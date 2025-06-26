@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "data-consistency-checker"
+version = "0.1.0"
+description = "Toolkit for analyzing dataset consistency"
+authors = ["Diogo Ribeiro <dfr@esmad.ipp.pt>"]
+readme = "README.md"
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "*"
+numpy = "*"
+scikit-learn = "*"
+matplotlib = "*"
+seaborn = "*"
+ipython = "*"
+python-dateutil = "*"
+termcolor = "*"
+scipy = "*"
+dill = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
