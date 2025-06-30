@@ -32,12 +32,21 @@ As this tool is limited to interpretable outlier detection methods, it does not 
 The unusual data found may be due to data collection errors, mixing different types of data together, or other issues that may be considered errors, or that may be informative. Some may point to forms of feature engineering, which may be useful for downstream tasks. 
 
 
-## Intallation
-The code consists of a single [python file](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/check_data_consistency.py) which may be downloaded and included in any project. It uses one package, which must be installed as:
+## Installation
+The project uses [Poetry](https://python-poetry.org/) for dependency management.  
+If the environment has no internet access, pre-download the required wheels listed in `requirements.txt` and install them with:
 
-pip intall termcolor
+```bash
+pip install --no-index --find-links /path/to/wheels -r requirements.txt
+```
 
-Otherwise, it does not rely on any packages other than numpy, pandas, scipy, matplotlib, seaborn, and other standard libraries. Once downloaded, it may be included as:
+When internet access is available, dependencies can be installed with Poetry:
+
+```bash
+poetry install
+```
+
+Once installed, the package can be imported as:
 
 ```python
 from check_data_consistency import DataConsistencyChecker
@@ -172,6 +181,12 @@ For note on reducing the execution times of the analysis, refer to:
 
 ## Unit Tests
 For contributors: [Notes on unit tests](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/unit_tests.md)
+
+After installing dependencies you can run the automated test suite with:
+
+```bash
+poetry run pytest -q
+```
 
 ## Additional Documenation
 Notes on additional topics, inlcuding date columns, clearing issues, contamination levels, the sort order of the data, and the use of synthetic may be found at: [Additional Documentation](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/additional_documentation.md)

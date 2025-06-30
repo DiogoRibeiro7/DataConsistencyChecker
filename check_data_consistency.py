@@ -42,6 +42,33 @@ import warnings
 from sklearn.exceptions import ConvergenceWarning
 import scipy.stats as scipy_stats
 
+# Mixins
+from display_mixin import DisplayMixin
+from plots_mixin import PlotsMixin
+from synth_data_mixin import SynthDataMixin
+
+# Utility functions split out from the main module
+from checker_utils import (
+    safe_div,
+    is_number,
+    convert_to_numeric,
+    get_num_decimal_digits,
+    get_non_alphanumeric,
+    styling_orig_row,
+    styling_flagged_rows,
+    is_notebook,
+    print_line,
+    print_text,
+    is_missing,
+    array_to_str,
+    replace_special_with_space,
+    truncate_description,
+    is_uppercase,
+    call_test,
+    clean_x_tick_labels,
+    set_warnings_levels,
+)
+
 # Uncomment to debug any warnings.
 # warnings.filterwarnings("error")
 
@@ -63,7 +90,7 @@ TEST_DEFN_FAST = 6          # Element 6 indicates if the test is reasonably fast
 TEST_DEFN_CODE = 7          # Element 7 indicates if the test assumes the values may represent code or ID values.
 
 
-class DataConsistencyChecker:
+class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
     def __init__(self,
                  iqr_limit=3.5,
                  idr_limit=1.0,
@@ -1283,117 +1310,6 @@ class DataConsistencyChecker:
         self.col_triples_all_null_bool_dict = None
         self.common_vals_dict = None
 
-    def generate_synth_data(self, all_cols=False, execute_list=None, exclude_list=None, seed=0, add_nones="none"):
-        """
-        Generate a random synthetic dataset which may be used to demonstrate each of the tests.
-
-        all_cols: bool
-            If all_cols is False, this generates columns specifically only for the tests that are specified to run.
-            If all_cols is True, this generates columns related to all tests, even where that test is not specified to
-            run.
-
-        execute_list: list of strings
-            If specified, only columns related to these tests will be generated.
-
-        exclude_list: list of strings
-            If specified, columns related to all tests other than these will be generated. It is not permitted to
-            specify both execute_list and exclude_list.
-
-        seed: int
-            If specified, this is used to initialize any random processes, which are involved in the creation of
-            most synthetic columns. If specified, the synthetic data creation will be repeatable.
-
-        add_nones: string
-            Must be one of 'none', 'one-row', 'in-sync', 'random', '80-percent'.
-            If add_nones is set to 'random', then each column will have a set of None values added randomly, covering
-            50% of the values. If set to 'in-sync', this is similar, but all columns will have None set in the ame rows.
-            If set to 'one-row', only one row will be given None values. If set to '80-percent', 80% of all values
-            will be set to None.
-        """
-
-        assert add_nones in ['none', 'one-row', 'in-sync', 'random', '80-percent']
-
-        # Check the passed test IDs, if any, are valid
-        if execute_list:
-            for test_id in execute_list:
-                if test_id not in self.get_test_list():
-                    print_text(f"{test_id} is not a valid test ID. Unable to generate data.")
-                    return
-        if exclude_list:
-            for test_id in exclude_list:
-                if test_id not in self.get_test_list():
-                    print_text(f"{test_id} is not a valid test ID. Unable to generate data.")
-                    return
-
-        self.synth_df = pd.DataFrame()
-        for test_id in self.test_dict.keys():
-            # Set the seed for each test, to ensure the synthetic data is the same regardless which other synthetic
-            # columns are included.
-            random.seed(seed)
-            np.random.seed(seed)
-            if all_cols or \
-                    ((execute_list is None and exclude_list is None) or
-                     (execute_list and test_id in execute_list) or
-                     (exclude_list and test_id not in exclude_list)):
-                self.test_dict[test_id][TEST_DEFN_GEN_FUNC]()
-
-        if add_nones == 'one-row':
-            # Set a single row, all columns to None. This checks that the tests are able to handle at least some Nulls
-            for col_name in self.synth_df.columns:
-                self.synth_df.loc[0, col_name] = None
-        elif add_nones == 'in-sync':
-            # Do not set the last few rows, where the exceptions tend to be, as None
-            none_idxs = random.sample(range(self.num_synth_rows - 10), self.num_synth_rows // 2)
-            for col_name in self.synth_df.columns:
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
-        elif add_nones == 'random':
-            for col_name in self.synth_df.columns:
-                none_idxs = random.sample(range(self.num_synth_rows - 10), self.num_synth_rows // 2)
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
-        elif add_nones == '80-percent':
-            none_idxs = random.sample(range(self.num_synth_rows - 10), int(self.num_synth_rows * 0.8))
-            for col_name in self.synth_df.columns:
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
-
-        return self.synth_df
-
-    def modify_real_data(self, df, num_modifications=5):
-        """
-        Given a real dataset, modify it slightly, in order to add what are likely inconsistencies to the data
-
-        df: pandas dataframe
-            A real or synthetic dataset.
-
-        num_modifications: int
-            The number of modifications to make. This should be small, so as not to change the overall distribution
-            of the data
-
-        Return:
-            the modified dataframe,
-            a list of row numbers and column names, indicating the cells that were modified
-        """
-
-        cell_list = []
-        for _ in range(num_modifications):
-            row_index = random.randint(0, len(df) - 1)
-            col_index = random.randint(0, len(df.columns) - 1)
-            col_name = df.columns[col_index]
-
-            if df.loc[row_index, col_name] is None:
-                non_null_values = df[col_name].dropna()
-                str_val = non_null_values.values.sample().values[0]
-            else:
-                str_val = str(df.loc[row_index, col_name]) + "9"
-            df.loc[row_index, col_name] = str_val
-            cell_list.append([row_index, col_name])
-
-        return df, cell_list
 
     def check_data_quality(
             self,
@@ -1692,185 +1608,6 @@ class DataConsistencyChecker:
             return self.orig_df[abs(self.numeric_vals_filled[col_name_1]) > abs((10.0)*self.numeric_vals_filled[col_name_2])]
         run_test(test_much_larger)
 
-    ##################################################################################################################
-    # Public methods to output information about the tool, unrelated to any specific dataset or test execution
-    ##################################################################################################################
-    def get_test_list(self):
-        """
-        Returns a python list, listing each test available by ID.
-        """
-
-        return [x for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_IMPLEMENTED]]
-
-    def get_test_descriptions(self):
-        """
-        Returns a python dictionary, with each test ID as key, matched with a short text explanation of the test.
-        """
-
-        return {x: self.test_dict[x][TEST_DEFN_DESC]
-                for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_IMPLEMENTED]}
-
-    def print_test_descriptions(self, long_desc=False, f=None):
-        """
-        Prints to screen a prettified list of tests and their descriptions.
-
-        long_desc: bool
-            If True, longer descriptions will be displayed for tests where available. If False, the short descriptions
-            only will be displayed.
-
-        f: file_handle
-        """
-
-        for test_id in self.test_dict.keys():
-            text = self.test_dict[test_id][TEST_DEFN_DESC]
-            if long_desc:
-                doc_str = self.test_dict[test_id][TEST_DEFN_FUNC].__doc__
-                if doc_str:
-                    text += doc_str
-                    text = ' '.join(text.split())
-            multiline_test_desc = wrap(text, 90)
-            if f:
-                f.write(f"{test_id+':':<30} {multiline_test_desc[0]}" + "<br" + os.linesep)
-            else:
-                print(f"{test_id+':':<30} {multiline_test_desc[0]}")
-            filler = ''.join([" "]*32)
-            for line in multiline_test_desc[1:]:
-                if f:
-                    f.write(f'{filler} {line}' + "<br>" + os.linesep)
-                else:
-                    print(f'{filler} {line}')
-
-    def get_patterns_shortlist(self):
-        """
-        Returns an array with the IDs of the tests in the short list. These are the tests that will be presented by
-        default when calling get_patterns() to list the patterns discovered.
-        """
-
-        # The TEST_DEFN_SHORTLIST element for each item in test_dict indicates if that test is in the short-list for
-        # reporting discovered patterns
-        return [x for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_SHORTLIST]]
-
-    def get_tests_for_codes(self):
-        """
-        Returns an array with the IDs of the tests that related to ID and code values. Where it is known that no columns
-        are of this type, these tests may be skipped.
-        """
-
-        # The TEST_DEFN_CODE element for each item in test_dict indicates if that test is in the list of tests related
-        # to ID and code values.
-        return [x for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_CODE]]
-
-    def demo_test(self, test_id, include_nulls=False):
-        """
-        This provides a demo of a single test.
-
-        This creates and displays synthetic demo data, runs the specified test on the demo data, and outputs the
-        results, calling display_detailed_results().
-
-        For most tests, the associated synthetic test data has three to five columns. The columns are named in two parts
-        with the first indicating the test the synthetic data is designed to test and demonstrate, and the other part
-        indicating if the column is part of a pattern with or without an exception. Typically those named 'rand' or
-        'rand_XXX' do not have a pattern, but may be involved in patterns spanning multiple columns. Those named
-        'all' are part of a pattern with no exceptions (and sometimes other patterns as well). Those named 'most' are
-        part of patterns with exceptions, indicating the pattern holds for most, but not all, rows.
-
-        include_nulls (bool):
-            If True, several versions of the data will be created with either few or many Null values.
-        """
-
-        if test_id not in self.test_dict.keys():
-            print(f"Error {test_id} is not a valid test")
-
-        none_cases = ['none']
-        none_strs = ['']
-        if include_nulls:
-            none_cases = ['none', 'one-row', 'in-sync', 'random', '80-percent']
-            none_strs = ['', '-- One row of Null values', '-- 50% Null values (same rows)',
-                         '-- 50% Null values (random locations)', '-- 80-percent Null Values']
-
-        for none_idx, none_type in enumerate(none_cases):
-            synth_df = self.generate_synth_data(all_cols=False, execute_list=[test_id], add_nones=none_type)
-            print_text(f"## {test_id}")
-            print_text(f"### Synthetic Data {none_strs[none_idx]}:")
-            if is_notebook():
-                display(synth_df)
-            else:
-                print(synth_df)
-
-            self.verbose = 2
-            self.init_data(synth_df)
-            self.check_data_quality(execute_list=[test_id])
-            self.display_detailed_results(show_short_list_only=False)
-
-    ##################################################################################################################
-    # Public methods to output statistics about the dataset, unrelated to any tests executed.
-    ##################################################################################################################
-
-    def display_columns_types_list(self):
-        """
-        Displays, for each of the four column types identified by the tool, which columns in the data are of those
-        types. This may be called to check the column types were identified correctly. This will skip columns removed
-        from analysis due to having only one unique value.
-        """
-
-        print()
-        print_text(f"**String Columns**:")
-        if len(self.string_cols) > 0:
-            print_text(str(self.string_cols).replace('[', '').replace(']', ''))
-        else:
-            print_text("None")
-
-        print()
-        print_text(f"**Numeric Columns**:")
-        if len(self.numeric_cols) > 0:
-            print_text(str(self.numeric_cols).replace('[', '').replace(']', ''))
-        else:
-            print_text("None")
-
-        print()
-        print_text(f"**Binary Columns**:")
-        if len(self.binary_cols) > 0:
-            print_text(str(self.binary_cols).replace('[', '').replace(']', ''))
-        else:
-            print_text("None")
-
-        print()
-        print_text(f"**Date/Time Columns**:")
-        if len(self.date_cols) > 0:
-            print_text(str(self.date_cols).replace('[', '').replace(']', ''))
-        else:
-            print_text("None")
-
-    def display_columns_types_table(self):
-        """
-        Displays the first rows of the data, along with the identified column type in the first row. Similar to
-        calling display_columns_types_list(), this may be used to determine if the inferred column types are correct.
-        """
-
-        var_types = []
-        for col_name in self.orig_df.columns:
-            if col_name in self.string_cols:
-                var_types.append('String')
-            elif col_name in self.binary_cols:
-                var_types.append('Binary')
-            elif col_name in self.date_cols:
-                var_types.append('Date')
-            elif col_name in self.numeric_cols:
-                var_types.append('Numeric')
-            else:
-                var_types.append("Unused")
-        df1 = pd.DataFrame([var_types], columns=self.orig_df.columns)
-        df2 = self.orig_df.head(5).copy()
-        display_df = pd.concat([df1, df2])
-
-        print()
-        print_text("Assigned column types and example rows:")
-        if is_notebook():
-            display(display_df)
-        else:
-            print(display_df)
-
-    ##################################################################################################################
     # Public methods to output the results of the analysis in various ways
     ##################################################################################################################
 
@@ -2154,11 +1891,20 @@ class DataConsistencyChecker:
         if self.exceptions_summary_df is None:
             return None
 
-        # todo: add 'Number of Rows Flagged At Least Once'
         g = self.exceptions_summary_df.groupby('Test ID')
+        row_counts = []
+        for test_id in g.groups:
+            result_cols = [c for c in self.test_results_df.columns if c.startswith(f"TEST {test_id} --")]
+            if result_cols:
+                num_rows = self.test_results_df[result_cols].any(axis=1).sum()
+            else:
+                num_rows = 0
+            row_counts.append(num_rows)
+
         df = pd.DataFrame({
             'Test ID': list(g.groups),
             'Number of Columns Flagged At Least Once': list(g['Column(s)'].nunique()),
+            'Number of Rows Flagged At Least Once': row_counts,
             'Number of Issues Total': list(g['Number of Exceptions'].sum())
         })
 
@@ -2177,22 +1923,16 @@ class DataConsistencyChecker:
             plt.show()
         return df
 
-    def summarize_patterns_and_exceptions(self, all_tests=False, heatmap=False):
-        """
-        Returns a dataframe with a row per test, indicating the number of patterns with and without exceptions that
-        were found for each test. This may be used to quickly determine which pattens exist within the data, and
-        to help focus specific calls to display_detailed_results() to return detailed information for specific tests.
+    def summarize_patterns_and_exceptions(self, all_tests: bool = False, heatmap: bool = False) -> pd.DataFrame:
+        """Summarize patterns and exceptions for each test.
 
-        all_tests: bool
-            If True, a row will be included for all tests that executed. This will include tests where no patterns were
-            found. If False, a row will be included for all tests that found at least one pattern, with or without
-            exceptions.
+        Args:
+            all_tests: Include tests with no patterns when ``True``.
+            heatmap: Display a heatmap when ``True``.
 
-        heatmap: bool
-            If True, a heatmap of form of the table will be displayed.
+        Returns:
+            ``pandas.DataFrame`` with counts of patterns with and without exceptions.
         """
-        # todo: draw a heatmap use white for no pattern, blue for pattern with no exceptions, yellow for pattern
-        #  with exceptions.
         vals = []
         for test_id in self.get_test_list():
             if (not all_tests) and \
@@ -2206,7 +1946,11 @@ class DataConsistencyChecker:
                                          'Number Patterns without Exceptions',
                                          'Number Patterns with Exceptions'])
         if heatmap:
-            pass  # todo: fill in
+            plot_df = df.set_index('Test ID')
+            fig, ax = plt.subplots(figsize=(len(plot_df.columns) * 0.6, len(plot_df) * 0.5))
+            sns.heatmap(plot_df, cmap='YlGnBu', annot=True, fmt='d', linewidths=0.75, linecolor='black', ax=ax)
+            ax.set_ylabel(None)
+            plt.show()
 
         df = df.replace(0, '')
         return df
@@ -2864,14 +2608,16 @@ class DataConsistencyChecker:
         df['FINAL SCORE'] = self.test_results_df['FINAL SCORE']
 
         num_feats = len(self.numeric_cols) + len(self.date_cols)
+        feats = self.numeric_cols + self.date_cols
         if num_feats > 50:
-            print((f"There are {num_feats} numeric and date features. Displaying only the 50 with the greatest"
-                   "correlation with the final score"))
-            num_feats = 50
-            feats = self.numeric_cols + self.date_cols
-            feats = feats[:50]  # todo: get the 50 with the greatest correlation
-        else:
-            feats = self.numeric_cols + self.date_cols
+            print(
+                f"There are {num_feats} numeric and date features. Displaying only the 50 with the greatest correlation with the final score"
+            )
+            corr = {
+                col: abs(df[col].astype(float).corr(df['FINAL SCORE'])) for col in feats
+            }
+            feats = [k for k, _ in sorted(corr.items(), key=lambda x: x[1], reverse=True)[:50]]
+            num_feats = len(feats)
 
         if num_feats > 0:
             n_rows = math.ceil(num_feats / 4)
@@ -2891,14 +2637,17 @@ class DataConsistencyChecker:
             plt.show()
 
         num_feats = len(self.binary_cols) + len(self.string_cols)
+        feats = self.binary_cols + self.string_cols
         if num_feats > 50:
-            print((f"There are {num_feats} numeric and date features. Displaying only the 50 with the greatest "
-                   "correlation with the final score"))
-            num_feats = 50
-            feats = self.binary_cols + self.string_cols
-            feats = feats[:50]  # todo: get the 50 with the greatest correlation
-        else:
-            feats = self.binary_cols + self.string_cols
+            print(
+                f"There are {num_feats} numeric and date features. Displaying only the 50 with the greatest correlation with the final score"
+            )
+            corr = {}
+            for col in feats:
+                codes = pd.Categorical(df[col]).codes
+                corr[col] = abs(pd.Series(codes).corr(df['FINAL SCORE']))
+            feats = [k for k, _ in sorted(corr.items(), key=lambda x: x[1], reverse=True)[:50]]
+            num_feats = len(feats)
 
         if num_feats > 0:
             n_rows = math.ceil(num_feats / 4)
@@ -2933,933 +2682,6 @@ class DataConsistencyChecker:
             plt.show()
 
     ##################################################################################################################
-    # Private methods to plot patterns
-    ##################################################################################################################
-
-    def save_image(self, f):
-        image_file_name = f"output_{self.image_output_num}.png"
-        full_image_file_name = os.path.join(self.output_folder, image_file_name)
-        plt.savefig(full_image_file_name)
-        self.image_output_num += 1
-        f.write(f"<img src={image_file_name}><br>")
-
-    def show_image(self, f):
-        if f:
-            self.save_image(f)
-            plt.close("all")
-        else:
-            plt.show()
-
-    def __plot_distribution(self, test_id, col_name, show_exceptions, display_info, f):
-        fig, ax = plt.subplots(figsize=(5, 3))
-        s = sns.histplot(data=self.orig_df, x=col_name, color='blue', bins=100, ax=ax)
-
-        if show_exceptions:
-            if test_id in ['VERY_LARGE', 'LATE_DATES']:
-                ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=display_info['upper_limit'], facecolor='blue', alpha=0.3)
-                ax.axvspan(xmin=display_info['upper_limit'], xmax=self.orig_df[col_name].max(), facecolor='red',  alpha=0.3)
-            if test_id in ['VERY_SMALL', 'EARLY_DATES']:
-                ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=display_info['lower_limit'], facecolor='red', alpha=0.3)
-                ax.axvspan(xmin=display_info['lower_limit'], xmax=self.orig_df[col_name].max(), facecolor='blue',  alpha=0.3)
-            if test_id in ['VERY_SMALL_ABS']:
-                ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=-display_info['lower_limit'], facecolor='blue', alpha=0.3)
-                ax.axvspan(xmin=-display_info['lower_limit'], xmax=display_info['lower_limit'], facecolor='red',  alpha=0.3)
-                ax.axvspan(xmin=display_info['lower_limit'], xmax=self.orig_df[col_name].max(), facecolor='blue', alpha=0.3)
-            if test_id in ['LESS_THAN_ONE']:
-                if self.orig_df[col_name].min() < -1:
-                    ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=-1, facecolor='red', alpha=0.3)
-                ax.axvspan(xmin=max(-1, self.orig_df[col_name].min()), xmax=min(1, self.orig_df[col_name].max()),
-                           facecolor='blue',  alpha=0.3)
-                if self.orig_df[col_name].max() > 1:
-                    ax.axvspan(xmin=1, xmax=self.orig_df[col_name].max(), facecolor='red', alpha=0.3)
-            if test_id in ['GREATER_THAN_ONE']:
-                if self.orig_df[col_name].min() < -1:
-                    ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=-1, facecolor='blue', alpha=0.3)
-                ax.axvspan(xmin=max(-1, self.orig_df[col_name].min()), xmax=min(1, self.orig_df[col_name].max()),
-                           facecolor='red',  alpha=0.3)
-                if self.orig_df[col_name].max() > 1:
-                    ax.axvspan(xmin=1, xmax=self.orig_df[col_name].max(), facecolor='blue', alpha=0.3)
-            if test_id in ['POSITIVE']:
-                ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=0, facecolor='red', alpha=0.3)
-                ax.axvspan(xmin=0, xmax=self.orig_df[col_name].max(), facecolor='blue',  alpha=0.3)
-            if test_id in ['NEGATIVE']:
-                ax.axvspan(xmin=self.orig_df[col_name].min(), xmax=0, facecolor='blue', alpha=0.3)
-                ax.axvspan(xmin=0, xmax=self.orig_df[col_name].max(), facecolor='red',  alpha=0.3)
-
-        # Ensure there are not too many tick labels to be readable
-        clean_x_tick_labels(fig, 1, ax)
-
-        if show_exceptions:
-            s.set_title(f"Distribution of {col_name} (Flagged values in red)")
-        else:
-            s.set_title(f"Distribution of {col_name}")
-
-        # Find the flagged values and identify them on the plot
-        if show_exceptions:
-            results_col_name = self.get_results_col_name(test_id, col_name)
-            results_col = self.test_results_df[results_col_name]
-            flagged_idxs = np.where(results_col)
-            flagged_vals = self.orig_df.loc[flagged_idxs, col_name].values
-            for v in flagged_vals:
-                s.axvline(v, color='red')
-        self.show_image(f)
-
-    def __draw_scatter_plot(self, df, test_id, x_col, y_col, y_is_calculated, columns_set, show_expections, display_info, f):
-
-        def draw_diagonal(ax):
-            if show_diagonal:
-                ax.plot(xlim, ylim)
-
-        def draw_kde(ax):
-            if test_id in ['RARE_COMBINATION']:
-                # Use a kde plot as the background
-                sns.kdeplot(
-                    data=df,
-                    x=x_col,
-                    y=y_col,
-                    fill=True,
-                    ax=ax)
-
-        def apply_gridlines(ax):
-            # For RARE_COMBINATION, draw the grid lines to make it more clear why certain values were flagged
-            if test_id in ['RARE_COMBINATION']:
-                for v in display_info['bins_1']:
-                    if v not in [-np.inf, np.inf]:
-                        ax.axvline(v, color='green', linewidth=1, alpha=0.3)
-                for v in display_info['bins_2']:
-                    if v not in [-np.inf, np.inf]:
-                        ax.axhline(v, color='green', linewidth=1, alpha=0.3)
-
-        def get_xy_lim(df, y_is_calculated):
-            xlim = None
-            ylim = None
-
-            if x_col in self.numeric_cols:
-                xlim = (df[x_col].min(), df[x_col].max())
-                rng = xlim[1] - xlim[0]
-                xlim = (xlim[0] - (rng / 50.0), xlim[1] + (rng / 50.0))
-
-            if (y_col in self.numeric_cols) or y_is_calculated:
-                ylim = (df[y_col].min(), df[y_col].max())
-                rng = ylim[1] - ylim[0]
-                ylim = (ylim[0] - (rng / 50.0), ylim[1] + (rng / 50.0))
-
-            # todo: set xlim & ylim equal if can!
-            # todo: put back -- does force x & y to use the same scale, which makes comparing easier.
-            # if (x_col in self.numeric_cols) and (y_col in self.numeric_cols):
-            #     xylim = (min(df[x_col].astype(float).min(), df[y_col].astype(float).min()),
-            #              max(df[x_col].astype(float).max(), df[y_col].astype(float).max()))
-
-            return xlim, ylim
-
-        show_diagonal = test_id in ['MEAN_OF_COLUMNS', 'SUM_OF_COLUMNS', 'MIN_OF_COLUMNS', 'MAX_OF_COLUMNS',
-                                    'LARGER_SAME_RANGE', 'SIMILAR_TO_PRODUCT', 'SIMILAR_TO_RATIO']
-
-        if not y_is_calculated:
-            df = self.orig_df[[x_col, y_col]].copy()
-            if x_col in self.numeric_vals_filled:
-                df[x_col] = self.numeric_vals_filled[x_col]
-            if y_col in self.numeric_vals_filled:
-                df[y_col] = self.numeric_vals_filled[y_col]
-
-        if not show_expections:
-            xlim, ylim = get_xy_lim(df, y_is_calculated)
-            fig, ax = plt.subplots(figsize=(5, 4))
-            draw_kde(ax)
-            s = sns.scatterplot(
-                data=df,
-                x=x_col,
-                y=y_col,
-                color='blue',
-                alpha=0.2,
-                label='Not Flagged',
-                ax=ax
-            )
-            s.set_title(f'Distribution of "{x_col}" and "{y_col}"')
-            s.legend().remove()
-            s.set_xlim(xlim)
-            s.set_ylim(ylim)
-            apply_gridlines(ax)
-            draw_diagonal(ax)
-            clean_x_tick_labels(fig, 1, ax)
-        else:
-            fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 4))
-            result_col_name = self.get_results_col_name(test_id, columns_set)
-            df['Flagged'] = self.test_results_df[result_col_name]
-            df_not_flagged = df[df['Flagged'] == 0]
-
-            # Draw without the exceptions
-            xlim, ylim = get_xy_lim(df_not_flagged, y_is_calculated)
-            draw_kde(ax[0])
-            s = sns.scatterplot(
-                data=df_not_flagged,
-                x=x_col,
-                y=y_col,
-                color='blue',
-                alpha=0.2,
-                label='Normal',
-                ax=ax[0]
-            )
-            s.set_title(f'Distribution of \n"{x_col}" \nand \n"{y_col}" \n(excluding flagged values)')
-            s.legend().remove()
-            s.set_xlim(xlim)
-            s.set_ylim(ylim)
-            apply_gridlines(ax[0])
-            draw_diagonal(ax[0])
-            clean_x_tick_labels(fig, 2, ax[0])
-
-            # Draw with and without the exceptions
-            xlim, ylim = get_xy_lim(df, y_is_calculated)
-            draw_kde(ax[1])
-            s = sns.scatterplot(
-                data=df[df['Flagged'] == 0],
-                x=x_col,
-                y=y_col,
-                color='blue',
-                alpha=0.2,
-                label='Normal',
-                ax=ax[1]
-            )
-            s = sns.scatterplot(
-                data=df[df['Flagged'] == 1],
-                x=x_col,
-                y=y_col,
-                color='red',
-                alpha=1.0,
-                label='Flagged',
-                ax=ax[1]
-            )
-            s.set_title(f'Distribution of \n"{x_col}" \nand \n"{y_col}" \n(Flagged values in red)')
-            s.legend().remove()
-            apply_gridlines(ax[1])
-            s.set_xlim(xlim)
-            s.set_ylim(ylim)
-            clean_x_tick_labels(fig, 2, ax[1])
-
-        plt.tight_layout()
-        self.show_image(f)
-
-    def __plot_count_plot(self, column_name, f):
-        fig, ax = plt.subplots(figsize=(4, 4))
-        if column_name in self.date_cols:
-            s = sns.countplot(orient='h', y=self.orig_df[column_name].fillna("NONE"))
-        else:
-            s = sns.countplot(orient='h', y=self.orig_df[column_name].fillna("NONE").str.strip())
-        s.set_title(f"Counts of unique values in {column_name}")
-        clean_x_tick_labels(fig, 1, ax)
-        self.show_image(f)
-
-    def __plot_heatmap(self, test_id, cols, f):
-        col_name_1, col_name_2 = cols
-        plt.subplots(figsize=(4, 4))
-
-        # todo: we may wish to include null as well, but need special handling below
-        vals1 = self.orig_df[col_name_1].dropna().unique()
-        vals2 = self.orig_df[col_name_2].dropna().unique()
-        counts_arr = []
-        for v1 in vals1:
-            row_arr = []
-            for v2 in vals2:
-                row_arr.append(len(self.orig_df[(self.orig_df[col_name_1] == v1) & (self.orig_df[col_name_2] == v2)]))
-            counts_arr.append(row_arr)
-        df = pd.DataFrame(counts_arr, index=vals1, columns=vals2)
-        s = sns.heatmap(df, cmap='Blues', linewidths=1.1, linecolor='black', annot=True, fmt="d")
-        s.set_title(f"Counts of unique values in {col_name_1} and {col_name_2}")
-        s.set_xlabel(col_name_2)
-        s.set_ylabel(col_name_1)
-        plt.xticks(rotation=45, ha='right', rotation_mode='anchor')
-        self.show_image(f)
-
-    def __draw_row_rank_plot(self, test_id, col_name, show_exceptions, f):
-        if not show_exceptions:
-            fig, ax = plt.subplots(figsize=(8, 4))
-            vals = self.orig_df[col_name]
-            if col_name in self.date_cols:
-                vals = [pd.to_datetime(x) for x in self.orig_df[col_name]]
-            s = sns.scatterplot(x=self.orig_df.index, y=vals, color='blue', alpha=0.2, label='Not Flagged')
-            if show_exceptions:
-                s.set_title(f'Distribution of "{col_name}" (Flagged values in red)')
-            else:
-                s.set_title(f'Distribution of "{col_name}"')
-            s.set_xlabel("Row Number")
-            clean_x_tick_labels(fig, 1, ax)
-            plt.legend().remove()
-            self.show_image(f)
-        else:
-            fig, ax = plt.subplots(nrows=1, ncols=2, sharey=False, figsize=(10, 4))
-
-            # Find the flagged values and identify them on the plot
-            results_col_name = self.get_results_col_name(test_id, col_name)
-            results_col = self.test_results_df[results_col_name]
-            not_flagged_idxs = np.where(~results_col)
-            not_flagged_vals = self.orig_df.loc[not_flagged_idxs][col_name].values
-            flagged_idxs = np.where(results_col)
-            flagged_vals = self.orig_df.loc[flagged_idxs][col_name].values
-
-            # Draw one plot without the flagged values
-            s = sns.scatterplot(x=not_flagged_idxs[0], y=not_flagged_vals, color='blue', ax=ax[0])
-            s.set_xlabel("Row Number")
-            clean_x_tick_labels(fig, 2, ax[0])
-            s.set_title("Values without exceptions")
-
-            # Draw one plot with the flagged values
-            s = sns.scatterplot(x=not_flagged_idxs[0], y=not_flagged_vals, color='blue', label="Not Flagged", ax=ax[1])
-            s = sns.scatterplot(x=flagged_idxs[0], y=flagged_vals, color='red', label="Flagged", ax=ax[1])
-            s.set_xlabel("Row Number")
-            clean_x_tick_labels(fig, 2, ax[1])
-            s.set_title("Values with exceptions")
-
-            plt.legend().remove()
-            plt.tight_layout()
-            self.show_image(f)
-
-    def __draw_box_plots(self, test_id, cols, columns_set, f):
-        # The first column is the string/binary value and the second is the numeric/date value
-        # todo: this does not colour the outliers. We may wish to draw a histogram next to it, but this is somewhat
-        # kludgy.
-        fig, ax = plt.subplots(figsize=(8, 4))
-        if cols[1] in self.numeric_cols:
-            s = sns.boxplot(data=self.orig_df, orient='h', y=cols[0], x=cols[1])
-        else:
-            df = self.orig_df[cols].copy()
-            df['Days Since Min Date'] = (pd.to_datetime(self.orig_df[cols[1]]) - pd.to_datetime(self.orig_df[cols[1]]).min()).dt.days
-            s = sns.boxplot(data=df, orient='h', y=cols[0], x='Days Since Min Date')
-        clean_x_tick_labels(fig, 1, ax)
-        self.show_image(f)
-
-        # Also draw a histogram of the relevant classes.
-        results_col_name = self.get_results_col_name(test_id, columns_set)
-        results_col = self.test_results_df[results_col_name]
-        flagged_idxs = np.where(results_col)
-        flagged_df = self.orig_df.loc[flagged_idxs]
-        vals = flagged_df[cols[0]].unique()
-        nvals = len(vals)
-        fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
-        for v_idx, v in enumerate(vals):
-            sub_df = self.orig_df[self.orig_df[cols[0]] == v]
-            sub_flagged_df = flagged_df[flagged_df[cols[0]] == v]
-            if nvals == 1:
-                curr_ax = ax
-            else:
-                curr_ax = ax[v_idx]
-            s = sns.histplot(data=sub_df, x=cols[1], color='blue', bins=100, ax=curr_ax)
-            flagged_vals = sub_flagged_df[cols[1]].values
-            for fv in flagged_vals:
-                # Add alpha, as in some cases the red lines are very close to the blue
-                s.axvline(fv, color='red', alpha=0.5)
-            s.set_title(f'Distribution of \n"{cols[1]}" where \n"{cols[0]}" is \n"{v}" \n(Flagged values in red)')
-            clean_x_tick_labels(fig, nvals, curr_ax)
-        plt.tight_layout()
-        self.show_image(f)
-
-    def __plot_larger_relationship(self, test_id, cols, columns_set, show_exceptions, display_info, f):
-        col_medians = [self.column_medians[c] for c in cols]
-        cols = np.array(cols)[np.argsort(col_medians)]
-
-        fig, ax = plt.subplots(figsize=(8, len(cols)))
-        df_arr = []
-        for c in cols:
-            df = pd.DataFrame(self.numeric_vals[c])
-            df.columns = ['Value']
-            df['Feature'] = [c] * len(df)
-            df_arr.append(df)
-        df = pd.concat(df_arr)
-        s = sns.boxplot(data=df.dropna(), orient='h', x='Value', y='Feature')
-        if test_id in ['MUCH_LARGER']:
-            plt.xscale('log')
-        clean_x_tick_labels(fig, 1, ax)
-        self.show_image(f)
-
-    def __draw_network_plot(self, nodes, edges):
-        """
-        Each node represents one feature in the original data, and each edge represents a larger-than relationship.
-        """
-
-        def get_num_conflicts(node, y):
-            num_conflicts = 0
-            # Loop through each edge going back from node
-            for edge in edges:
-                if edge[0] != node[0]:
-                    continue
-
-                # Determine the x and y position of the other node in this edge
-                other_node_feature = edge[1]
-                x_pos_other_node, y_pos_other_node = positions[other_node_feature]
-
-                # Loop through all nodes within the x range of this edge
-                for n in nodes:
-                    if (n[1] < x_pos_other_node) or (n[1] > node[1]):
-                        continue
-                    if (n[0] == other_node_feature) or (n[0] == node[0]):
-                        continue
-
-                    x_pos_middle_node, y_pos_middle_node = positions[n[0]]
-
-                    # Determine the y value of the current edge, given the proposed y value for the node, at the x
-                    # position of n
-                    x_pos_middle_node = n[1]
-                    if (y > y_pos_other_node):
-                        y_diff = y - y_pos_other_node
-                    else:
-                        y_diff = y_pos_other_node - y
-                    x_diff = node[1] - x_pos_other_node
-                    frac_along_x = (x_pos_middle_node - x_pos_other_node) / x_diff
-                    y_edge_at_n = y_pos_other_node + (frac_along_x * y_diff)
-
-                    # If the edge is too close to n, consider this a conflict
-                    if abs(x_pos_middle_node - y_edge_at_n) < 5:
-                        num_conflicts += 1
-
-            print(node, y, num_conflicts)
-            return num_conflicts
-
-        # Remove redundant edges. We create an nxn matrix, representing the relationship of one column being larger
-        # than other. Initially these are 1 if a>b, and 0 otherwise. We then replace as many 1 values with 2 (indicating
-        # redundant) as we can. These are of the form a>c, where we also have a>b and b>c.
-        mat = np.zeros((len(nodes), len(nodes)))
-        for edge in edges:
-            mat[nodes.index(edge[1]), nodes.index(edge[0])] = 1
-        num_chanaged = 1
-        print(nodes)
-        print('before:')
-        print(mat)
-        while num_chanaged > 0:
-            num_chanaged = 0
-            for r in range(len(nodes)):
-                for c in range(len(nodes)):
-                    if mat[r][c] != 1:
-                        continue
-                    else:
-                        for other_r in range(len(nodes)):
-                            if (mat[other_r][c] > 0) and (mat[r][other_r] > 0):
-                                mat[r][c] = 2
-                                num_chanaged += 1
-        print('after:')
-        print(mat)
-
-        # Include the x position with each node and sort these left to right
-        nodes = [(node, self.column_medians[node]) for node in nodes]
-        nodes = sorted(nodes, key=lambda x: x[1])
-        node_names = [n[0] for n in nodes]
-
-        # Define the location of each node.
-        positions = {}
-        preferred_y_pos_arr = [50, 55, 45, 60, 40, 65, 35, 70, 30, 75, 25, 80, 20, 85, 15, 90, 10, 95, 5]
-        for node_idx, node in enumerate(nodes):
-            y_pos = 50
-            num_conflicts_arr = []
-            if node_idx > 0:
-                for y in range(5, 100, 5):
-                    num_conflicts_arr.append(get_num_conflicts(node, y))
-                idx_arr = np.argsort(num_conflicts_arr)
-                # If multiple positions are equally unobstructed, favour the position closest to 50.
-                min_val = min(num_conflicts_arr)
-                y_pos = (idx_arr[0] + 1) * 5
-            positions[node[0]] = (node[1], y_pos)
-
-        plt.figure(figsize=(max(4, len(nodes) * 2), 4))
-
-        # Draw the nodes
-        for node in nodes:
-            posn = positions[node[0]]
-            plt.scatter(posn[0], posn[1], label=node, s=500, c='skyblue')
-            plt.text(posn[0], posn[1]-10, node, fontsize=9, color='black', fontweight='bold', ha='center', va='center')
-
-        # Draw the edges
-        for edge in edges:
-            node_0 = edge[0]
-            node_1 = edge[1]
-            if mat[node_names.index(node_1)][node_names.index(node_0)] == 1:
-                p_1x = positions[node_0][0]
-                p_1y = positions[node_0][1]
-                p_2x = positions[node_1][0]
-                p_2y = positions[node_1][1]
-                plt.arrow(p_1x, p_1y, p_2x - p_1x, p_2y - p_1y, length_includes_head=True, head_width=3, head_length=3)
-
-        plt.axis('off')
-        plt.ylim(0, 100)
-        plt.title("Relationships of Column Magnitudes")
-        plt.show()
-        print_text(('Edges indicate pairs of columns where one column, row by row, contains strictly larger values '
-                    'than the other column. Redundant edges are removed. The x-position of the nodes represents the '
-                    'median value of the column.'))
-
-    def __draw_results_plots(self, test_id, cols, columns_set, show_exceptions, display_info, f):
-
-        if test_id in ['UNUSUAL_ORDER_MAGNITUDE', 'FEW_NEIGHBORS', 'FEW_WITHIN_RANGE', 'VERY_SMALL', 'VERY_LARGE',
-                       'VERY_SMALL_ABS', 'LESS_THAN_ONE', 'GREATER_THAN_ONE', 'NON_ZERO', 'POSITIVE', 'NEGATIVE',
-                       'EARLY_DATES', 'LATE_DATES']:
-            self.__plot_distribution(test_id, cols[0], show_exceptions, display_info, f)
-
-        if test_id in ['LARGER_DIFF_RANGE', 'LARGER_SAME_RANGE', 'MUCH_LARGER']:
-            if len(cols) == 2:
-                self.__draw_scatter_plot(
-                    df=self.orig_df,
-                    test_id=test_id,
-                    x_col=cols[0],
-                    y_col=cols[1],
-                    y_is_calculated=False,
-                    columns_set=columns_set,
-                    show_expections=show_exceptions,
-                    display_info=display_info,
-                    f=f)
-            self.__plot_larger_relationship(test_id, cols, columns_set, show_exceptions, display_info, f)
-
-        if test_id in ['SIMILAR_WRT_RATIO', 'SIMILAR_WRT_DIFF', 'SIMILAR_TO_INVERSE', 'CORRELATED_DATES',
-                       'SIMILAR_TO_NEGATIVE', 'CORRELATED_NUMERIC', 'RARE_COMBINATION', 'BINARY_MATCHES_VALUES']:
-            self.__draw_scatter_plot(
-                df=self.orig_df,
-                test_id=test_id,
-                x_col=cols[0],
-                y_col=cols[1],
-                y_is_calculated=False,
-                columns_set=columns_set,
-                show_expections=show_exceptions,
-                display_info=display_info,
-                f=f)
-
-        if test_id in ['SAME_VALUES']:
-            if self.orig_df[cols[0]].nunique() > 5:
-                self.__draw_scatter_plot(
-                    df=self.orig_df,
-                    test_id=test_id,
-                    x_col=cols[0],
-                    y_col=cols[1],
-                    y_is_calculated=False,
-                    columns_set=columns_set,
-                    show_expections=show_exceptions,
-                    display_info=display_info,
-                    f=f)
-            else:
-                self.__plot_heatmap(test_id, cols, f)
-
-        if test_id in ['MEAN_OF_COLUMNS', 'SUM_OF_COLUMNS', 'MIN_OF_COLUMNS', 'MAX_OF_COLUMNS',
-                       'CONSTANT_SUM', 'CONSTANT_DIFF', 'CONSTANT_PRODUCT', 'CONSTANT_RATIO']:
-            df = self.orig_df.copy()
-            if test_id in ['MEAN_OF_COLUMNS']:
-                calculated_col = 'Mean'
-                df[calculated_col] = display_info['Mean']
-            if test_id in ['SUM_OF_COLUMNS']:
-                calculated_col = 'Sum'
-                df[calculated_col] = display_info['Sum']
-            if test_id in ['MIN_OF_COLUMNS']:
-                calculated_col = 'Min'
-                df[calculated_col] = display_info['Min']
-            if test_id in ['MAX_OF_COLUMNS']:
-                calculated_col = 'Max'
-                df[calculated_col] = display_info['Max']
-            if test_id in ['CONSTANT_SUM']:
-                calculated_col = 'SUM'
-                df[calculated_col] = display_info['Sum']
-            if test_id in ['CONSTANT_DIFF']:
-                calculated_col = 'DIFF'
-                df[calculated_col] = display_info['Diff']
-            if test_id in ['CONSTANT_PRODUCT']:
-                calculated_col = 'PRODUCT'
-                df[calculated_col] = display_info['Product']
-            if test_id in ['CONSTANT_RATIO']:
-                calculated_col = 'RATIO'
-                df[calculated_col] = display_info['Ratio']
-            self.__draw_scatter_plot(df=df,
-                                     test_id=test_id,
-                                     x_col=cols[-1],
-                                     y_col=calculated_col,
-                                     y_is_calculated=True,
-                                     columns_set=columns_set,
-                                     show_expections=show_exceptions,
-                                     display_info=display_info,
-                                     f=f)
-
-            # Also show the original features in some cases
-            if test_id in ['CONSTANT_SUM', 'CONSTANT_DIFF', 'CONSTANT_PRODUCT', 'CONSTANT_RATIO']:
-                self.__draw_scatter_plot(df=df,
-                                         test_id=test_id,
-                                         x_col=cols[0],
-                                         y_col=cols[1],
-                                         y_is_calculated=False,
-                                         columns_set=columns_set,
-                                         show_expections=show_exceptions,
-                                         display_info=display_info,
-                                         f=f)
-
-        if test_id in ['LARGER_THAN_SUM', 'SIMILAR_TO_DIFF', 'LARGER_THAN_ABS_DIFF', 'SIMILAR_TO_PRODUCT',
-                       'SIMILAR_TO_RATIO']:
-            df = self.orig_df.copy()
-            col_name_1, col_name_2, col_name_3 = cols
-            if test_id in ['LARGER_THAN_SUM']:
-                calculated_col = 'SUM'
-                df[calculated_col] = self.numeric_vals_filled[col_name_1] + self.numeric_vals_filled[col_name_2]
-            elif test_id in ['SIMILAR_TO_DIFF', 'LARGER_THAN_ABS_DIFF']:
-                calculated_col = 'Absolute Difference'
-                df[calculated_col] = abs(self.numeric_vals_filled[col_name_1] - self.numeric_vals_filled[col_name_2])
-            elif test_id in ['SIMILAR_TO_PRODUCT']:
-                calculated_col = 'PRODUCT'
-                df[calculated_col] = self.numeric_vals_filled[col_name_1] * self.numeric_vals_filled[col_name_2] #df[col_name_1] * df[col_name_2]
-            elif test_id in ['SIMILAR_TO_RATIO']:
-                calculated_col = 'Division Results'
-                df[calculated_col] = self.numeric_vals_filled[col_name_1] / self.numeric_vals_filled[col_name_2]
-            self.__draw_scatter_plot(df=df,
-                                     test_id=test_id,
-                                     x_col=col_name_3,
-                                     y_col=calculated_col,
-                                     y_is_calculated=True,
-                                     columns_set=columns_set,
-                                     show_expections=show_exceptions,
-                                     display_info=display_info,
-                                     f=f)
-
-        if test_id in ['RARE_VALUES']:
-            self.__plot_count_plot(cols[0], f)
-
-        if test_id in ['RARE_PAIRS', 'BINARY_SAME', 'BINARY_OPPOSITE', 'BINARY_IMPLIES']:
-            self.__plot_heatmap(test_id, cols, f)
-
-        if test_id in ['COLUMN_ORDERED_ASC', 'COLUMN_ORDERED_DESC', 'COLUMN_TENDS_ASC', 'COLUMN_TENDS_DESC',
-                       'SIMILAR_PREVIOUS']:
-            self.__draw_row_rank_plot(test_id, cols[0], show_exceptions, f)
-
-        if test_id in ['SMALL_GIVEN_VALUE', 'LARGE_GIVEN_VALUE', 'BINARY_MATCHES_VALUE']:
-            self.__draw_box_plots(test_id, cols, columns_set, f)
-
-        if test_id in ['BINARY_MATCHES_SUM']:
-            df2 = self.orig_df[cols].copy()
-            df2['SUM'] = self.numeric_vals_filled[cols[0]] + self.numeric_vals_filled[cols[1]]
-
-            fig, ax = plt.subplots(nrows=1, ncols=3, sharey=True, figsize=(15, 4))
-            s = sns.boxplot(data=df2, orient='h', y=cols[2], x='SUM', ax=ax[0])
-            s.set_title(f"{cols[2]} vs \nthe SUM of {cols[0]} \nand \n{cols[1]}")
-
-            s = sns.boxplot(data=self.orig_df, orient='h', y=cols[2], x=cols[0], ax=ax[1])
-            s.set_title(f"{cols[2]} vs \n{cols[0]} \nAlone")
-
-            s = sns.boxplot(data=self.orig_df, orient='h', y=cols[2], x=cols[1], ax=ax[2])
-            s.set_title(f"{cols[2]} vs \n{cols[1]} \nAlone")
-            self.show_image(f)
-
-        if test_id in ['BINARY_TWO_OTHERS_MATCH']:
-            if (cols[0] in self.numeric_cols) and (cols[1] in self.numeric_cols):
-                s = sns.scatterplot(data=self.orig_df, x=cols[0], y=cols[1], hue=cols[2])
-                s.set_title(f'"{cols[0]}" vs "{cols[1]}"\nColor indicates "{cols[2]}"')
-                plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-                self.show_image(f)
-
-        if test_id in ['UNUSUAL_DAY_OF_WEEK']:
-            sns.countplot(x=self.orig_df[cols[0]].dt.strftime('%A').fillna('NONE'))
-            self.show_image(f)
-
-        if test_id in ['UNUSUAL_DAY_OF_MONTH']:
-            sns.countplot(x=self.orig_df[cols[0]].dt.day.fillna('NONE'))
-            self.show_image(f)
-
-        if test_id in ['UNUSUAL_MONTH']:
-            sns.countplot(x=self.orig_df[cols[0]].dt.month.fillna('NONE'))
-            self.show_image(f)
-
-        if test_id in ['UNUSUAL_HOUR']:
-            sns.countplot(x=self.orig_df[cols[0]].dt.hour.fillna('NONE'))
-            self.show_image(f)
-
-        if test_id in ['UNUSUAL_MINUTES']:
-            sns.countplot(x=self.orig_df[cols[0]].dt.minute.fillna('NONE'))
-            self.show_image(f)
-
-        elif test_id in ['CONSTANT_GAP', 'LARGE_GAP', 'SMALL_GAP', 'LATER']:
-            fig, ax = plt.subplots()
-            gaps_arr = (self.orig_df[cols[1]] - self.orig_df[cols[0]]).dt.days.dropna()
-            if gaps_arr.nunique() > 20:
-                sns.histplot(x=gaps_arr)
-            else:
-                sns.countplot(x=gaps_arr)
-            clean_x_tick_labels(fig, 1, ax)
-            self.show_image(f)
-
-        elif test_id in ['RARE_PAIRS_FIRST_CHAR']:
-            df2 = self.orig_df[cols].copy()
-            df2[f'{cols[0]} First Char'] = df2[cols[0]].astype(str).str[:1]
-            df2[f'{cols[1]} First Char'] = df2[cols[1]].astype(str).str[:1]
-            counts_data = pd.crosstab(df2[f'{cols[0]} First Char'], df2[f'{cols[1]} First Char'])
-            s = sns.heatmap(counts_data, cmap="Blues", annot=True, fmt='g')
-            s.set_title(f"Counts by First Characters of {cols[0]} and {cols[1]}")
-            self.show_image(f)
-
-        elif test_id in ['RARE_PAIRS_FIRST_WORD']:
-            df2 = self.orig_df[cols].copy()
-            col_vals = df2[cols[0]].astype(str).apply(replace_special_with_space)
-            df2[f'{cols[0]} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df2[cols[1]].astype(str).apply(replace_special_with_space)
-            df2[f'{cols[1]} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            counts_data = pd.crosstab(df2[f'{cols[0]} First Word'], df2[f'{cols[1]} First Word'])
-            s = sns.heatmap(counts_data, cmap="Blues", annot=True, fmt='g')
-            s.set_title(f"Counts by First Words of {cols[0]} and {cols[1]}")
-            self.show_image(f)
-
-        elif test_id in ['CORRELATED_ALPHA_ORDER']:
-            df2 = self.orig_df[cols].copy()
-            df2[cols[0]] = self.orig_df[cols[0]].rank(pct=True)
-            df2[cols[1]] = self.orig_df[cols[1]].rank(pct=True)
-            s = sns.scatterplot(data=df2, x=cols[0], y=cols[1])
-            s.set_title("Values by Alphabetic Order")
-
-            # Find the flagged values and identify them on the plot
-            if show_exceptions:
-                results_col_name = self.get_results_col_name(test_id, columns_set)
-                results_col = self.test_results_df[results_col_name]
-                flagged_idxs = np.where(results_col)
-                sns.scatterplot(data=df2.loc[flagged_idxs], x=cols[0], y=cols[1], color='red', label='Flagged')
-            self.show_image(f)
-
-        elif test_id in ['LARGE_GIVEN_DATE', 'SMALL_GIVEN_DATE']:
-            df2 = self.orig_df[cols].copy()
-            df2[cols[1]] = df2[cols[1]].astype(float)
-            if cols[1] in self.date_cols:
-                df2['Epoch'] = (df2[cols[1]] - datetime.datetime(1970, 1, 1)).dt.total_seconds()
-                sns.boxplot(data=df2, orient='h', y=cols[0], x='Epoch')
-                plt.xlabel(cols[1])
-                plt.ylabel(cols[0] + " Bin Number")
-                plt.xticks([])
-                plt.tight_layout()
-                self.show_image(f)
-            else:
-                fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 3))
-                sns.scatterplot(data=df2, x=cols[0], y=cols[1], ax=ax[0])
-                for v in display_info['bin_edges']:
-                    ax[0].axvline(v, color='green', linewidth=1, alpha=0.3)
-                for label in ax[0].get_xmajorticklabels():
-                    label.set_rotation(30)
-                    label.set_horizontalalignment("right")
-                ax[0].set_title('Values with Bin Edges')
-
-                df2[cols[0]] = display_info['bin_assignments']
-                s = sns.boxplot(data=df2, orient='v', x=cols[0], y=cols[1], ax=ax[1])
-                s.set_xlabel(cols[0] + " Bin Number")
-                s.set_title("Values by Bin")
-                plt.tight_layout()
-                self.show_image(f)
-
-            # Also draw a histogram of the relevant classes.
-            results_col_name = self.get_results_col_name(test_id, columns_set)
-            results_col = self.test_results_df[results_col_name]
-            flagged_idxs = np.where(results_col)
-            flagged_df = self.orig_df.loc[flagged_idxs]
-            bins_with_flagged = set(display_info['bin_assignments'].values[flagged_idxs].tolist())
-            nvals = len(bins_with_flagged)
-            fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
-            for idx, bin_id in enumerate(bins_with_flagged):
-                rows_for_bin = np.where(display_info['bin_assignments'] == bin_id)
-                bin_df = df2.loc[rows_for_bin]
-                if nvals == 1:
-                    curr_ax = ax
-                else:
-                    curr_ax = ax[idx]
-                s = sns.histplot(data=bin_df, x=cols[1], color='blue', bins=100, ax=curr_ax)
-                s.set_title(f"Values for bin {bin_id}\nFlagged values in red")
-
-                # Draw the flagged values
-                for i in flagged_df.index:
-                    if display_info['bin_assignments'][i] == bin_id:
-                        curr_ax.axvline(flagged_df.loc[i, cols[1]], color='red')
-            plt.tight_layout()
-            self.show_image(f)
-
-        elif test_id in ['LARGE_GIVEN_PREFIX', 'SMALL_GIVEN_PREFIX']:
-            df2 = self.orig_df[cols].copy()
-            col_vals = df2[cols[0]].astype(str).apply(replace_special_with_space)
-            df2[cols[0]] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            if cols[1] in self.date_cols:
-                df2['Epoch'] = (df2[cols[1]] - datetime.datetime(1970, 1, 1)).dt.total_seconds()
-                sns.boxplot(data=df2, orient='h', y=cols[0], x='Epoch')
-                plt.xlabel(cols[1])
-                plt.xticks([])
-            else:
-                df2[cols[1]] = df2[cols[1]].astype(float)
-                sns.boxplot(data=df2, orient='h', y=cols[0], x=cols[1])
-            self.show_image(f)
-
-            # Also draw a histogram of the relevant classes.
-            results_col_name = self.get_results_col_name(test_id, columns_set)
-            results_col = self.test_results_df[results_col_name]
-            flagged_idxs = np.where(results_col)
-            flagged_df = self.orig_df.loc[flagged_idxs]
-            col_vals = flagged_df[cols[0]].astype(str).apply(replace_special_with_space)
-            flagged_df[cols[0]] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            vals = pd.Series(flagged_df[cols[0]].astype(str).apply(replace_special_with_space))
-            vals = pd.Series([x[0] if len(x) > 0 else "" for x in vals.str.split()]).unique()
-            nvals = len(vals)
-            fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
-            for v_idx, v in enumerate(vals):
-                sub_df = df2[df2[cols[0]] == v]
-                sub_flagged_df = flagged_df[flagged_df[cols[0]] == v]
-                if nvals == 1:
-                    curr_ax = ax
-                else:
-                    curr_ax = ax[v_idx]
-                s = sns.histplot(data=sub_df, x=cols[1], color='blue', bins=100, ax=curr_ax)
-                flagged_vals = sub_flagged_df[cols[1]].values
-                for fv in flagged_vals:
-                    if fv is None:
-                        continue
-                    s.axvline(fv, color='red')
-                s.set_title(f"Distribution of {cols[1]} where the first word of {cols[0]} is {v} (Flagged values in red)")
-                if cols[1] in self.date_cols:
-                    plt.xticks(rotation=45, ha='right', rotation_mode='anchor')
-                self.show_image(f)
-
-        elif test_id in ['SMALL_AVG_RANK_PER_ROW', 'LARGE_AVG_RANK_PER_ROW']:
-            t_df = pd.DataFrame({"Avg. Percentiles": display_info['percentiles']})
-            fig, ax = plt.subplots(figsize=(6, 2))
-            s = sns.histplot(data=t_df, x='Avg. Percentiles')
-            for fv in display_info['flagged_vals']:
-                ax.axvline(fv, color='r')
-            s.set_title("Mean Percentile of Numeric Values by Row")
-            self.show_image(f)
-
-        elif test_id in ['CORRELATED_GIVEN_VALUE']:
-            if show_exceptions:
-                results_col_name = self.get_results_col_name(test_id, columns_set)
-                results_col = self.test_results_df[results_col_name]  # Array of True/False indicating the flagged rows
-                flagged_idxs = np.where(results_col)
-
-            vals = self.orig_df[cols[0]].unique()
-            plotted_vals = []
-            for val in vals:
-                if self.orig_df[cols[0]].tolist().count(val) > 100:
-                    plotted_vals.append(val)
-
-            for val in plotted_vals:
-                if (val == None) or (val != val):
-                    df2 = self.orig_df[self.orig_df[cols[0]].isna()]
-                else:
-                    df2 = self.orig_df[self.orig_df[cols[0]] == val]
-                fig, ax = plt.subplots(figsize=(3, 3))
-                s = sns.scatterplot(data=df2, x=cols[1], y=cols[2], color='blue')
-                s.set_title(f'Where Column "{cols[0]}" is "{val}"')
-
-                if show_exceptions:
-                    for flagged_idx in flagged_idxs:
-                        if flagged_idx in list(df2.index):
-                            df3 = df2.loc[flagged_idx]
-                            s = sns.scatterplot(data=df3, x=cols[1], y=cols[2], color='red')
-                self.show_image(f)
-
-        elif test_id in ['GROUPED_STRINGS_BY_NUMERIC']:
-            df2 = pd.DataFrame({cols[0]: self.numeric_vals_filled[cols[0]], cols[1]: self.orig_df[cols[1]]})
-            if show_exceptions:
-                results_col_name = self.get_results_col_name(test_id, columns_set)
-                results_col = self.test_results_df[results_col_name]  # Array of True/False indicating the flagged rows
-                df2['Flagged'] = results_col
-                s = sns.scatterplot(data=df2, x=cols[0], y=cols[1], hue='Flagged')
-            else:
-                s = sns.scatterplot(data=df2, x=cols[0], y=cols[1], color='blue')
-            self.show_image(f)
-
-        elif test_id in ['LARGE_GIVEN_PAIR', 'SMALL_GIVEN_PAIR']:
-
-            def highlight_cells():
-                for row_idx in flagged_df.index:
-                    v0 = flagged_df.loc[row_idx, cols[0]].strip()
-                    v1 = flagged_df.loc[row_idx, cols[1]].strip()
-                    patch_x = counts_df.columns.tolist().index(v1)
-                    patch_y = counts_df.index.tolist().index(v0)
-                    ax.add_patch(Rectangle((patch_x, patch_y), 1, 1, fill=False, edgecolor='yellow', lw=3))
-
-            results_col_name = self.get_results_col_name(test_id, columns_set)
-            results_col = self.test_results_df[results_col_name]
-            flagged_idxs = np.where(results_col)
-            flagged_df = self.orig_df.loc[flagged_idxs]
-            vals = flagged_df[[cols[0], cols[1]]].drop_duplicates()
-            nvals = len(vals)
-
-            # Present a heatmap of the counts of each pair
-            counts_df = pd.crosstab(self.orig_df[cols[0]], self.orig_df[cols[1]])
-            counts_df.columns = [x.strip() for x in counts_df.columns]
-            counts_df.index = [x.strip() for x in counts_df.index]
-            fig_size_x = len(counts_df.columns) * 2
-            if len(counts_df) > 10:
-                fig_size_y = len(counts_df) * 0.4
-            else:
-                fig_size_y = max(3, len(counts_df) * 0.9)
-            fig, ax = plt.subplots(figsize=(fig_size_x, fig_size_y))
-            s = sns.heatmap(counts_df, annot=True, cmap="YlGnBu", fmt='g', linewidths=1.0, linecolor='black', clip_on=False)
-            s.set_title(f'Counts by combination of values in \n"{cols[0]}" and \n"{cols[1]}"')
-            plt.tight_layout()
-            highlight_cells()
-            self.show_image(f)
-
-            # Present a heatmap of the average value of col[2] for each pair
-            if cols[2] in self.numeric_cols:
-                # Use aggfunc='quantile' for date columns
-                avg_df = pd.crosstab(self.orig_df[cols[0]], self.orig_df[cols[1]], values=self.numeric_vals[cols[2]], aggfunc='mean')
-                fig, ax = plt.subplots(figsize=(fig_size_x, fig_size_y))
-                s = sns.heatmap(avg_df, annot=True, cmap="YlGnBu", fmt='g', linewidths=1.0, linecolor='black', clip_on=False)
-                s.set_title(f'Average value of \n"{cols[2]}" \nby combination of values in \n"{cols[0]}" and \n"{cols[1]}"')
-                plt.tight_layout()
-                highlight_cells()
-                self.show_image(f)
-
-            # Present a histogram of the relevant classes
-            fig, ax = plt.subplots(nrows=1, ncols=nvals, sharey=True, figsize=(nvals*4, 4))
-            for v_idx in range(nvals):
-                v0 = vals.iloc[v_idx][cols[0]]
-                v1 = vals.iloc[v_idx][cols[1]]
-                sub_df = self.orig_df[(self.orig_df[cols[0]] == v0) & (self.orig_df[cols[1]] == v1)]
-                sub_flagged_df = flagged_df[(flagged_df[cols[0]] == v0) & (flagged_df[cols[1]] == v1)]
-                if nvals == 1:
-                    curr_ax = ax
-                else:
-                    curr_ax = ax[v_idx]
-                s = sns.histplot(data=sub_df, x=cols[2], color='blue', bins=100, ax=curr_ax)
-                flagged_vals = sub_flagged_df[cols[2]].values
-                for fv in flagged_vals:
-                    if fv is None:
-                        continue
-                    s.axvline(fv, color='red')
-                s.set_title(f'Distribution of \n"{cols[2]}" where \n"{cols[0]}" is "{v0}" and \n"{cols[1]}" is "{v1}"')
-                if nvals == 1:
-                    ax_curr = ax
-                else:
-                    ax_curr = ax[v_idx]
-                num_ticks = len(ax_curr.xaxis.get_ticklabels())
-                for label_idx, label in enumerate(ax_curr.xaxis.get_ticklabels()):
-                    if label_idx != (num_ticks - 1):
-                        label.set_visible(False)
-            self.show_image(f)
-
-        elif test_id in ['BINARY_RARE_COMBINATION']:
-            counts_df = self.orig_df.groupby(cols).size().reset_index()
-            # The 0 column is the counts. The other columns have the values from the columns in the original data.
-            counts = counts_df[0]
-            labels = []
-            for i in counts_df.index:
-                label = ''
-                for c in cols:
-                    label += str(counts_df.loc[i, c]) + " / "
-                labels.append(label)
-            s = sns.barplot(orient='h', y=labels, x=counts)
-            s.set_title("Counts of combinations of values in columns")
-            for p_idx, p in enumerate(s.patches):
-                s.annotate('{:.1f}'.format(counts[p_idx]), (p.get_width()+0.25, (p.get_y() + (p.get_height() / 2))+0.1))
-            self.show_image(f)
-
-        elif test_id in ['DECISION_TREE_REGRESSOR', 'LINEAR_REGRESSION'] or (test_id in ['PREV_VALUES_DT'] and cols[-1] in self.numeric_cols):
-            df2 = pd.DataFrame({
-                cols[-1]: self.orig_df[cols[-1]],
-                'Prediction': display_info['Pred']
-            })
-            if show_exceptions:
-                result_col_name = self.get_results_col_name(test_id, columns_set)
-                results_col = self.test_results_df[result_col_name]
-                df2['Flagged'] = results_col
-                s = sns.scatterplot(data=df2, y='Prediction', x=cols[-1], hue='Flagged')
-            else:
-                s = sns.scatterplot(data=df2, y='Prediction', x=cols[-1])
-            s.set_title(f'Actual vs Predicted values for "{cols[-1]}"')
-            self.show_image(f)
-
-        elif test_id in ['FIRST_WORD_SMALL_SET']:
-            if len(display_info['counts']) > 1:
-                s = sns.barplot(orient='h', y=display_info['counts'].index, x=display_info['counts'].values)
-                self.show_image(f)
-
     ##################################################################################################################
     # Private methods to display tables of example rows from the original data
     ##################################################################################################################
@@ -4585,11 +3407,14 @@ class DataConsistencyChecker:
         output_file = "output.html"
         export_dataframes_to_html([df1, df2], output_file)
 
-    # todo: provide a parameter to name the export
-    # todo: improve the font
-    # todo: add more layers of expanding divs: buy test and by issue
-    # todo: add background colour & border per div.
-    def export_html(self, test_id_list=None):
+    def export_html(self, test_id_list=None, output_file: str = "Data_consistency.html"):
+        """Export patterns and exceptions to an HTML report.
+
+        Args:
+            test_id_list: Optional list of test IDs to include. If ``None`` all
+                available tests are exported.
+            output_file: Output path for the generated HTML file.
+        """
 
         def print_test_header(test_id, section_name, f):
             nonlocal test_id_list
@@ -4623,7 +3448,7 @@ class DataConsistencyChecker:
         if test_id_list is None:
             test_id_list = self.get_test_list()
 
-        with open("Data_consistency.html", 'w') as f:
+        with open(output_file, 'w') as f:
             f.write("<html>" + os.linesep)
             f.write("<head>" + os.linesep)
             f.write("</head>" + os.linesep)
@@ -18767,256 +17592,3 @@ class DataConsistencyChecker:
                           "flagged_vals": flagged_vals}
         )
 
-
-##################################################################################################################
-# General Methods outside the class
-##################################################################################################################
-
-def safe_div(x, y):
-    if y == 0:
-        return 0
-    return x / y
-
-
-def is_number(s):
-    """
-    Returns True if the passed value is numeric or can be cast to a numeric, such as '1.0'. Returns False otherwise.
-    """
-    try:
-        float(s)
-        return True
-    except (ValueError, TypeError):
-        return False
-
-
-def convert_to_numeric(arr, filler):
-    """
-    Ensure an array has all numeric values. Any non-numeric values are replaced by the specified filler value.
-    Null values as well as variables with non-numeric characters will be removed.
-    """
-    return pd.Series([float(x) if (is_number(x) and x == x and x != None) else filler for x in arr], dtype='float64')
-
-
-def get_num_decimal_digits(num):
-    """
-    Return the number of decimal digits in the passed string
-    """
-
-    num_str = str(np.format_float_positional(num))
-    if num_str.count('.') == 0:
-        return 0
-    digits_str = num_str.split('.')[1]
-    len_digits_str = len(digits_str)
-    if len_digits_str == 0:
-        return 0
-    digits_val = int(digits_str)
-    if digits_val == 0:
-        return 0
-    return len_digits_str
-
-
-def get_non_alphanumeric(x):
-    """
-    Return the passed string, with all alphanumeric characters removed. Returns an empty string if the passed
-    string is empty or contains only alphanumeric characters.
-    """
-
-    if x.isalnum():
-        return []
-    return [c for c in x if not str(c).isalnum()]
-
-
-def styling_orig_row(x, row_idx, flagged_arr):
-    """
-    Used to set the background colours for dataframes that display the flagged rows. All cells are coloured either
-    light blue (indicating no issues) or light yellow (indicating at least one issue).
-    """
-
-    df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
-    for c_idx, c_flagged in enumerate(flagged_arr):
-        if c_flagged:
-            df_styler.iloc[row_idx, c_idx+1] = 'background-color: #efecc3; color: black'
-        else:
-            df_styler.iloc[row_idx, c_idx+1] = 'background-color: #e5f8fa; color: black'
-    return df_styler
-
-
-def styling_flagged_rows(x, flagged_cells):
-    """
-    Similar to styling_orig_row(), but called where the list of tests are not included in the dataframe, only original
-    data rows.
-    """
-
-    df_styler = pd.DataFrame('background-color: #e5f8fa; color: black', index=x.index, columns=x.columns)
-    for row_idx in x.index:
-        for col_idx, col_name in enumerate(x.columns[:-1]):  # Do not check the 'FINAL SCORE' column
-            if flagged_cells[row_idx, col_idx] > 0:
-                df_styler.loc[row_idx][x.columns[col_idx]] = 'background-color: #efecc3; color: black'
-    for row_idx in x.index:
-        col_idx = len(x.columns) - 1
-        df_styler.loc[row_idx][x.columns[col_idx]] = 'background-color: white; color: black'
-    return df_styler
-
-
-def is_notebook():
-    """
-    Determine if we are currently operating in a notebook, such as Jupyter. Returns True if so, False otherwise.
-    """
-
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return False  # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter
-
-
-def print_line(f):
-    if not f:
-        print()
-
-
-def print_text(s, f=None):
-    """
-    General method to handle printing text to either HTML file, console, or notebook in the form of markdown.
-    """
-
-    if f:
-        s = s.replace("**", "<b>", 1)
-        s = s.replace("**", "</b>", 1)
-
-        s = s.replace("###", "<H2>", 1)
-        s = s.replace("##", "<H1>", 1)
-
-        s = s.replace(' ', '&nbsp;')
-        s = s.replace('\n', '<br>')
-        f.write(s + "<br><br>" + os.linesep)
-    elif is_notebook():
-        # Remove or replace any characters that are specific to console
-        if 'decision tree' in s:
-            print(s)
-        else:
-            s = s.replace(' ', '&nbsp;')
-            s = s.replace('\n', '<br>')
-            display(Markdown(s))
-    else:
-        # Remove or replace any characters that are specific to markdown
-        print(s.replace("**", "").replace("#", "").replace("<br>", "\n"))
-
-
-def is_missing(x):
-    """
-    When passed a single value of any type, returns True if the value is None, np.nan, empty, or can otherwise be
-    considered missing. Returns False otherwise.
-    """
-
-    # todo: check NaD (not a date) too. and NaT (not a time)
-    if x is None:
-        return True
-    if 'NAType' in str(type(x)):
-        return True
-    if 'missing' in str(type(x)):
-        return True
-    if isinstance(x, numbers.Number):
-        return math.isnan(x)
-    if x != x:
-        return True
-    if type(x) in [str, np.str_]:
-        return (x.strip() == "") or (x == 'nan') or (x == 'None') or (len(x) == 0)
-    if type(x) == list:
-        return len(x) == 0
-    return False
-
-
-def array_to_str(arr):
-    """
-    Create a prettified string version of a python array
-    """
-
-    arr = sorted(arr)
-    arr_str = ""
-    for v in arr:
-        arr_str += str(v) + ", "
-    arr_str = arr_str[:-2]
-    return arr_str
-
-
-def replace_special_with_space(x):
-    """
-    Returns a string similar to the passed strings, but with all special (non-alphanumeric) characters replaced with
-    spaces. This is generally used to support splitting strings based on special characters as well as white space
-    characters.
-    """
-
-    if x is None:
-        return ""
-    if x in [np.inf, -np.inf, np.NaN]:
-        return ""
-    return ''.join([c if ((c in string.ascii_letters) or (c in string.digits)) else " " for c in x])
-
-
-def truncate_description(x):
-    if len(x) > 100:
-        x = x[:100] + "..."
-    return x
-
-
-def is_uppercase(x):
-    # We accept characters with and without accents, which is the ascii range 65 to 90, and 193 to 221
-    if x is None or x == '':
-        return False
-    return (65 <= ord(x) <= 90) or (193 <= ord(x) <= 221)
-
-
-def call_test(dc, test_id):
-    print(test_id)
-
-
-def clean_x_tick_labels(fig, n_axis, ax):
-    """
-    n_axis: the number of axes in the figure
-    """
-
-    # Ensure the x tick labels are populated
-    plt.draw()
-
-    # Ensure there are at most 10 tick labels
-    num_ticks = len(ax.xaxis.get_ticklabels())
-    if num_ticks > 10:
-        max_ticks = 10
-        mod = num_ticks // max_ticks
-        for label_idx, label in enumerate(ax.xaxis.get_ticklabels()):
-            if label_idx % mod != 0:
-                label.set_visible(False)
-
-    # Rotate labels if necessary
-    num_chars = 0
-    for label_idx, label in enumerate(ax.xaxis.get_ticklabels()):
-        if label.get_visible():
-            num_chars += len(label._text)
-
-    # In some cases, we can not get the text of the labels. To be safe, rotate the labels in these cases as well.
-    if (num_chars > (fig.get_figwidth() * 10 / n_axis)) or (num_chars == 0):
-        fig.autofmt_xdate()
-
-
-def set_warnings_levels():
-    warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
-    warnings.filterwarnings(action='ignore', category=FutureWarning)
-    # Some versions of scipy have different exceptions
-    try:
-        warnings.filterwarnings(action='ignore', category=scipy_stats.SpearmanRConstantInputWarning)
-    except:
-        pass
-    try:
-        warnings.filterwarnings(action='ignore', category=scipy_stats.ConstantInputWarning)
-    except:
-        pass
-    try:
-        warnings.filterwarnings(action='ignore', category=scipy_stats.NearConstantInputWarning)
-    except:
-        pass

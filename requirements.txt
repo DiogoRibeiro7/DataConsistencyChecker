@@ -1,0 +1,11 @@
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+ipython
+python-dateutil
+termcolor
+scipy
+dill
+pytest
