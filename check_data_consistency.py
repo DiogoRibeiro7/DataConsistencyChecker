@@ -45,6 +45,7 @@ import scipy.stats as scipy_stats
 # Mixins
 from display_mixin import DisplayMixin
 from plots_mixin import PlotsMixin
+from synth_data_mixin import SynthDataMixin
 
 # Utility functions split out from the main module
 from checker_utils import (
@@ -89,7 +90,7 @@ TEST_DEFN_FAST = 6          # Element 6 indicates if the test is reasonably fast
 TEST_DEFN_CODE = 7          # Element 7 indicates if the test assumes the values may represent code or ID values.
 
 
-class DataConsistencyChecker(DisplayMixin, PlotsMixin):
+class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
     def __init__(self,
                  iqr_limit=3.5,
                  idr_limit=1.0,
@@ -1309,117 +1310,6 @@ class DataConsistencyChecker(DisplayMixin, PlotsMixin):
         self.col_triples_all_null_bool_dict = None
         self.common_vals_dict = None
 
-    def generate_synth_data(self, all_cols=False, execute_list=None, exclude_list=None, seed=0, add_nones="none"):
-        """
-        Generate a random synthetic dataset which may be used to demonstrate each of the tests.
-
-        all_cols: bool
-            If all_cols is False, this generates columns specifically only for the tests that are specified to run.
-            If all_cols is True, this generates columns related to all tests, even where that test is not specified to
-            run.
-
-        execute_list: list of strings
-            If specified, only columns related to these tests will be generated.
-
-        exclude_list: list of strings
-            If specified, columns related to all tests other than these will be generated. It is not permitted to
-            specify both execute_list and exclude_list.
-
-        seed: int
-            If specified, this is used to initialize any random processes, which are involved in the creation of
-            most synthetic columns. If specified, the synthetic data creation will be repeatable.
-
-        add_nones: string
-            Must be one of 'none', 'one-row', 'in-sync', 'random', '80-percent'.
-            If add_nones is set to 'random', then each column will have a set of None values added randomly, covering
-            50% of the values. If set to 'in-sync', this is similar, but all columns will have None set in the ame rows.
-            If set to 'one-row', only one row will be given None values. If set to '80-percent', 80% of all values
-            will be set to None.
-        """
-
-        assert add_nones in ['none', 'one-row', 'in-sync', 'random', '80-percent']
-
-        # Check the passed test IDs, if any, are valid
-        if execute_list:
-            for test_id in execute_list:
-                if test_id not in self.get_test_list():
-                    print_text(f"{test_id} is not a valid test ID. Unable to generate data.")
-                    return
-        if exclude_list:
-            for test_id in exclude_list:
-                if test_id not in self.get_test_list():
-                    print_text(f"{test_id} is not a valid test ID. Unable to generate data.")
-                    return
-
-        self.synth_df = pd.DataFrame()
-        for test_id in self.test_dict.keys():
-            # Set the seed for each test, to ensure the synthetic data is the same regardless which other synthetic
-            # columns are included.
-            random.seed(seed)
-            np.random.seed(seed)
-            if all_cols or \
-                    ((execute_list is None and exclude_list is None) or
-                     (execute_list and test_id in execute_list) or
-                     (exclude_list and test_id not in exclude_list)):
-                self.test_dict[test_id][TEST_DEFN_GEN_FUNC]()
-
-        if add_nones == 'one-row':
-            # Set a single row, all columns to None. This checks that the tests are able to handle at least some Nulls
-            for col_name in self.synth_df.columns:
-                self.synth_df.loc[0, col_name] = None
-        elif add_nones == 'in-sync':
-            # Do not set the last few rows, where the exceptions tend to be, as None
-            none_idxs = random.sample(range(self.num_synth_rows - 10), self.num_synth_rows // 2)
-            for col_name in self.synth_df.columns:
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
-        elif add_nones == 'random':
-            for col_name in self.synth_df.columns:
-                none_idxs = random.sample(range(self.num_synth_rows - 10), self.num_synth_rows // 2)
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
-        elif add_nones == '80-percent':
-            none_idxs = random.sample(range(self.num_synth_rows - 10), int(self.num_synth_rows * 0.8))
-            for col_name in self.synth_df.columns:
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
-
-        return self.synth_df
-
-    def modify_real_data(self, df, num_modifications=5):
-        """
-        Given a real dataset, modify it slightly, in order to add what are likely inconsistencies to the data
-
-        df: pandas dataframe
-            A real or synthetic dataset.
-
-        num_modifications: int
-            The number of modifications to make. This should be small, so as not to change the overall distribution
-            of the data
-
-        Return:
-            the modified dataframe,
-            a list of row numbers and column names, indicating the cells that were modified
-        """
-
-        cell_list = []
-        for _ in range(num_modifications):
-            row_index = random.randint(0, len(df) - 1)
-            col_index = random.randint(0, len(df.columns) - 1)
-            col_name = df.columns[col_index]
-
-            if df.loc[row_index, col_name] is None:
-                non_null_values = df[col_name].dropna()
-                str_val = non_null_values.values.sample().values[0]
-            else:
-                str_val = str(df.loc[row_index, col_name]) + "9"
-            df.loc[row_index, col_name] = str_val
-            cell_list.append([row_index, col_name])
-
-        return df, cell_list
 
     def check_data_quality(
             self,
