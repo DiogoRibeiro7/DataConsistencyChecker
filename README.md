@@ -282,7 +282,16 @@ The codebase is organized into modular components for maintainability:
 
 ```
 DataConsistencyChecker/
-├── check_data_consistency.py   # Main checker class with all 164 tests
+├── check_data_consistency.py   # Main checker class (~16,800 lines)
+├── test_registry.py             # Test definition constants and registry
+├── tests_definitions/           # Test definitions organized by category
+│   ├── __init__.py              # Package aggregator
+│   ├── base_tests.py            # Single/pair column tests (any type)
+│   ├── numeric_tests.py         # Numeric column tests
+│   ├── date_tests.py            # Date/time column tests
+│   ├── string_tests.py          # String/text column tests
+│   ├── binary_tests.py          # Binary column tests
+│   └── multi_column_tests.py    # Multi-column & row-level tests
 ├── checker_utils.py             # Utility functions (type checking, styling, etc.)
 ├── display_mixin.py             # Display and output helper methods
 ├── plots_mixin.py               # Visualization and plotting utilities
@@ -297,7 +306,19 @@ DataConsistencyChecker/
 └── pyproject.toml              # Poetry configuration
 ```
 
-The main `DataConsistencyChecker` class uses multiple inheritance from three mixins (DisplayMixin, PlotsMixin, SynthDataMixin) to organize functionality and maintain code clarity.
+### Modular Architecture
+
+The codebase has been refactored for better maintainability:
+
+- **Main class** (`check_data_consistency.py`): Core API, test execution logic, and all 164 test implementations
+- **Test definitions** (`tests_definitions/`): Test metadata organized into 6 category-based modules (~250 lines each)
+- **Mixins**: DisplayMixin, PlotsMixin, and SynthDataMixin provide specialized functionality through multiple inheritance
+- **Utilities**: Shared helper functions for type checking, styling, and data manipulation
+
+This modular structure makes it easier to:
+- Add new tests (just add to the appropriate category module)
+- Understand test organization (tests grouped by column types)
+- Maintain and review code (smaller, focused modules)
 
 ## Performance
 For notes on reducing the execution times of the analysis, refer to:
