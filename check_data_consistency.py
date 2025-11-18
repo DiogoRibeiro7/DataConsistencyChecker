@@ -1,3 +1,6 @@
+from __future__ import annotations
+from typing import Any, Callable
+
 import pandas as pd
 import numpy as np
 import numbers
@@ -92,38 +95,36 @@ alphanumeric = letters + digits
 
 
 class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
-    def __init__(self,
-                 iqr_limit=3.5,
-                 idr_limit=1.0,
-                 max_combinations=100_000,
-                 verbose=1):
+    """
+    Automated data quality checker performing 164 tests to identify patterns and anomalies.
+
+    This class examines tabular datasets for consistency patterns across single columns,
+    pairs of columns, and larger column sets. It identifies both patterns and exceptions
+    to those patterns, useful for EDA and interpretable outlier detection.
+    """
+
+    def __init__(
+        self,
+        iqr_limit: float = 3.5,
+        idr_limit: float = 1.0,
+        max_combinations: int = 100_000,
+        verbose: int = 1
+    ) -> None:
         """
         Initialize a DataConsistencyChecker object.
 
-        iqr_limit: float
-            Inter-quartile range is used in several tests to find unusually small or large values. For example,
-            to identify large values, Q3 (the 3rd quartile, or 75th percentile plus some multiplier times the
-            inter-quartile range is often used. Ex: Q3 + 1.5*IQR. To avoid noisy results, a higher coefficient
-            is used here.
-
-        idr_limit: float
-            Inter-decile range is used in several tests, particularly to identify very small values, as IQR can work
-            poorly where the values are strictly positive.
-
-        max_combinations: int
-            Several tests check many combinations of columns, which can be very slow to execute where there are many
-            columns. For example, BIN_NUM_SAME will check subsets of the binary columns, testing different sizes of
-            subsets. For some sizes of subsets, there may be a very large number of combinations. Setting
-            max_combinations will restrict the number of combinations examined. This may result in missing some
-            patterns, but allows execution time to be limited. This applies only to tests that check subsets of
-            multiple sizes.
-
-        verbose: int
-           -1: no output at all will be displayed
-            0: no output will be displayed until the tests are complete.
-            1: the test names will be displayed as they execute.
-            2: a description of each test, and progress related to each of the more expensive tests will be displayed
-               as well.
+        Args:
+            iqr_limit: Inter-quartile range multiplier used to identify outliers.
+                Higher values reduce false positives. Default: 3.5
+            idr_limit: Inter-decile range multiplier for outlier detection in
+                strictly positive data. Default: 1.0
+            max_combinations: Maximum number of column combinations to test.
+                Limits execution time for tests on multiple column sets. Default: 100,000
+            verbose: Verbosity level for progress output:
+                -1: No output
+                 0: Output only after completion
+                 1: Display test names during execution
+                 2: Display test descriptions and progress updates
         """
 
         set_warnings_levels()
@@ -246,14 +247,21 @@ class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
                           for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_IMPLEMENTED]}
 
 
-    def init_data(self, df, known_date_cols=None):
+    def init_data(
+        self,
+        df: pd.DataFrame,
+        known_date_cols: list[str] | None = None
+    ) -> None:
         """
-        Must be called before calling check_data_quality(). Prepares the data for checking for anomalies.
+        Prepare data for quality checking. Must be called before check_data_quality().
 
-        df: dataframe to be assessed
+        Args:
+            df: DataFrame to be assessed for data quality
+            known_date_cols: List of column names to treat as date columns.
+                If None, date columns are auto-detected.
 
-        known_date_cols: list of strings
-            If specified, these, and only these, columns will be treated as date columns.
+        Returns:
+            None. Data is stored in instance variables.
         """
 
         self.orig_df = df.copy()
@@ -555,56 +563,41 @@ class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
 
 
     def check_data_quality(
-            self,
-            append_results=False,
-            execute_list=None,
-            exclude_list=None,
-            test_start_id=0,
-            fast_only=False,
-            include_code_tests=True,
-            freq_contamination_level=0.005,
-            rare_contamination_level=0.1,
-            run_parallel=False):
+        self,
+        append_results: bool = False,
+        execute_list: list[str] | None = None,
+        exclude_list: list[str] | None = None,
+        test_start_id: int = 0,
+        fast_only: bool = False,
+        include_code_tests: bool = True,
+        freq_contamination_level: int | float = 0.005,
+        rare_contamination_level: int | float = 0.1,
+        run_parallel: bool = False
+    ) -> None:
         """
-        Run the specified tests on the dataset specified in init_data(). This method identifies the patterns and
-        exceptions to these found in the data. Additional API calls may be made to access the results.
+        Execute data quality tests on the dataset specified in init_data().
 
-        append_results: bool
-            If set True, any previous test results, from previous executions of check_data_quality() will be saved and
-            the results from the current run appended to the previous results. If False, all previous test results will
-            be removed.
+        Identifies patterns and exceptions in the data. Use additional API calls
+        to access and analyze the results.
 
-        execute_list: list of Test IDs
-            If specified, these and only these tests will be executed.
+        Args:
+            append_results: If True, append to previous results; if False, clear previous results
+            execute_list: Specific test IDs to execute. If None, runs all tests
+            exclude_list: Test IDs to exclude. Cannot be used with execute_list
+            test_start_id: Test number to start from (for resuming incomplete runs)
+            fast_only: If True, run only fast single-column tests
+            include_code_tests: If True, include tests for code/ID value columns
+            freq_contamination_level: Max fraction (or count) of rows violating a pattern
+                for tests that frequently find results. Lower values reduce false positives
+            rare_contamination_level: Max fraction (or count) of rows violating a pattern
+                for tests that rarely find results. Higher values reduce false negatives
+            run_parallel: If True, run tests in parallel for faster execution
 
-        exclude_list:  list of Test IDs
-            If specified, all tests other than these will be executed. It is not permitted to specify both
-               execute_list and exclude_list.
+        Returns:
+            None. Results stored in instance variables accessible via other methods.
 
-        test_start_id: int
-            Each test has a unique number. Specifying a value greater than 0 will skip the initial tests. This may be
-            specified to continue a previous execution that was incomplete.
-
-        fast_only: bool
-            If specified, only tests that operate on single columns will be executed. The slower tests check sets of
-            two or more columns, and are skipped if this is set True.
-
-        include_code_tests: bool:
-            Some tests are specific to columns with code or ID values, such that the individual characters in the
-            values may have meaning. For example, with value X7333, it may be relevant that the first character is
-            an 'X', or that the subsequent characters are 4 numeric characters. If set True, these tests will be
-            executed.
-
-        freq_contamination_level: int or float
-            The maximum fraction of rows in violation of the pattern where we consider the pattern to still be in place.
-            If set as an integer, this defines the maximum number of rows, as opposed to the fraction. This is used for 
-            tests that frequently find results and is set low to reduce over-reporting
-
-        rare_contamination_level: int or float
-            This is used for tests that rarely find results and is set high to reduce under-reporting
-
-        run_parallel: bool
-            If set True, the tests will be run in parallel, which can reduce overall execution time.
+        Raises:
+            AssertionError: If both execute_list and exclude_list are specified
         """
 
         if self.orig_df is None or len(self.orig_df) == 0:
@@ -901,22 +894,26 @@ class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
             self.single_test_summary_df = self.single_test_summary_df.fillna("-")
         return self.single_test_summary_df
 
-    def get_patterns_list(self, test_exclude_list=None, column_exclude_list=None, show_short_list_only=True):
+    def get_patterns_list(
+        self,
+        test_exclude_list: list[str] | None = None,
+        column_exclude_list: list[str] | None = None,
+        show_short_list_only: bool = True
+    ) -> pd.DataFrame | None:
         """
-        This returns a dataframe containing a list of all, or some, of the identified patterns that had no exceptions.
-        Which patterns are included is controlled by the parameters. Each row of the returned dataframe represents
-        one pattern, which is one test over some set of rows. The dataframe specifies for each pattern: the test,
-        the set of columns, and a description of the pattern.
+        Get a DataFrame listing identified patterns without exceptions.
 
-        test_exclude_list: list
-            If set, rows related to these tests will be excluded.
+        Returns patterns discovered in the data, optionally filtered by test or column.
+        Each row represents one pattern (one test on a set of columns).
 
-        column_exclude_list: list
-            If set, rows related to these columns will be excluded.
+        Args:
+            test_exclude_list: Test IDs to exclude from results
+            column_exclude_list: Column names to exclude from results
+            show_short_list_only: If True, return only high-relevance (low-noise) patterns
 
-        show_short_list_only: bool
-            If True, only the tests that are most relevant (least noisy) will be returned. If False, all identified
-            patterns matching the other parameters will be returned.
+        Returns:
+            DataFrame with columns: Test ID, Column(s), Description of Pattern
+            Returns None if no patterns have been identified yet.
         """
 
         if self.patterns_df is None:
@@ -939,12 +936,16 @@ class DataConsistencyChecker(DisplayMixin, PlotsMixin, SynthDataMixin):
 
         return self._clean_column_names(df.drop(columns=['Display Information']))
 
-    def get_exceptions_list(self):
+    def get_exceptions_list(self) -> pd.DataFrame | None:
         """
-        Returns a dataframe containing a row for each pattern that was discovered with exceptions. This has a similar
-        format to the dataframe returned by get_patterns_list(), with one additional column representing the number
-        of exceptions found. The dataframe has columns for: test id, the set of columns involved in the pattern,
-        a description of the pattern and exceptions, and the number of exceptions.
+        Get a DataFrame listing patterns with exceptions.
+
+        Returns patterns that were discovered with violations. Similar to get_patterns_list()
+        but includes an additional column for the number of exceptions found.
+
+        Returns:
+            DataFrame with columns: Test ID, Column(s), Description, Number of Exceptions
+            Returns None if no exceptions have been identified yet.
         """
 
         def clean_col_names(x):
