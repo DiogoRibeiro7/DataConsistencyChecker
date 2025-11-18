@@ -1,5 +1,17 @@
 # DataConsistencyChecker
-A python tool to examine datasets for consistency. It performs approximately 150 tests, identifying patterns in the data and any exceptions to these. The tool provides useful analysis, which may be used for any EDA (Exploratory Data Analysis) work, and may be useful for interpretable outlier detection. The tool may be run on any tabular dataset.
+
+A Python tool for automated exploratory data analysis (EDA) and interpretable outlier detection. It performs **164 distinct tests** on tabular datasets, identifying patterns in the data and any exceptions to these patterns. The tool works seamlessly with categorical, numeric, and datetime data without requiring encoding or binning.
+
+## Key Features
+
+- **164 Comprehensive Tests**: Examines single columns, pairs of columns, and larger column sets
+- **Interpretable Results**: Every test is straightforward and explainable
+- **Multiple Data Types**: Handles categorical, numeric, datetime, and string data natively
+- **Pattern Discovery**: Identifies consistent patterns and their exceptions
+- **Outlier Scoring**: Scores rows based on frequency of anomalies across tests
+- **Rich Visualizations**: Matplotlib and Seaborn integration for pattern visualization
+- **No Preprocessing Required**: Works on original, unencoded data
+- **Modular Architecture**: Organized using mixins for display, plotting, and synthetic data generation
 
 ## Background
 
@@ -32,19 +44,41 @@ As this tool is limited to interpretable outlier detection methods, it does not 
 The unusual data found may be due to data collection errors, mixing different types of data together, or other issues that may be considered errors, or that may be informative. Some may point to forms of feature engineering, which may be useful for downstream tasks. 
 
 
+## Requirements
+
+- Python 3.10+
+- Poetry for dependency management
+
+### Technology Stack
+
+| Component | Libraries |
+|-----------|-----------|
+| **Data Processing** | pandas, numpy |
+| **Machine Learning** | scikit-learn |
+| **Visualization** | matplotlib, seaborn |
+| **Statistics** | scipy |
+| **Date Handling** | dateutil |
+| **Testing** | pytest |
+
 ## Installation
-The project uses [Poetry](https://python-poetry.org/) for dependency management.  
+
+The project uses [Poetry](https://python-poetry.org/) for dependency management.
+
+### Standard Installation (with internet access)
+
+```bash
+poetry install
+```
+
+### Offline Installation
+
 If the environment has no internet access, pre-download the required wheels listed in `requirements.txt` and install them with:
 
 ```bash
 pip install --no-index --find-links /path/to/wheels -r requirements.txt
 ```
 
-When internet access is available, dependencies can be installed with Poetry:
-
-```bash
-poetry install
-```
+### Usage
 
 Once installed, the package can be imported as:
 
@@ -109,6 +143,74 @@ dc.display_detailed_results(save_to_disk=True)
 ```
 Saving to disk will create an HTML file called Data_Consistency.html with the full results. The folder may be specified for this. This can contain a large volume of output as it does not need to be rendered within a notebook.
 
+## Test Categories
+
+DataConsistencyChecker organizes its 164 tests into several categories:
+
+### Single Column Tests (15+)
+- Missing values, rare values, unique values
+- Decimal digit consistency
+- Numeric properties (positive/negative, unusual magnitudes)
+- Column ordering (ascending/descending, monotonic)
+- Character patterns in strings
+- Date/time patterns (early dates, unusual months, consistent gaps)
+
+### Pair of Columns Tests (60+)
+- **Value Relationships**: SAME_VALUES, SAME_OR_CONSTANT, UNIQUE_PAIR
+- **Missing Patterns**: MATCHED_MISSING, OPPOSITE_MISSING
+- **Numeric Relationships**: SUM, DIFFERENCE, PRODUCT, RATIO, ROUNDED
+- **Correlations**: CORRELATED_NUMERIC, CORRELATED_DATES
+- **String Relationships**: B_CONTAINS_A, SAME_FIRST_WORD, similar prefixes/suffixes
+- **Ordering**: One column consistently larger/smaller than another
+
+### Multi-Column Tests (40+)
+- **Binary Operations**: BINARY_AND, BINARY_OR, BINARY_XOR
+- **Aggregations**: SUM_OF_COLUMNS, MEAN_OF_COLUMNS, MAX_OF_COLUMNS, MIN_OF_COLUMNS
+- **Machine Learning**: DECISION_TREE_CLASSIFIER, LINEAR_REGRESSION (predictability tests)
+- **Pattern Combinations**: Complex relationships across multiple features
+
+### Specialized Tests
+- Code/ID value analysis (structured strings, product codes)
+- Character analysis (common words, special characters, patterns)
+- Temporal patterns and anomalies
+- Feature engineering opportunities
+
+## Key APIs
+
+### Initialization & Execution
+```python
+dc = DataConsistencyChecker(
+    iqr_limit=3.5,           # IQR threshold for outliers
+    idr_limit=1.0,           # Interdecile range threshold
+    max_combinations=100_000, # Max column combinations to test
+    verbose=1                 # Verbosity level
+)
+dc.init_data(df, known_date_cols=None)
+dc.check_data_quality(
+    execute_list=None,        # Run specific tests
+    exclude_list=None,        # Skip specific tests
+    fast_only=False,          # Run only fast single-column tests
+    run_parallel=False        # Enable parallel execution
+)
+```
+
+### Result Analysis
+```python
+dc.get_patterns_list()                    # List all identified patterns
+dc.get_exceptions_list()                  # List all exceptions to patterns
+dc.summarize_patterns_and_exceptions()    # Overview of findings
+dc.display_detailed_results()             # Detailed display with plots
+dc.get_outlier_scores()                   # Row-by-row outlier scores
+dc.display_most_flagged_rows()            # Show most anomalous rows
+dc.quick_report()                         # Convenience method for summary
+```
+
+### Utility Methods
+```python
+dc.generate_synth_data()                  # Create synthetic test datasets
+dc.demo_test(test_id)                     # Demonstrate a specific test
+dc.clear_results() / dc.restore_results() # Manual result management
+```
 
 ## Example Notebooks
 
@@ -174,20 +276,73 @@ The [Test_Demo API Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker
 ## Full API
 For a description of the APIs, see: [Full API Documentation](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/api.md)
 
+## Project Structure
+
+The codebase is organized into modular components for maintainability:
+
+```
+DataConsistencyChecker/
+├── check_data_consistency.py   # Main checker class (~16,800 lines)
+├── test_registry.py             # Test definition constants and registry
+├── tests_definitions/           # Test definitions organized by category
+│   ├── __init__.py              # Package aggregator
+│   ├── base_tests.py            # Single/pair column tests (any type)
+│   ├── numeric_tests.py         # Numeric column tests
+│   ├── date_tests.py            # Date/time column tests
+│   ├── string_tests.py          # String/text column tests
+│   ├── binary_tests.py          # Binary column tests
+│   └── multi_column_tests.py    # Multi-column & row-level tests
+├── checker_utils.py             # Utility functions (type checking, styling, etc.)
+├── display_mixin.py             # Display and output helper methods
+├── plots_mixin.py               # Visualization and plotting utilities
+├── synth_data_mixin.py          # Synthetic data generation for testing
+├── docs/                        # Comprehensive documentation
+│   ├── api.md                   # Complete API reference
+│   ├── performance.md           # Performance optimization guide
+│   ├── additional_documentation.md
+│   └── unit_tests.md
+├── Demo Notebooks/              # 8 Jupyter notebooks with examples
+├── tests/                       # 161 unit test files
+└── pyproject.toml              # Poetry configuration
+```
+
+### Modular Architecture
+
+The codebase has been refactored for better maintainability:
+
+- **Main class** (`check_data_consistency.py`): Core API, test execution logic, and all 164 test implementations
+- **Test definitions** (`tests_definitions/`): Test metadata organized into 6 category-based modules (~250 lines each)
+- **Mixins**: DisplayMixin, PlotsMixin, and SynthDataMixin provide specialized functionality through multiple inheritance
+- **Utilities**: Shared helper functions for type checking, styling, and data manipulation
+
+This modular structure makes it easier to:
+- Add new tests (just add to the appropriate category module)
+- Understand test organization (tests grouped by column types)
+- Maintain and review code (smaller, focused modules)
+
 ## Performance
-For note on reducing the execution times of the analysis, refer to:
+For notes on reducing the execution times of the analysis, refer to:
 [Performance Notes](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/performance.md)
 
+## Development & Testing
 
-## Unit Tests
-For contributors: [Notes on unit tests](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/unit_tests.md)
+### Running Tests
 
-After installing dependencies you can run the automated test suite with:
+The project includes comprehensive unit tests with 161 test files covering all 164 tests. After installing dependencies, you can run the automated test suite with:
 
 ```bash
 poetry run pytest -q
 ```
 
-## Additional Documenation
+For contributors and detailed information about the testing framework, see: [Notes on unit tests](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/unit_tests.md)
+
+### CI/CD
+
+The project uses GitHub Actions for continuous integration:
+- Automated testing on Python 3.10
+- Poetry-based dependency management
+- Test suite execution on each commit
+
+## Additional Documentation
 Notes on additional topics, inlcuding date columns, clearing issues, contamination levels, the sort order of the data, and the use of synthetic may be found at: [Additional Documentation](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/additional_documentation.md)
 
