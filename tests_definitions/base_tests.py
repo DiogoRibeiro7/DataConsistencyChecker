@@ -26,30 +26,30 @@ def get_base_tests(checker):
         'MISSING_VALUES': (
             'Check if all values in a column are consistently present / missing',
             ('Check if all values in a column are consistently present / consistently missing.'),
-            checker._DataConsistencyChecker__check_missing,
-            checker._DataConsistencyChecker__generate_missing,
+            checker._check_missing,
+            checker._generate_missing,
             False, True, True, False
         ),
         'RARE_VALUES': (
             '',
             'Check if there are any rare values in a column.',
-            checker._DataConsistencyChecker__check_rare_values,
-            checker._DataConsistencyChecker__generate_rare_values,
+            checker._check_rare_values,
+            checker._generate_rare_values,
             False, True, True, False
         ),
         'UNIQUE_VALUES': (
             '',
             'Check if there are consistently unique values with a column.',
-            checker._DataConsistencyChecker__check_unique_values,
-            checker._DataConsistencyChecker__generate_unique_values,
+            checker._check_unique_values,
+            checker._generate_unique_values,
             True, True, True, False
         ),
         'PREV_VALUES_DT': (
             'Check if the values in a column can be predicted from previous values',
             ('Check if the values in a column can be predicted from previous values in '
              'that column using a simple decision tree.'),
-            checker._DataConsistencyChecker__check_prev_values_dt,
-            checker._DataConsistencyChecker__generate_prev_values_dt,
+            checker._check_prev_values_dt,
+            checker._generate_prev_values_dt,
             True, True, True, False
         ),
 
@@ -57,38 +57,38 @@ def get_base_tests(checker):
         'MATCHED_MISSING': (
             '',
             'Check if two columns have missing values consistently in the same rows.',
-            checker._DataConsistencyChecker__check_matched_missing,
-            checker._DataConsistencyChecker__generate_matched_missing,
+            checker._check_matched_missing,
+            checker._generate_matched_missing,
             True, True, False, False
         ),
         'OPPOSITE_MISSING': (
             'Check if two columns have null values consistently in different rows',
             ('Check if two columns both frequently have null values, but consistently '
              'not in the same rows.'),
-            checker._DataConsistencyChecker__check_opposite_missing,
-            checker._DataConsistencyChecker__generate_opposite_missing,
+            checker._check_opposite_missing,
+            checker._generate_opposite_missing,
             True, True, False, False
         ),
         'SAME_VALUES': (
             '',
             'Check if two columns consistently have the same values.',
-            checker._DataConsistencyChecker__check_same,
-            checker._DataConsistencyChecker__generate_same,
+            checker._check_same,
+            checker._generate_same,
             True, True, False, False
         ),
         'SAME_OR_CONSTANT': (
             'Check for values matching another column, or small set of other values',
             ('Check one column consistently has either the same value as another column, '
              'or a small number of other values.'),
-            checker._DataConsistencyChecker__check_same_or_constant,
-            checker._DataConsistencyChecker__generate_same_or_constant,
+            checker._check_same_or_constant,
+            checker._generate_same_or_constant,
             True, True, False, False
         ),
         'UNIQUE_PAIR': (
             '',
             'Check if two columns consistently have a unique pair of values.',
-            checker._DataConsistencyChecker__check_unique_pair,
-            checker._DataConsistencyChecker__generate_unique_pair,
+            checker._check_unique_pair,
+            checker._generate_unique_pair,
             True, True, False, False
         ),
     }

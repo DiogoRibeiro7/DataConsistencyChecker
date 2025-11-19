@@ -153,29 +153,48 @@ The codebase is organized into modular components for maintainability:
 
 ```
 DataConsistencyChecker/
-├── check_data_consistency.py   # Main DataConsistencyChecker class
-│                                 # Contains all 164 test implementations
-├── test_registry.py             # Test definition constants and registry
-├── tests_definitions/           # Test metadata organized by category
-│   ├── base_tests.py            # Single/pair column tests (any type)
-│   ├── numeric_tests.py         # Numeric column tests
-│   ├── date_tests.py            # Date/time column tests
-│   ├── string_tests.py          # String/text column tests
-│   ├── binary_tests.py          # Binary column tests
-│   └── multi_column_tests.py    # Multi-column & row-level tests
-├── checker_utils.py             # Shared utility functions
-├── display_mixin.py             # Display and output methods
-├── plots_mixin.py               # Visualization methods
-├── synth_data_mixin.py          # Synthetic data generation
-└── tests/                       # Unit tests (one file per test)
+├── check_data_consistency.py     # Main DataConsistencyChecker class (~4,300 lines)
+│                                  # Core orchestration, configuration, and utilities
+├── test_implementations/         # Test method implementations organized by category
+│   ├── base_tests_mixin.py       # Base test methods (18 methods, 1,003 lines)
+│   ├── numeric_tests_mixin.py    # Numeric test methods (118 methods, 4,773 lines)
+│   ├── date_tests_mixin.py       # Date test methods (36 methods, 1,043 lines)
+│   ├── string_tests_mixin.py     # String test methods (118 methods, 4,187 lines)
+│   ├── binary_tests_mixin.py     # Binary test methods (24 methods, 1,383 lines)
+│   └── multi_column_tests_mixin.py # Multi-column test methods (18 methods, 844 lines)
+├── tests_definitions/            # Test metadata organized by category
+│   ├── base_tests.py             # Single/pair column tests (any type)
+│   ├── numeric_tests.py          # Numeric column tests
+│   ├── date_tests.py             # Date/time column tests
+│   ├── string_tests.py           # String/text column tests
+│   ├── binary_tests.py           # Binary column tests
+│   └── multi_column_tests.py     # Multi-column & row-level tests
+├── test_registry.py              # Test definition constants and registry
+├── checker_utils.py              # Shared utility functions
+├── display_mixin.py              # Display and output methods
+├── plots_mixin.py                # Visualization methods
+├── synth_data_mixin.py           # Synthetic data generation
+└── tests/                        # Unit tests (one file per test)
 ```
 
 ### Key Components
 
+- **Main Class** (`check_data_consistency.py`): Core orchestration, initialization, and utilities
+- **Test Implementation Mixins** (`test_implementations/`): Organized test methods by category
+  - Each mixin contains `_check_*` and `_generate_*` methods for its category
+  - Mixins use single underscore (protected) naming to avoid Python name mangling
+  - Total: 332 test methods across 6 mixin files
 - **Test Definitions** (`tests_definitions/`): Metadata about each test (description, flags)
-- **Test Implementations** (`check_data_consistency.py`): The actual test logic (`__check_*` and `__generate_*` methods)
-- **Mixins**: Separate concerns (display, plotting, synthetic data)
+- **Display/Plotting Mixins**: Separate concerns (display, plotting, synthetic data)
 - **Utilities**: Helper functions used across the codebase
+
+### Modular Architecture Benefits
+
+The modular structure provides several advantages:
+- **Maintainability**: Each category is self-contained and easier to understand
+- **Contribution**: Easier to add new tests in the appropriate category
+- **Testing**: Mixins can be tested independently
+- **File Size**: Main file reduced from 16,838 to 4,277 lines (74% reduction)
 
 ## Adding New Tests
 
@@ -202,8 +221,8 @@ def get_numeric_tests(checker):
         'YOUR_TEST_ID': (
             'Short description for progress display',
             'Full description of what the test does',
-            checker._DataConsistencyChecker__check_your_test,
-            checker._DataConsistencyChecker__generate_your_test,
+            checker._check_your_test,       # Note: single underscore
+            checker._generate_your_test,     # Note: single underscore
             False,  # shortlist (include in default pattern listings)
             True,   # implemented
             True,   # fast (runs fast even with many columns)
@@ -212,15 +231,24 @@ def get_numeric_tests(checker):
     }
 ```
 
+**Important**: Method references use single underscore (`checker._check_*`) to avoid Python name mangling issues with mixin classes.
+
 ### 2. Implement Test Logic
 
-Add two methods to `check_data_consistency.py`:
+Add two methods to the appropriate mixin file in `test_implementations/`:
+
+- `base_tests_mixin.py` - For single/pair column tests (any type)
+- `numeric_tests_mixin.py` - For numeric column tests
+- `date_tests_mixin.py` - For date/time column tests
+- `string_tests_mixin.py` - For string/text column tests
+- `binary_tests_mixin.py` - For binary column tests
+- `multi_column_tests_mixin.py` - For multi-column tests
 
 #### Check Method
 Identifies patterns and exceptions in the data:
 
 ```python
-def __check_your_test(self, test_id):
+def _check_your_test(self, test_id):  # Note: single underscore prefix
     """
     Brief description of what this test checks.
 
@@ -257,7 +285,7 @@ def __check_your_test(self, test_id):
 Creates synthetic data to demonstrate the test:
 
 ```python
-def __generate_your_test(self):
+def _generate_your_test(self):  # Note: single underscore prefix
     """
     Generate synthetic data demonstrating this test.
 
@@ -266,7 +294,8 @@ def __generate_your_test(self):
     # Create example data showing the pattern
     # Include some rows that violate the pattern (exceptions)
 
-    return synth_df
+    # Use helper method to add columns to synthetic dataframe
+    self._add_synthetic_column('example_col', example_values)
 ```
 
 ### 3. Create Unit Test
