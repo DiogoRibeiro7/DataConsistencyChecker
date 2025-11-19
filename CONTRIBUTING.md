@@ -33,10 +33,119 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
    poetry install
    ```
 
-3. **Verify installation**
+3. **Set up pre-commit hooks** (recommended)
+   ```bash
+   poetry run pre-commit install
+   ```
+
+4. **Verify installation**
    ```bash
    poetry run pytest -q
    ```
+
+### Quick Start with Makefile
+
+For convenience, a Makefile is provided with common development tasks:
+
+```bash
+# Install dependencies and set up pre-commit hooks
+make install
+
+# Run all checks (lint, format, type-check, tests)
+make all
+
+# Run tests
+make test
+
+# Run tests with coverage
+make coverage
+
+# Format code
+make format
+
+# Run linting
+make lint
+
+# See all available commands
+make help
+```
+
+### Code Quality Tools
+
+This project uses several tools to maintain code quality:
+
+#### Ruff - Linting and Formatting
+
+Ruff is an extremely fast Python linter and formatter that replaces multiple tools.
+
+```bash
+# Check for linting issues
+poetry run ruff check .
+
+# Auto-fix linting issues
+poetry run ruff check . --fix
+
+# Check formatting
+poetry run ruff format --check .
+
+# Auto-format code
+poetry run ruff format .
+```
+
+#### Mypy - Type Checking
+
+Mypy performs static type analysis to catch type-related errors.
+
+```bash
+# Run type checking
+poetry run mypy .
+
+# Run with detailed error codes
+poetry run mypy . --show-error-codes
+```
+
+#### Pytest with Coverage
+
+Run tests with coverage reporting to ensure code is properly tested.
+
+```bash
+# Run tests with coverage
+poetry run pytest --cov=. --cov-report=term-missing
+
+# Generate HTML coverage report
+poetry run pytest --cov=. --cov-report=html
+
+# View coverage report (opens in browser)
+open htmlcov/index.html
+```
+
+#### Pre-commit Hooks
+
+Pre-commit hooks automatically run checks before each commit. Install them with:
+
+```bash
+poetry run pre-commit install
+```
+
+Run all hooks manually:
+
+```bash
+# Run on all files
+poetry run pre-commit run --all-files
+
+# Run on staged files only
+poetry run pre-commit run
+```
+
+The hooks will:
+- Run Ruff linter and formatter
+- Run mypy type checking (on main code, not tests)
+- Check for trailing whitespace
+- Ensure files end with newline
+- Check YAML/TOML syntax
+- Detect debug statements
+- Check for large files
+- Run security checks with Bandit
 
 ## Project Structure
 
