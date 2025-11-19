@@ -226,7 +226,7 @@ def replace_special_with_space(x: str | None) -> str:
     """Replace special characters in ``x`` with spaces."""
     if x is None:
         return ""
-    if x in [np.inf, -np.inf, np.NaN]:
+    if x in [np.inf, -np.inf, np.nan]:
         return ""
     return "".join(
         [c if ((c in string.ascii_letters) or (c in string.digits)) else " " for c in x]

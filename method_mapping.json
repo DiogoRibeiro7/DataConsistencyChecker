@@ -1,0 +1,1691 @@
+{
+  "base_tests": {
+    "__generate_missing": {
+      "start_line": 4020,
+      "signature": "def __generate_missing(self):",
+      "end_line": 4033
+    },
+    "__check_missing": {
+      "start_line": 4034,
+      "signature": "def __check_missing(self, test_id):",
+      "end_line": 4062
+    },
+    "__generate_rare_values": {
+      "start_line": 4063,
+      "signature": "def __generate_rare_values(self):",
+      "end_line": 4075
+    },
+    "__check_rare_values": {
+      "start_line": 4076,
+      "signature": "def __check_rare_values(self, test_id):",
+      "end_line": 4123
+    },
+    "__generate_unique_values": {
+      "start_line": 4124,
+      "signature": "def __generate_unique_values(self):",
+      "end_line": 4133
+    },
+    "__check_unique_values": {
+      "start_line": 4134,
+      "signature": "def __check_unique_values(self, test_id):",
+      "end_line": 4178
+    },
+    "__generate_prev_values_dt": {
+      "start_line": 4179,
+      "signature": "def __generate_prev_values_dt(self):",
+      "end_line": 4212
+    },
+    "__check_prev_values_dt": {
+      "start_line": 4213,
+      "signature": "def __check_prev_values_dt(self, test_id):",
+      "end_line": 4479
+    },
+    "__generate_matched_missing": {
+      "start_line": 4480,
+      "signature": "def __generate_matched_missing(self):",
+      "end_line": 4498
+    },
+    "__check_matched_missing": {
+      "start_line": 4499,
+      "signature": "def __check_matched_missing(self, test_id):",
+      "end_line": 4568
+    },
+    "__generate_opposite_missing": {
+      "start_line": 4569,
+      "signature": "def __generate_opposite_missing(self):",
+      "end_line": 4587
+    },
+    "__check_opposite_missing": {
+      "start_line": 4588,
+      "signature": "def __check_opposite_missing(self, test_id):",
+      "end_line": 4655
+    },
+    "__generate_same": {
+      "start_line": 4656,
+      "signature": "def __generate_same(self):",
+      "end_line": 4683
+    },
+    "__check_same": {
+      "start_line": 4684,
+      "signature": "def __check_same(self, test_id):",
+      "end_line": 4766
+    },
+    "__generate_same_or_constant": {
+      "start_line": 4767,
+      "signature": "def __generate_same_or_constant(self):",
+      "end_line": 4780
+    },
+    "__check_same_or_constant": {
+      "start_line": 4781,
+      "signature": "def __check_same_or_constant(self, test_id):",
+      "end_line": 4889
+    },
+    "__generate_unique_pair": {
+      "start_line": 4890,
+      "signature": "def __generate_unique_pair(self):",
+      "end_line": 4900
+    },
+    "__check_unique_pair": {
+      "start_line": 4901,
+      "signature": "def __check_unique_pair(self, test_id):",
+      "end_line": 4949
+    }
+  },
+  "numeric_tests": {
+    "__generate_positive_values": {
+      "start_line": 4950,
+      "signature": "def __generate_positive_values(self):",
+      "end_line": 4958
+    },
+    "__check_positive_values": {
+      "start_line": 4959,
+      "signature": "def __check_positive_values(self, test_id):",
+      "end_line": 4970
+    },
+    "__generate_negative_values": {
+      "start_line": 4971,
+      "signature": "def __generate_negative_values(self):",
+      "end_line": 4979
+    },
+    "__check_negative_values": {
+      "start_line": 4980,
+      "signature": "def __check_negative_values(self, test_id):",
+      "end_line": 4997
+    },
+    "__generate_number_decimals": {
+      "start_line": 4998,
+      "signature": "def __generate_number_decimals(self):",
+      "end_line": 5007
+    },
+    "__check_number_decimals": {
+      "start_line": 5008,
+      "signature": "def __check_number_decimals(self, test_id):",
+      "end_line": 5053
+    },
+    "__generate_rare_decimals": {
+      "start_line": 5054,
+      "signature": "def __generate_rare_decimals(self):",
+      "end_line": 5069
+    },
+    "__check_rare_decimals": {
+      "start_line": 5070,
+      "signature": "def __check_rare_decimals(self, test_id):",
+      "end_line": 5104
+    },
+    "__generate_column_increasing": {
+      "start_line": 5105,
+      "signature": "def __generate_column_increasing(self):",
+      "end_line": 5118
+    },
+    "__check_column_increasing": {
+      "start_line": 5119,
+      "signature": "def __check_column_increasing(self, test_id):",
+      "end_line": 5172
+    },
+    "__generate_column_decreasing": {
+      "start_line": 5173,
+      "signature": "def __generate_column_decreasing(self):",
+      "end_line": 5189
+    },
+    "__check_column_decreasing": {
+      "start_line": 5190,
+      "signature": "def __check_column_decreasing(self, test_id):",
+      "end_line": 5243
+    },
+    "__generate_column_tends_asc": {
+      "start_line": 5244,
+      "signature": "def __generate_column_tends_asc(self):",
+      "end_line": 5261
+    },
+    "__check_column_tends_asc": {
+      "start_line": 5262,
+      "signature": "def __check_column_tends_asc(self, test_id):",
+      "end_line": 5289
+    },
+    "__generate_column_tends_desc": {
+      "start_line": 5290,
+      "signature": "def __generate_column_tends_desc(self):",
+      "end_line": 5307
+    },
+    "__check_column_tends_desc": {
+      "start_line": 5308,
+      "signature": "def __check_column_tends_desc(self, test_id):",
+      "end_line": 5334
+    },
+    "__generate_similar_previous": {
+      "start_line": 5335,
+      "signature": "def __generate_similar_previous(self):",
+      "end_line": 5363
+    },
+    "__check_similar_previous": {
+      "start_line": 5364,
+      "signature": "def __check_similar_previous(self, test_id):",
+      "end_line": 5416
+    },
+    "__generate_unusual_order_magnitude": {
+      "start_line": 5417,
+      "signature": "def __generate_unusual_order_magnitude(self):",
+      "end_line": 5431
+    },
+    "__check_unusual_order_magnitude": {
+      "start_line": 5432,
+      "signature": "def __check_unusual_order_magnitude(self, test_id):",
+      "end_line": 5452
+    },
+    "__generate_few_neighbors": {
+      "start_line": 5453,
+      "signature": "def __generate_few_neighbors(self):",
+      "end_line": 5475
+    },
+    "__check_few_neighbors": {
+      "start_line": 5476,
+      "signature": "def __check_few_neighbors(self, test_id):",
+      "end_line": 5569
+    },
+    "__generate_few_within_range": {
+      "start_line": 5570,
+      "signature": "def __generate_few_within_range(self):",
+      "end_line": 5594
+    },
+    "__check_few_within_range": {
+      "start_line": 5595,
+      "signature": "def __check_few_within_range(self, test_id):",
+      "end_line": 5721
+    },
+    "__generate_very_small": {
+      "start_line": 5722,
+      "signature": "def __generate_very_small(self):",
+      "end_line": 5733
+    },
+    "__check_very_small": {
+      "start_line": 5734,
+      "signature": "def __check_very_small(self, test_id):",
+      "end_line": 5754
+    },
+    "__generate_very_large": {
+      "start_line": 5755,
+      "signature": "def __generate_very_large(self):",
+      "end_line": 5768
+    },
+    "__check_very_large": {
+      "start_line": 5769,
+      "signature": "def __check_very_large(self, test_id):",
+      "end_line": 5785
+    },
+    "__generate_very_small_abs": {
+      "start_line": 5786,
+      "signature": "def __generate_very_small_abs(self):",
+      "end_line": 5799
+    },
+    "__check_very_small_abs": {
+      "start_line": 5800,
+      "signature": "def __check_very_small_abs(self, test_id):",
+      "end_line": 5829
+    },
+    "__generate_multiple_constant": {
+      "start_line": 5830,
+      "signature": "def __generate_multiple_constant(self):",
+      "end_line": 5841
+    },
+    "__check_multiple_constant": {
+      "start_line": 5842,
+      "signature": "def __check_multiple_constant(self, test_id):",
+      "end_line": 5892
+    },
+    "__generate_rounding": {
+      "start_line": 5893,
+      "signature": "def __generate_rounding(self):",
+      "end_line": 5907
+    },
+    "__check_rounding": {
+      "start_line": 5908,
+      "signature": "def __check_rounding(self, test_id):",
+      "end_line": 5969
+    },
+    "__generate_non_zero": {
+      "start_line": 5970,
+      "signature": "def __generate_non_zero(self):",
+      "end_line": 5978
+    },
+    "__check_non_zero": {
+      "start_line": 5979,
+      "signature": "def __check_non_zero(self, test_id):",
+      "end_line": 5995
+    },
+    "__generate_less_than_one": {
+      "start_line": 5996,
+      "signature": "def __generate_less_than_one(self):",
+      "end_line": 6004
+    },
+    "__check_less_than_one": {
+      "start_line": 6005,
+      "signature": "def __check_less_than_one(self, test_id):",
+      "end_line": 6027
+    },
+    "__generate_greater_than_one": {
+      "start_line": 6028,
+      "signature": "def __generate_greater_than_one(self):",
+      "end_line": 6036
+    },
+    "__check_greater_than_one": {
+      "start_line": 6037,
+      "signature": "def __check_greater_than_one(self, test_id):",
+      "end_line": 6046
+    },
+    "__generate_invalid_numbers": {
+      "start_line": 6047,
+      "signature": "def __generate_invalid_numbers(self):",
+      "end_line": 6058
+    },
+    "__check_invalid_numbers": {
+      "start_line": 6059,
+      "signature": "def __check_invalid_numbers(self, test_id):",
+      "end_line": 6075
+    },
+    "__generate_larger_diff_range": {
+      "start_line": 6218,
+      "signature": "def __generate_larger_diff_range(self):",
+      "end_line": 6229
+    },
+    "__check_larger_diff_range": {
+      "start_line": 6230,
+      "signature": "def __check_larger_diff_range(self, test_id):",
+      "end_line": 6241
+    },
+    "__generate_larger_same_range": {
+      "start_line": 6242,
+      "signature": "def __generate_larger_same_range(self):",
+      "end_line": 6258
+    },
+    "__check_larger_same_range": {
+      "start_line": 6259,
+      "signature": "def __check_larger_same_range(self, test_id):",
+      "end_line": 6268
+    },
+    "__generate_much_larger": {
+      "start_line": 6269,
+      "signature": "def __generate_much_larger(self):",
+      "end_line": 6283
+    },
+    "__check_much_larger": {
+      "start_line": 6284,
+      "signature": "def __check_much_larger(self, test_id):",
+      "end_line": 6389
+    },
+    "__generate_similar_wrt_ratio": {
+      "start_line": 6390,
+      "signature": "def __generate_similar_wrt_ratio(self):",
+      "end_line": 6402
+    },
+    "__check_similar_wrt_ratio": {
+      "start_line": 6403,
+      "signature": "def __check_similar_wrt_ratio(self, test_id):",
+      "end_line": 6462
+    },
+    "__generate_similar_wrt_difference": {
+      "start_line": 6463,
+      "signature": "def __generate_similar_wrt_difference(self):",
+      "end_line": 6472
+    },
+    "__check_similar_wrt_difference": {
+      "start_line": 6473,
+      "signature": "def __check_similar_wrt_difference(self, test_id):",
+      "end_line": 6529
+    },
+    "__generate_similar_to_inverse": {
+      "start_line": 6530,
+      "signature": "def __generate_similar_to_inverse(self):",
+      "end_line": 6539
+    },
+    "__check_similar_to_inverse": {
+      "start_line": 6540,
+      "signature": "def __check_similar_to_inverse(self, test_id):",
+      "end_line": 6586
+    },
+    "__generate_similar_to_negative": {
+      "start_line": 6587,
+      "signature": "def __generate_similar_to_negative(self):",
+      "end_line": 6596
+    },
+    "__check_similar_to_negative": {
+      "start_line": 6597,
+      "signature": "def __check_similar_to_negative(self, test_id):",
+      "end_line": 6629
+    },
+    "__generate_constant_sum": {
+      "start_line": 6630,
+      "signature": "def __generate_constant_sum(self):",
+      "end_line": 6639
+    },
+    "__check_constant_sum": {
+      "start_line": 6640,
+      "signature": "def __check_constant_sum(self, test_id):",
+      "end_line": 6698
+    },
+    "__generate_constant_diff": {
+      "start_line": 6699,
+      "signature": "def __generate_constant_diff(self):",
+      "end_line": 6709
+    },
+    "__check_constant_diff": {
+      "start_line": 6710,
+      "signature": "def __check_constant_diff(self, test_id):",
+      "end_line": 6773
+    },
+    "__generate_constant_product": {
+      "start_line": 6774,
+      "signature": "def __generate_constant_product(self):",
+      "end_line": 6784
+    },
+    "__check_constant_product": {
+      "start_line": 6785,
+      "signature": "def __check_constant_product(self, test_id):",
+      "end_line": 6842
+    },
+    "__generate_constant_ratio": {
+      "start_line": 6843,
+      "signature": "def __generate_constant_ratio(self):",
+      "end_line": 6852
+    },
+    "__check_constant_ratio": {
+      "start_line": 6853,
+      "signature": "def __check_constant_ratio(self, test_id):",
+      "end_line": 6931
+    },
+    "__generate_even_multiple": {
+      "start_line": 6932,
+      "signature": "def __generate_even_multiple(self):",
+      "end_line": 6945
+    },
+    "__check_even_multiple": {
+      "start_line": 6946,
+      "signature": "def __check_even_multiple(self, test_id):",
+      "end_line": 7005
+    },
+    "__generate_rare_combination": {
+      "start_line": 7006,
+      "signature": "def __generate_rare_combination(self):",
+      "end_line": 7021
+    },
+    "__check_rare_combination": {
+      "start_line": 7022,
+      "signature": "def __check_rare_combination(self, test_id):",
+      "end_line": 7149
+    },
+    "__generate_correlated": {
+      "start_line": 7150,
+      "signature": "def __generate_correlated(self):",
+      "end_line": 7168
+    },
+    "__check_correlated": {
+      "start_line": 7169,
+      "signature": "def __check_correlated(self, test_id):",
+      "end_line": 7239
+    },
+    "__generate_matched_zero": {
+      "start_line": 7240,
+      "signature": "def __generate_matched_zero(self):",
+      "end_line": 7253
+    },
+    "__check_matched_zero": {
+      "start_line": 7254,
+      "signature": "def __check_matched_zero(self, test_id):",
+      "end_line": 7316
+    },
+    "__generate_opposite_zero": {
+      "start_line": 7317,
+      "signature": "def __generate_opposite_zero(self):",
+      "end_line": 7328
+    },
+    "__check_opposite_zero": {
+      "start_line": 7329,
+      "signature": "def __check_opposite_zero(self, test_id):",
+      "end_line": 7362
+    },
+    "__generate_running_sum": {
+      "start_line": 7363,
+      "signature": "def __generate_running_sum(self):",
+      "end_line": 7373
+    },
+    "__check_running_sum": {
+      "start_line": 7374,
+      "signature": "def __check_running_sum(self, test_id):",
+      "end_line": 7425
+    },
+    "__generate_a_rounded_b": {
+      "start_line": 7426,
+      "signature": "def __generate_a_rounded_b(self):",
+      "end_line": 7464
+    },
+    "__check_a_rounded_b": {
+      "start_line": 7465,
+      "signature": "def __check_a_rounded_b(self, test_id):",
+      "end_line": 7641
+    },
+    "__generate_matched_zero_missing": {
+      "start_line": 7642,
+      "signature": "def __generate_matched_zero_missing(self):",
+      "end_line": 7659
+    },
+    "__check_matched_zero_missing": {
+      "start_line": 7660,
+      "signature": "def __check_matched_zero_missing(self, test_id):",
+      "end_line": 7717
+    },
+    "__generate_similar_to_diff": {
+      "start_line": 7723,
+      "signature": "def __generate_similar_to_diff(self):",
+      "end_line": 7738
+    },
+    "__check_similar_to_diff": {
+      "start_line": 7739,
+      "signature": "def __check_similar_to_diff(self, test_id):",
+      "end_line": 7823
+    },
+    "__generate_diff_exact": {
+      "start_line": 7824,
+      "signature": "def __generate_diff_exact(self):",
+      "end_line": 7829
+    },
+    "__check_diff_exact": {
+      "start_line": 7830,
+      "signature": "def __check_diff_exact(self, test_id):",
+      "end_line": 7832
+    },
+    "__generate_similar_to_product": {
+      "start_line": 7833,
+      "signature": "def __generate_similar_to_product(self):",
+      "end_line": 7843
+    },
+    "__check_similar_to_product": {
+      "start_line": 7844,
+      "signature": "def __check_similar_to_product(self, test_id):",
+      "end_line": 7916
+    },
+    "__generate_product_exact": {
+      "start_line": 7917,
+      "signature": "def __generate_product_exact(self):",
+      "end_line": 7922
+    },
+    "__check_product_exact": {
+      "start_line": 7923,
+      "signature": "def __check_product_exact(self, test_id):",
+      "end_line": 7925
+    },
+    "__generate_similar_to_ratio": {
+      "start_line": 7926,
+      "signature": "def __generate_similar_to_ratio(self):",
+      "end_line": 7939
+    },
+    "__check_similar_to_ratio": {
+      "start_line": 7940,
+      "signature": "def __check_similar_to_ratio(self, test_id):",
+      "end_line": 8004
+    },
+    "__generate_ratio_exact": {
+      "start_line": 8005,
+      "signature": "def __generate_ratio_exact(self):",
+      "end_line": 8011
+    },
+    "__check_ratio_exact": {
+      "start_line": 8012,
+      "signature": "def __check_ratio_exact(self, test_id):",
+      "end_line": 8014
+    },
+    "__generate_larger_than_sum": {
+      "start_line": 8015,
+      "signature": "def __generate_larger_than_sum(self):",
+      "end_line": 8031
+    },
+    "__check_larger_than_sum": {
+      "start_line": 8032,
+      "signature": "def __check_larger_than_sum(self, test_id):",
+      "end_line": 8127
+    },
+    "__generate_larger_than_abs_diff": {
+      "start_line": 8128,
+      "signature": "def __generate_larger_than_abs_diff(self):",
+      "end_line": 8141
+    },
+    "__check_larger_than_abs_diff": {
+      "start_line": 8142,
+      "signature": "def __check_larger_than_abs_diff(self, test_id):",
+      "end_line": 8248
+    },
+    "__generate_sum_of_columns": {
+      "start_line": 8249,
+      "signature": "def __generate_sum_of_columns(self):",
+      "end_line": 8286
+    },
+    "__check_sum_of_columns": {
+      "start_line": 8287,
+      "signature": "def __check_sum_of_columns(self, test_id):",
+      "end_line": 8441
+    },
+    "__generate_min_of_columns": {
+      "start_line": 8442,
+      "signature": "def __generate_min_of_columns(self):",
+      "end_line": 8464
+    },
+    "__check_min_of_columns": {
+      "start_line": 8465,
+      "signature": "def __check_min_of_columns(self, test_id):",
+      "end_line": 8565
+    },
+    "__generate_max_of_columns": {
+      "start_line": 8566,
+      "signature": "def __generate_max_of_columns(self):",
+      "end_line": 8579
+    },
+    "__check_max_of_columns": {
+      "start_line": 8580,
+      "signature": "def __check_max_of_columns(self, test_id):",
+      "end_line": 8680
+    },
+    "__generate_mean_of_columns": {
+      "start_line": 8681,
+      "signature": "def __generate_mean_of_columns(self):",
+      "end_line": 8702
+    },
+    "__check_mean_of_columns": {
+      "start_line": 8703,
+      "signature": "def __check_mean_of_columns(self, test_id):",
+      "end_line": 8815
+    },
+    "generate_mathed_set_pos_neg": {
+      "start_line": 8816,
+      "signature": "def generate_mathed_set_pos_neg(self):",
+      "end_line": 8829
+    },
+    "check_mathed_set_pos_neg": {
+      "start_line": 8830,
+      "signature": "def check_mathed_set_pos_neg(self, test_id):",
+      "end_line": 8945
+    },
+    "generate_matched_set_zero_non_zero": {
+      "start_line": 8946,
+      "signature": "def generate_matched_set_zero_non_zero(self):",
+      "end_line": 8966
+    },
+    "check_matched_set_zero_non_zero": {
+      "start_line": 8967,
+      "signature": "def check_matched_set_zero_non_zero(self, test_id):",
+      "end_line": 9090
+    },
+    "__generate_dt_regressor": {
+      "start_line": 9091,
+      "signature": "def __generate_dt_regressor(self):",
+      "end_line": 9118
+    },
+    "__check_dt_regressor": {
+      "start_line": 9119,
+      "signature": "def __check_dt_regressor(self, test_id):",
+      "end_line": 9255
+    },
+    "__generate_lin_regressor": {
+      "start_line": 9256,
+      "signature": "def __generate_lin_regressor(self):",
+      "end_line": 9274
+    },
+    "__check_lin_regressor": {
+      "start_line": 9275,
+      "signature": "def __check_lin_regressor(self, test_id):",
+      "end_line": 9419
+    },
+    "__generate_small_vs_corr_cols": {
+      "start_line": 9420,
+      "signature": "def __generate_small_vs_corr_cols(self):",
+      "end_line": 9476
+    },
+    "__check_small_vs_corr_cols": {
+      "start_line": 9477,
+      "signature": "def __check_small_vs_corr_cols(self, test_id):",
+      "end_line": 9510
+    },
+    "__generate_large_vs_corr_cols": {
+      "start_line": 9511,
+      "signature": "def __generate_large_vs_corr_cols(self):",
+      "end_line": 9527
+    },
+    "__check_large_vs_corr_cols": {
+      "start_line": 9528,
+      "signature": "def __check_large_vs_corr_cols(self, test_id):",
+      "end_line": 9554
+    },
+    "__generate_predict_null": {
+      "start_line": 9555,
+      "signature": "def __generate_predict_null(self):",
+      "end_line": 9571
+    },
+    "__check_predict_null": {
+      "start_line": 9572,
+      "signature": "def __check_predict_null(self, test_id):",
+      "end_line": 9696
+    }
+  },
+  "date_tests": {
+    "__generate_early_dates": {
+      "start_line": 9697,
+      "signature": "def __generate_early_dates(self):",
+      "end_line": 9721
+    },
+    "__check_early_dates": {
+      "start_line": 9722,
+      "signature": "def __check_early_dates(self, test_id):",
+      "end_line": 9743
+    },
+    "__generate_late_dates": {
+      "start_line": 9744,
+      "signature": "def __generate_late_dates(self):",
+      "end_line": 9753
+    },
+    "__check_late_dates": {
+      "start_line": 9754,
+      "signature": "def __check_late_dates(self, test_id):",
+      "end_line": 9777
+    },
+    "__generate_unusual_dow": {
+      "start_line": 9778,
+      "signature": "def __generate_unusual_dow(self):",
+      "end_line": 9788
+    },
+    "__check_unusual_dow": {
+      "start_line": 9789,
+      "signature": "def __check_unusual_dow(self, test_id):",
+      "end_line": 9812
+    },
+    "__generate_unusual_dom": {
+      "start_line": 9813,
+      "signature": "def __generate_unusual_dom(self):",
+      "end_line": 9823
+    },
+    "__check_unusual_dom": {
+      "start_line": 9824,
+      "signature": "def __check_unusual_dom(self, test_id):",
+      "end_line": 9845
+    },
+    "__generate_unusual_month": {
+      "start_line": 9846,
+      "signature": "def __generate_unusual_month(self):",
+      "end_line": 9858
+    },
+    "__check_unusual_month": {
+      "start_line": 9859,
+      "signature": "def __check_unusual_month(self, test_id):",
+      "end_line": 9880
+    },
+    "__generate_unusual_hour": {
+      "start_line": 9881,
+      "signature": "def __generate_unusual_hour(self):",
+      "end_line": 9891
+    },
+    "__check_unusual_hour": {
+      "start_line": 9892,
+      "signature": "def __check_unusual_hour(self, test_id):",
+      "end_line": 9917
+    },
+    "__generate_unusual_minutes": {
+      "start_line": 9918,
+      "signature": "def __generate_unusual_minutes(self):",
+      "end_line": 9928
+    },
+    "__check_unusual_minutes": {
+      "start_line": 9929,
+      "signature": "def __check_unusual_minutes(self, test_id):",
+      "end_line": 9954
+    },
+    "__generate_constant_dom": {
+      "start_line": 9955,
+      "signature": "def __generate_constant_dom(self):",
+      "end_line": 9980
+    },
+    "__check_constant_dom": {
+      "start_line": 9981,
+      "signature": "def __check_constant_dom(self, test_id):",
+      "end_line": 10000
+    },
+    "__generate_last_dom": {
+      "start_line": 10001,
+      "signature": "def __generate_last_dom(self):",
+      "end_line": 10027
+    },
+    "__check_last_dom": {
+      "start_line": 10028,
+      "signature": "def __check_last_dom(self, test_id):",
+      "end_line": 10059
+    },
+    "__generate_constant_date_gap": {
+      "start_line": 10060,
+      "signature": "def __generate_constant_date_gap(self):",
+      "end_line": 10088
+    },
+    "__check_constant_date_gap": {
+      "start_line": 10089,
+      "signature": "def __check_constant_date_gap(self, test_id):",
+      "end_line": 10105
+    },
+    "__generate_large_date_gap": {
+      "start_line": 10106,
+      "signature": "def __generate_large_date_gap(self):",
+      "end_line": 10118
+    },
+    "__check_large_date_gap": {
+      "start_line": 10119,
+      "signature": "def __check_large_date_gap(self, test_id):",
+      "end_line": 10156
+    },
+    "__generate_small_date_gap": {
+      "start_line": 10157,
+      "signature": "def __generate_small_date_gap(self):",
+      "end_line": 10170
+    },
+    "__check_small_date_gap": {
+      "start_line": 10171,
+      "signature": "def __check_small_date_gap(self, test_id):",
+      "end_line": 10210
+    },
+    "__generate_date_later": {
+      "start_line": 10211,
+      "signature": "def __generate_date_later(self):",
+      "end_line": 10226
+    },
+    "__check_date_later": {
+      "start_line": 10227,
+      "signature": "def __check_date_later(self, test_id):",
+      "end_line": 10253
+    },
+    "__generate_same_date": {
+      "start_line": 10254,
+      "signature": "def __generate_same_date(self):",
+      "end_line": 10283
+    },
+    "__check_same_date": {
+      "start_line": 10284,
+      "signature": "def __check_same_date(self, test_id):",
+      "end_line": 10304
+    },
+    "__generate_same_month": {
+      "start_line": 10305,
+      "signature": "def __generate_same_month(self):",
+      "end_line": 10336
+    },
+    "__check_same_month": {
+      "start_line": 10337,
+      "signature": "def __check_same_month(self, test_id):",
+      "end_line": 10355
+    },
+    "__generate_correlated_dates": {
+      "start_line": 10356,
+      "signature": "def __generate_correlated_dates(self):",
+      "end_line": 10371
+    },
+    "__check_correlated_dates": {
+      "start_line": 10372,
+      "signature": "def __check_correlated_dates(self, test_id):",
+      "end_line": 10438
+    },
+    "__generate_large_given_date": {
+      "start_line": 10439,
+      "signature": "def __generate_large_given_date(self):",
+      "end_line": 10454
+    },
+    "__check_large_given_date": {
+      "start_line": 10455,
+      "signature": "def __check_large_given_date(self, test_id):",
+      "end_line": 10544
+    },
+    "__generate_small_given_date": {
+      "start_line": 10545,
+      "signature": "def __generate_small_given_date(self):",
+      "end_line": 10555
+    },
+    "__check_small_given_date": {
+      "start_line": 10556,
+      "signature": "def __check_small_given_date(self, test_id):",
+      "end_line": 10648
+    }
+  },
+  "string_tests": {
+    "__generate_blank": {
+      "start_line": 11953,
+      "signature": "def __generate_blank(self):",
+      "end_line": 11963
+    },
+    "__check_blank": {
+      "start_line": 11964,
+      "signature": "def __check_blank(self, test_id):",
+      "end_line": 11974
+    },
+    "__generate_leading_whitespace": {
+      "start_line": 11975,
+      "signature": "def __generate_leading_whitespace(self):",
+      "end_line": 11990
+    },
+    "__check_leading_whitespace": {
+      "start_line": 11991,
+      "signature": "def __check_leading_whitespace(self, test_id):",
+      "end_line": 12032
+    },
+    "__generate_trailing_whitespace": {
+      "start_line": 12033,
+      "signature": "def __generate_trailing_whitespace(self):",
+      "end_line": 12045
+    },
+    "__check_trailing_whitespace": {
+      "start_line": 12046,
+      "signature": "def __check_trailing_whitespace(self, test_id):",
+      "end_line": 12080
+    },
+    "__generate_first_char_alpha": {
+      "start_line": 12081,
+      "signature": "def __generate_first_char_alpha(self):",
+      "end_line": 12092
+    },
+    "__check_first_char_alpha": {
+      "start_line": 12093,
+      "signature": "def __check_first_char_alpha(self, test_id):",
+      "end_line": 12118
+    },
+    "__generate_first_char_numeric": {
+      "start_line": 12119,
+      "signature": "def __generate_first_char_numeric(self):",
+      "end_line": 12130
+    },
+    "__check_first_char_numeric": {
+      "start_line": 12131,
+      "signature": "def __check_first_char_numeric(self, test_id):",
+      "end_line": 12156
+    },
+    "__generate_first_char_small_set": {
+      "start_line": 12157,
+      "signature": "def __generate_first_char_small_set(self):",
+      "end_line": 12168
+    },
+    "__check_first_char_small_set": {
+      "start_line": 12169,
+      "signature": "def __check_first_char_small_set(self, test_id):",
+      "end_line": 12204
+    },
+    "__generate_first_char_uppercase": {
+      "start_line": 12205,
+      "signature": "def __generate_first_char_uppercase(self):",
+      "end_line": 12217
+    },
+    "__check_first_char_uppercase": {
+      "start_line": 12218,
+      "signature": "def __check_first_char_uppercase(self, test_id):",
+      "end_line": 12237
+    },
+    "__generate_first_char_lowercase": {
+      "start_line": 12238,
+      "signature": "def __generate_first_char_lowercase(self):",
+      "end_line": 12249
+    },
+    "__check_first_char_lowercase": {
+      "start_line": 12250,
+      "signature": "def __check_first_char_lowercase(self, test_id):",
+      "end_line": 12269
+    },
+    "__generate_last_char_small_set": {
+      "start_line": 12270,
+      "signature": "def __generate_last_char_small_set(self):",
+      "end_line": 12281
+    },
+    "__check_last_char_small_set": {
+      "start_line": 12282,
+      "signature": "def __check_last_char_small_set(self, test_id):",
+      "end_line": 12320
+    },
+    "__generate_common_special_chars": {
+      "start_line": 12321,
+      "signature": "def __generate_common_special_chars(self):",
+      "end_line": 12332
+    },
+    "__check_common_special_chars": {
+      "start_line": 12333,
+      "signature": "def __check_common_special_chars(self, test_id):",
+      "end_line": 12391
+    },
+    "__generate_common_chars": {
+      "start_line": 12392,
+      "signature": "def __generate_common_chars(self):",
+      "end_line": 12404
+    },
+    "__check_common_chars": {
+      "start_line": 12405,
+      "signature": "def __check_common_chars(self, test_id):",
+      "end_line": 12481
+    },
+    "__generate_number_alpha_chars": {
+      "start_line": 12482,
+      "signature": "def __generate_number_alpha_chars(self):",
+      "end_line": 12494
+    },
+    "__check_number_alpha_chars": {
+      "start_line": 12495,
+      "signature": "def __check_number_alpha_chars(self, test_id):",
+      "end_line": 12514
+    },
+    "__generate_number_numeric_chars": {
+      "start_line": 12515,
+      "signature": "def __generate_number_numeric_chars(self):",
+      "end_line": 12527
+    },
+    "__check_number_numeric_chars": {
+      "start_line": 12528,
+      "signature": "def __check_number_numeric_chars(self, test_id):",
+      "end_line": 12549
+    },
+    "__generate_number_alphanumeric_chars": {
+      "start_line": 12550,
+      "signature": "def __generate_number_alphanumeric_chars(self):",
+      "end_line": 12561
+    },
+    "__check_number_alphanumeric_chars": {
+      "start_line": 12562,
+      "signature": "def __check_number_alphanumeric_chars(self, test_id):",
+      "end_line": 12582
+    },
+    "__generate_number_non_alphanumeric_chars": {
+      "start_line": 12583,
+      "signature": "def __generate_number_non_alphanumeric_chars(self):",
+      "end_line": 12594
+    },
+    "__check_number_non_alphanumeric_chars": {
+      "start_line": 12595,
+      "signature": "def __check_number_non_alphanumeric_chars(self, test_id):",
+      "end_line": 12620
+    },
+    "__generate_number_chars": {
+      "start_line": 12621,
+      "signature": "def __generate_number_chars(self):",
+      "end_line": 12632
+    },
+    "__check_number_chars": {
+      "start_line": 12633,
+      "signature": "def __check_number_chars(self, test_id):",
+      "end_line": 12652
+    },
+    "__generate_nonprintable_chars": {
+      "start_line": 12653,
+      "signature": "def __generate_nonprintable_chars(self):",
+      "end_line": 12662
+    },
+    "__check_nonprintable_chars": {
+      "start_line": 12663,
+      "signature": "def __check_nonprintable_chars(self, test_id):",
+      "end_line": 12682
+    },
+    "__generate_many_chars": {
+      "start_line": 12683,
+      "signature": "def __generate_many_chars(self):",
+      "end_line": 12693
+    },
+    "__check_many_chars": {
+      "start_line": 12694,
+      "signature": "def __check_many_chars(self, test_id):",
+      "end_line": 12709
+    },
+    "__generate_few_chars": {
+      "start_line": 12710,
+      "signature": "def __generate_few_chars(self):",
+      "end_line": 12721
+    },
+    "__check_few_chars": {
+      "start_line": 12722,
+      "signature": "def __check_few_chars(self, test_id):",
+      "end_line": 12745
+    },
+    "__generate_position_non_alphanumeric": {
+      "start_line": 12746,
+      "signature": "def __generate_position_non_alphanumeric(self):",
+      "end_line": 12760
+    },
+    "__check_position_non_alphanumeric": {
+      "start_line": 12761,
+      "signature": "def __check_position_non_alphanumeric(self, test_id):",
+      "end_line": 12837
+    },
+    "__generate_chars_pattern": {
+      "start_line": 12838,
+      "signature": "def __generate_chars_pattern(self):",
+      "end_line": 12854
+    },
+    "__check_chars_pattern": {
+      "start_line": 12855,
+      "signature": "def __check_chars_pattern(self, test_id):",
+      "end_line": 12914
+    },
+    "__generate_uppercase": {
+      "start_line": 12915,
+      "signature": "def __generate_uppercase(self):",
+      "end_line": 12927
+    },
+    "__check_uppercase": {
+      "start_line": 12928,
+      "signature": "def __check_uppercase(self, test_id):",
+      "end_line": 12943
+    },
+    "__generate_lowercase": {
+      "start_line": 12944,
+      "signature": "def __generate_lowercase(self):",
+      "end_line": 12958
+    },
+    "__check_lowercase": {
+      "start_line": 12959,
+      "signature": "def __check_lowercase(self, test_id):",
+      "end_line": 12974
+    },
+    "__generate_characters_used": {
+      "start_line": 12975,
+      "signature": "def __generate_characters_used(self):",
+      "end_line": 12990
+    },
+    "__check_characters_used": {
+      "start_line": 12991,
+      "signature": "def __check_characters_used(self, test_id):",
+      "end_line": 13044
+    },
+    "__generate_first_word": {
+      "start_line": 13045,
+      "signature": "def __generate_first_word(self):",
+      "end_line": 13057
+    },
+    "__check_first_word": {
+      "start_line": 13058,
+      "signature": "def __check_first_word(self, test_id):",
+      "end_line": 13092
+    },
+    "__generate_last_word": {
+      "start_line": 13093,
+      "signature": "def __generate_last_word(self):",
+      "end_line": 13104
+    },
+    "__check_last_word": {
+      "start_line": 13105,
+      "signature": "def __check_last_word(self, test_id):",
+      "end_line": 13136
+    },
+    "__generate_num_words": {
+      "start_line": 13137,
+      "signature": "def __generate_num_words(self):",
+      "end_line": 13149
+    },
+    "__check_num_words": {
+      "start_line": 13150,
+      "signature": "def __check_num_words(self, test_id):",
+      "end_line": 13173
+    },
+    "__generate_longest_words": {
+      "start_line": 13174,
+      "signature": "def __generate_longest_words(self):",
+      "end_line": 13186
+    },
+    "__check_longest_words": {
+      "start_line": 13187,
+      "signature": "def __check_longest_words(self, test_id):",
+      "end_line": 13213
+    },
+    "__generate_words_used": {
+      "start_line": 13214,
+      "signature": "def __generate_words_used(self):",
+      "end_line": 13227
+    },
+    "__check_words_used": {
+      "start_line": 13228,
+      "signature": "def __check_words_used(self, test_id):",
+      "end_line": 13254
+    },
+    "__generate_rare_words": {
+      "start_line": 13255,
+      "signature": "def __generate_rare_words(self):",
+      "end_line": 13266
+    },
+    "__check_rare_words": {
+      "start_line": 13267,
+      "signature": "def __check_rare_words(self, test_id):",
+      "end_line": 13296
+    },
+    "__generate_grouped_strings": {
+      "start_line": 13297,
+      "signature": "def __generate_grouped_strings(self):",
+      "end_line": 13312
+    },
+    "__check_grouped_strings": {
+      "start_line": 13414,
+      "signature": "def __check_grouped_strings(self, test_id):",
+      "end_line": 13428
+    },
+    "__generate_a_implies_b": {
+      "start_line": 13429,
+      "signature": "def __generate_a_implies_b(self):",
+      "end_line": 13435
+    },
+    "__check_a_implies_b": {
+      "start_line": 13436,
+      "signature": "def __check_a_implies_b(self, test_id):",
+      "end_line": 13438
+    },
+    "__generate_rare_pairs": {
+      "start_line": 13439,
+      "signature": "def __generate_rare_pairs(self):",
+      "end_line": 13457
+    },
+    "__check_rare_pairs": {
+      "start_line": 13458,
+      "signature": "def __check_rare_pairs(self, test_id):",
+      "end_line": 13510
+    },
+    "__generate_rare_pair_first_char": {
+      "start_line": 13511,
+      "signature": "def __generate_rare_pair_first_char(self):",
+      "end_line": 13530
+    },
+    "__check_rare_pair_first_char": {
+      "start_line": 13531,
+      "signature": "def __check_rare_pair_first_char(self, test_id):",
+      "end_line": 13625
+    },
+    "__generate_rare_pair_first_word": {
+      "start_line": 13626,
+      "signature": "def __generate_rare_pair_first_word(self):",
+      "end_line": 13648
+    },
+    "__check_rare_pair_first_word": {
+      "start_line": 13649,
+      "signature": "def __check_rare_pair_first_word(self, test_id):",
+      "end_line": 13708
+    },
+    "__generate_rare_pair_first_word_val": {
+      "start_line": 13709,
+      "signature": "def __generate_rare_pair_first_word_val(self):",
+      "end_line": 13735
+    },
+    "__check_rare_pair_first_word_val": {
+      "start_line": 13736,
+      "signature": "def __check_rare_pair_first_word_val(self, test_id):",
+      "end_line": 13808
+    },
+    "__generate_similar_chars": {
+      "start_line": 13809,
+      "signature": "def __generate_similar_chars(self):",
+      "end_line": 13822
+    },
+    "__check_similar_chars": {
+      "start_line": 13823,
+      "signature": "def __check_similar_chars(self, test_id):",
+      "end_line": 13862
+    },
+    "__generate_similar_num_chars": {
+      "start_line": 13863,
+      "signature": "def __generate_similar_num_chars(self):",
+      "end_line": 13878
+    },
+    "__check_similar_num_chars": {
+      "start_line": 13879,
+      "signature": "def __check_similar_num_chars(self, test_id):",
+      "end_line": 13919
+    },
+    "__generate_similar_words": {
+      "start_line": 13920,
+      "signature": "def __generate_similar_words(self):",
+      "end_line": 13935
+    },
+    "__check_similar_words": {
+      "start_line": 13936,
+      "signature": "def __check_similar_words(self, test_id):",
+      "end_line": 13984
+    },
+    "__generate_similar_num_words": {
+      "start_line": 13985,
+      "signature": "def __generate_similar_num_words(self):",
+      "end_line": 14003
+    },
+    "__check_similar_num_words": {
+      "start_line": 14004,
+      "signature": "def __check_similar_num_words(self, test_id):",
+      "end_line": 14065
+    },
+    "__generate_same_first_chars": {
+      "start_line": 14066,
+      "signature": "def __generate_same_first_chars(self):",
+      "end_line": 14077
+    },
+    "__check_same_first_chars": {
+      "start_line": 14078,
+      "signature": "def __check_same_first_chars(self, test_id):",
+      "end_line": 14130
+    },
+    "__generate_same_first_word": {
+      "start_line": 14131,
+      "signature": "def __generate_same_first_word(self):",
+      "end_line": 14152
+    },
+    "__check_same_first_word": {
+      "start_line": 14153,
+      "signature": "def __check_same_first_word(self, test_id):",
+      "end_line": 14208
+    },
+    "__generate_same_last_word": {
+      "start_line": 14209,
+      "signature": "def __generate_same_last_word(self):",
+      "end_line": 14238
+    },
+    "__check_same_last_word": {
+      "start_line": 14239,
+      "signature": "def __check_same_last_word(self, test_id):",
+      "end_line": 14297
+    },
+    "__generate_same_alpha_chars": {
+      "start_line": 14298,
+      "signature": "def __generate_same_alpha_chars(self):",
+      "end_line": 14313
+    },
+    "__check_same_alpha_chars": {
+      "start_line": 14314,
+      "signature": "def __check_same_alpha_chars(self, test_id):",
+      "end_line": 14357
+    },
+    "__generate_same_numeric_chars": {
+      "start_line": 14358,
+      "signature": "def __generate_same_numeric_chars(self):",
+      "end_line": 14371
+    },
+    "__check_same_numeric_chars": {
+      "start_line": 14372,
+      "signature": "def __check_same_numeric_chars(self, test_id):",
+      "end_line": 14422
+    },
+    "__generate_same_special_chars": {
+      "start_line": 14423,
+      "signature": "def __generate_same_special_chars(self):",
+      "end_line": 14439
+    },
+    "__check_same_special_chars": {
+      "start_line": 14440,
+      "signature": "def __check_same_special_chars(self, test_id):",
+      "end_line": 14489
+    },
+    "__generate_a_prefix_of_b": {
+      "start_line": 14490,
+      "signature": "def __generate_a_prefix_of_b(self):",
+      "end_line": 14503
+    },
+    "__check_a_prefix_of_b": {
+      "start_line": 14504,
+      "signature": "def __check_a_prefix_of_b(self, test_id):",
+      "end_line": 14560
+    },
+    "__generate_a_suffix_of_b": {
+      "start_line": 14561,
+      "signature": "def __generate_a_suffix_of_b(self):",
+      "end_line": 14574
+    },
+    "__check_a_suffix_of_b": {
+      "start_line": 14575,
+      "signature": "def __check_a_suffix_of_b(self, test_id):",
+      "end_line": 14620
+    },
+    "__generate_b_contains_a": {
+      "start_line": 14621,
+      "signature": "def __generate_b_contains_a(self):",
+      "end_line": 14634
+    },
+    "__check_b_contains_a": {
+      "start_line": 14635,
+      "signature": "def __check_b_contains_a(self, test_id):",
+      "end_line": 14681
+    },
+    "__generate_correlated_alpha": {
+      "start_line": 14682,
+      "signature": "def __generate_correlated_alpha(self):",
+      "end_line": 14704
+    },
+    "__check_correlated_alpha": {
+      "start_line": 14705,
+      "signature": "def __check_correlated_alpha(self, test_id):",
+      "end_line": 14783
+    },
+    "__generate_large_given": {
+      "start_line": 14784,
+      "signature": "def __generate_large_given(self):",
+      "end_line": 14811
+    },
+    "__check_large_given": {
+      "start_line": 14812,
+      "signature": "def __check_large_given(self, test_id):",
+      "end_line": 14913
+    },
+    "__generate_small_given": {
+      "start_line": 14914,
+      "signature": "def __generate_small_given(self):",
+      "end_line": 14941
+    },
+    "__check_small_given": {
+      "start_line": 14942,
+      "signature": "def __check_small_given(self, test_id):",
+      "end_line": 15044
+    },
+    "__generate_large_given_prefix": {
+      "start_line": 15045,
+      "signature": "def __generate_large_given_prefix(self):",
+      "end_line": 15077
+    },
+    "__check_large_given_prefix": {
+      "start_line": 15078,
+      "signature": "def __check_large_given_prefix(self, test_id):",
+      "end_line": 15196
+    },
+    "__generate_small_given_prefix": {
+      "start_line": 15197,
+      "signature": "def __generate_small_given_prefix(self):",
+      "end_line": 15213
+    },
+    "__check_small_given_prefix": {
+      "start_line": 15214,
+      "signature": "def __check_small_given_prefix(self, test_id):",
+      "end_line": 15324
+    },
+    "__generate_grouped_strings_by_numeric": {
+      "start_line": 15325,
+      "signature": "def __generate_grouped_strings_by_numeric(self):",
+      "end_line": 15343
+    },
+    "__check_grouped_strings_by_numeric": {
+      "start_line": 15344,
+      "signature": "def __check_grouped_strings_by_numeric(self, test_id):",
+      "end_line": 15380
+    },
+    "__generate_large_given_pair": {
+      "start_line": 15381,
+      "signature": "def __generate_large_given_pair(self):",
+      "end_line": 15420
+    },
+    "__check_large_given_pair": {
+      "start_line": 15421,
+      "signature": "def __check_large_given_pair(self, test_id):",
+      "end_line": 15566
+    },
+    "__generate_small_given_pair": {
+      "start_line": 15567,
+      "signature": "def __generate_small_given_pair(self):",
+      "end_line": 15605
+    },
+    "__check_small_given_pair": {
+      "start_line": 15606,
+      "signature": "def __check_small_given_pair(self, test_id):",
+      "end_line": 15742
+    },
+    "__generate_corr_given_val": {
+      "start_line": 15743,
+      "signature": "def __generate_corr_given_val(self):",
+      "end_line": 15770
+    },
+    "__check_corr_given_val": {
+      "start_line": 15771,
+      "signature": "def __check_corr_given_val(self, test_id):",
+      "end_line": 15927
+    },
+    "__generate_dt_classifier": {
+      "start_line": 15928,
+      "signature": "def __generate_dt_classifier(self):",
+      "end_line": 15955
+    },
+    "__check_dt_classifier": {
+      "start_line": 15956,
+      "signature": "def __check_dt_classifier(self, test_id):",
+      "end_line": 16067
+    }
+  },
+  "binary_tests": {
+    "__generate_binary_same": {
+      "start_line": 10649,
+      "signature": "def __generate_binary_same(self):",
+      "end_line": 10660
+    },
+    "__check_binary_same": {
+      "start_line": 10661,
+      "signature": "def __check_binary_same(self, test_id):",
+      "end_line": 10718
+    },
+    "__generate_binary_opposite": {
+      "start_line": 10719,
+      "signature": "def __generate_binary_opposite(self):",
+      "end_line": 10728
+    },
+    "__check_binary_opposite": {
+      "start_line": 10729,
+      "signature": "def __check_binary_opposite(self, test_id):",
+      "end_line": 10764
+    },
+    "__generate_binary_implies": {
+      "start_line": 10765,
+      "signature": "def __generate_binary_implies(self):",
+      "end_line": 10776
+    },
+    "__check_binary_implies": {
+      "start_line": 10777,
+      "signature": "def __check_binary_implies(self, test_id):",
+      "end_line": 10873
+    },
+    "__generate_binary_and": {
+      "start_line": 10874,
+      "signature": "def __generate_binary_and(self):",
+      "end_line": 10885
+    },
+    "__check_binary_and": {
+      "start_line": 10886,
+      "signature": "def __check_binary_and(self, test_id):",
+      "end_line": 10983
+    },
+    "__generate_binary_or": {
+      "start_line": 10984,
+      "signature": "def __generate_binary_or(self):",
+      "end_line": 10996
+    },
+    "__check_binary_or": {
+      "start_line": 10997,
+      "signature": "def __check_binary_or(self, test_id):",
+      "end_line": 11086
+    },
+    "__generate_binary_xor": {
+      "start_line": 11087,
+      "signature": "def __generate_binary_xor(self):",
+      "end_line": 11098
+    },
+    "__check_binary_xor": {
+      "start_line": 11099,
+      "signature": "def __check_binary_xor(self, test_id):",
+      "end_line": 11163
+    },
+    "__generate_binary_num_same": {
+      "start_line": 11164,
+      "signature": "def __generate_binary_num_same(self):",
+      "end_line": 11178
+    },
+    "__check_binary_num_same": {
+      "start_line": 11179,
+      "signature": "def __check_binary_num_same(self, test_id):",
+      "end_line": 11268
+    },
+    "__generate_binary_rare_combo": {
+      "start_line": 11269,
+      "signature": "def __generate_binary_rare_combo(self):",
+      "end_line": 11291
+    },
+    "__check_binary_rare_combo": {
+      "start_line": 11292,
+      "signature": "def __check_binary_rare_combo(self, test_id):",
+      "end_line": 11400
+    },
+    "__generate_binary_matches_values": {
+      "start_line": 11401,
+      "signature": "def __generate_binary_matches_values(self):",
+      "end_line": 11411
+    },
+    "__check_binary_matches_values": {
+      "start_line": 11412,
+      "signature": "def __check_binary_matches_values(self, test_id):",
+      "end_line": 11524
+    },
+    "__generate_binary_two_others_match": {
+      "start_line": 11525,
+      "signature": "def __generate_binary_two_others_match(self):",
+      "end_line": 11548
+    },
+    "__check_binary_two_others_match": {
+      "start_line": 11549,
+      "signature": "def __check_binary_two_others_match(self, test_id):",
+      "end_line": 11756
+    },
+    "__generate_binary_two_str_match": {
+      "start_line": 11757,
+      "signature": "def __generate_binary_two_str_match(self):",
+      "end_line": 11770
+    },
+    "__check_binary_two_str_match": {
+      "start_line": 11771,
+      "signature": "def __check_binary_two_str_match(self, test_id):",
+      "end_line": 11778
+    },
+    "__generate_binary_matches_sum": {
+      "start_line": 11779,
+      "signature": "def __generate_binary_matches_sum(self):",
+      "end_line": 11792
+    },
+    "__check_binary_matches_sum": {
+      "start_line": 11793,
+      "signature": "def __check_binary_matches_sum(self, test_id):",
+      "end_line": 11952
+    }
+  },
+  "multi_column_tests": {
+    "__generate_c_is_a_or_b": {
+      "start_line": 16068,
+      "signature": "def __generate_c_is_a_or_b(self):",
+      "end_line": 16252
+    },
+    "__check_c_is_a_or_b": {
+      "start_line": 16253,
+      "signature": "def __check_c_is_a_or_b(self, test_id):",
+      "end_line": 16349
+    },
+    "__generate_two_pairs": {
+      "start_line": 16350,
+      "signature": "def __generate_two_pairs(self):",
+      "end_line": 16365
+    },
+    "__check_two_pairs": {
+      "start_line": 16366,
+      "signature": "def __check_two_pairs(self, test_id):",
+      "end_line": 16509
+    },
+    "__generate_unique_sets_values": {
+      "start_line": 16510,
+      "signature": "def __generate_unique_sets_values(self):",
+      "end_line": 16530
+    },
+    "__check_unique_sets_values": {
+      "start_line": 16531,
+      "signature": "def __check_unique_sets_values(self, test_id):",
+      "end_line": 16589
+    },
+    "__generate_missing_values_per_row": {
+      "start_line": 16590,
+      "signature": "def __generate_missing_values_per_row(self):",
+      "end_line": 16607
+    },
+    "__check_missing_values_per_row": {
+      "start_line": 16608,
+      "signature": "def __check_missing_values_per_row(self, test_id):",
+      "end_line": 16617
+    },
+    "__generate_zero_values_per_row": {
+      "start_line": 16618,
+      "signature": "def __generate_zero_values_per_row(self):",
+      "end_line": 16638
+    },
+    "__check_zero_values_per_row": {
+      "start_line": 16639,
+      "signature": "def __check_zero_values_per_row(self, test_id):",
+      "end_line": 16658
+    },
+    "__generate_unique_values_per_row": {
+      "start_line": 16659,
+      "signature": "def __generate_unique_values_per_row(self):",
+      "end_line": 16679
+    },
+    "__check_unique_values_per_row": {
+      "start_line": 16680,
+      "signature": "def __check_unique_values_per_row(self, test_id):",
+      "end_line": 16719
+    },
+    "__generate_negative_values_per_row": {
+      "start_line": 16720,
+      "signature": "def __generate_negative_values_per_row(self):",
+      "end_line": 16737
+    },
+    "__check_negative_values_per_row": {
+      "start_line": 16738,
+      "signature": "def __check_negative_values_per_row(self, test_id):",
+      "end_line": 16752
+    },
+    "__generate_small_avg_rank_per_row": {
+      "start_line": 16753,
+      "signature": "def __generate_small_avg_rank_per_row(self):",
+      "end_line": 16761
+    },
+    "__check_small_avg_rank_per_row": {
+      "start_line": 16762,
+      "signature": "def __check_small_avg_rank_per_row(self, test_id):",
+      "end_line": 16794
+    },
+    "__generate_large_avg_rank_per_row": {
+      "start_line": 16795,
+      "signature": "def __generate_large_avg_rank_per_row(self):",
+      "end_line": 16803
+    },
+    "__check_large_avg_rank_per_row": {
+      "start_line": 16804,
+      "signature": "def __check_large_avg_rank_per_row(self, test_id):",
+      "end_line": 16838
+    }
+  },
+  "uncategorized": {
+    "__check_two_cols_larger": {
+      "start_line": 6076,
+      "signature": "def __check_two_cols_larger(self, test_id, require_same_scale):",
+      "end_line": 6217
+    },
+    "__check_sum_exact": {
+      "start_line": 7718,
+      "signature": "def __check_sum_exact(self, test_id):",
+      "end_line": 7722
+    },
+    "__check_grouped_strings_column": {
+      "start_line": 13313,
+      "signature": "def __check_grouped_strings_column(self, test_id, sort_col, col_name, col_values):",
+      "end_line": 13413
+    }
+  }
+}
