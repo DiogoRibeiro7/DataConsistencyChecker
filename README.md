@@ -46,7 +46,7 @@ The unusual data found may be due to data collection errors, mixing different ty
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10–3.14
 - Poetry for dependency management
 
 ### Technology Stack
@@ -324,31 +324,35 @@ For a description of the APIs, see: [Full API Documentation](https://github.com/
 
 ## Project Structure
 
-The repository separates orchestration, test metadata, test implementations, presentation, and developer tooling:
+The repository uses a standard `src/` package layout:
 
 ```
 DataConsistencyChecker/
-├── src/data_consistency_checker/ # Installable package: checker, mixins, tests metadata
-├── checker_utils.py            # Shared utility functions
-├── test_registry.py            # Test-definition constants
-├── tests_definitions/          # Metadata for the 164 consistency tests
-├── test_implementations/       # Category-based test implementation mixins
-├── display_mixin.py            # Result presentation helpers
-├── plots_mixin.py              # Plotting and visualization helpers
-├── synth_data_mixin.py         # Synthetic-data generation helpers
-├── tests/                      # Regression and integration tests
-├── docs/                       # API and conceptual documentation
-├── Demo Notebooks/             # Worked examples
-├── .github/workflows/          # Continuous integration
-├── pyproject.toml              # Project, dependency, and tool configuration
-└── poetry.lock                 # Reproducible dependency lock
+├── src/
+│   ├── data_consistency_checker/
+│   │   ├── __init__.py             # Public API
+│   │   ├── checker.py              # Core checker and orchestration
+│   │   ├── checker_utils.py        # Shared utilities
+│   │   ├── test_registry.py        # Test metadata constants
+│   │   ├── display_mixin.py        # Result presentation
+│   │   ├── plots_mixin.py          # Visualization helpers
+│   │   ├── synth_data_mixin.py     # Synthetic-data helpers
+│   │   ├── test_implementations/   # Category-specific test logic
+│   │   └── tests_definitions/      # Metadata for the 164 checks
+│   └── check_data_consistency/     # Legacy import compatibility
+├── tests/                          # Regression and integration tests
+├── docs/                           # API and conceptual documentation
+├── Demo Notebooks/                 # Worked examples
+├── .github/workflows/              # Continuous integration
+├── pyproject.toml                  # Package and tool configuration
+└── poetry.lock                     # Reproducible dependency lock
 ```
 
 ### Modular Architecture
 
-`DataConsistencyChecker` is composed from category-specific implementation mixins. Test metadata lives separately under `tests_definitions/`, while the main module owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API.
+The public package is `data_consistency_checker`. `DataConsistencyChecker` owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API. Category-specific checks are implemented through mixins, while test metadata is kept separately from implementation code.
 
-This separation keeps individual test families easier to review and extend without returning to the original monolithic implementation.
+The historical `check_data_consistency` import is retained as a compatibility package, but new code should import from `data_consistency_checker`.
 
 ## Performance
 For notes on reducing the execution times of the analysis, refer to:
