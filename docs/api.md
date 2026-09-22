@@ -522,12 +522,21 @@
 ## Methods to describe specific rows in terms of their patterns and exceptions        
 
 ## get_outlier_scores
-**get_outlier_scores**()
-        
-        Returns an outlier score for each row, similar to most outlier detectors.
-        Returns a python array with an element for each row in the original data. All values are non-negative integer
-        values, with most rows containing zero for most datasets. The scores indicate the number of tests that flagged
-        each row. 
+**get_outlier_scores**(normalized=False)
+
+        Return one outlier score per original row.
+
+        normalized: bool
+            If False, return the historical raw count of exception-bearing patterns that flagged each row.
+            If True, divide each raw score by the number of active exception-result columns in the run.
+            Normalized scores lie in [0, 1]. They are relative flag frequencies, not probabilities or
+            statistical significance measures.
+
+## get_outlier_score_summary
+**get_outlier_score_summary**()
+
+        Return a defensive-copy DataFrame with `FINAL SCORE` and `NORMALIZED SCORE` for every row.
+        This is useful when both score representations are needed for downstream analysis.
 
 ## get_results_by_row_id
 **get_results_by_row_id**(row_num)
