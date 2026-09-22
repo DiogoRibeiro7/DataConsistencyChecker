@@ -1,7 +1,8 @@
 from __future__ import annotations
 from typing import Any, Callable
 
-from dataexcept import OutlierDetectionError, exception_to_dict, wrap
+from dataexcept import OutlierDetectionError, exception_to_dict
+from dataexcept import wrap as wrap_dataexcept
 
 import pandas as pd
 import numpy as np
@@ -595,7 +596,7 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         Returns:
             The structured DataExcept error representing the failed test.
         """
-        structured = wrap(
+        structured = wrap_dataexcept(
             error,
             OutlierDetectionError,
             method=test_id,
