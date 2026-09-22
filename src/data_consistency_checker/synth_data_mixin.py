@@ -13,8 +13,8 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
-from checker_utils import print_text
-from test_registry import TEST_DEFN_GEN_FUNC
+from .checker_utils import print_text
+from .test_registry import TEST_DEFN_GEN_FUNC
 
 
 class SynthDataMixin:

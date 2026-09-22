@@ -29,7 +29,7 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from itertools import combinations
 from decimal import Decimal, ROUND_HALF_UP
 
-from checker_utils import (
+from ..checker_utils import (
     safe_div,
     is_number,
     convert_to_numeric,

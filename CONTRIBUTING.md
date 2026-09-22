@@ -5,7 +5,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 ## Table of Contents
 
 - [Getting Started](#getting-started)
-- [Development Setup](#mainment-setup)
+- [Development Setup](#development-setup)
 - [Project Structure](#project-structure)
 - [Adding New Tests](#adding-new-tests)
 - [Code Style Guidelines](#code-style-guidelines)
@@ -16,7 +16,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10–3.14
 - Poetry for dependency management
 - Git for version control
 
@@ -45,7 +45,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 
 ### Quick Start with Makefile
 
-For convenience, a Makefile is provided with common mainment tasks:
+For convenience, a Makefile is provided with common development tasks:
 
 ```bash
 # Install dependencies and set up pre-commit hooks
@@ -149,52 +149,31 @@ The hooks will:
 
 ## Project Structure
 
-The codebase is organized into modular components for maintainability:
+The project uses a `src/` layout. Production code belongs under
+`src/data_consistency_checker/`; root-level implementation modules are not used.
 
 ```
 DataConsistencyChecker/
-├── check_data_consistency.py     # Main DataConsistencyChecker class (~4,300 lines)
-│                                  # Core orchestration, configuration, and utilities
-├── test_implementations/         # Test method implementations organized by category
-│   ├── base_tests_mixin.py       # Base test methods (18 methods, 1,003 lines)
-│   ├── numeric_tests_mixin.py    # Numeric test methods (118 methods, 4,773 lines)
-│   ├── date_tests_mixin.py       # Date test methods (36 methods, 1,043 lines)
-│   ├── string_tests_mixin.py     # String test methods (118 methods, 4,187 lines)
-│   ├── binary_tests_mixin.py     # Binary test methods (24 methods, 1,383 lines)
-│   └── multi_column_tests_mixin.py # Multi-column test methods (18 methods, 844 lines)
-├── tests_definitions/            # Test metadata organized by category
-│   ├── base_tests.py             # Single/pair column tests (any type)
-│   ├── numeric_tests.py          # Numeric column tests
-│   ├── date_tests.py             # Date/time column tests
-│   ├── string_tests.py           # String/text column tests
-│   ├── binary_tests.py           # Binary column tests
-│   └── multi_column_tests.py     # Multi-column & row-level tests
-├── test_registry.py              # Test definition constants and registry
-├── checker_utils.py              # Shared utility functions
-├── display_mixin.py              # Display and output methods
-├── plots_mixin.py                # Visualization methods
-├── synth_data_mixin.py           # Synthetic data generation
-└── tests/                        # Unit tests (one file per test)
+├── src/
+│   ├── data_consistency_checker/
+│   │   ├── checker.py
+│   │   ├── checker_utils.py
+│   │   ├── display_mixin.py
+│   │   ├── plots_mixin.py
+│   │   ├── synth_data_mixin.py
+│   │   ├── test_registry.py
+│   │   ├── test_implementations/
+│   │   └── tests_definitions/
+│   └── check_data_consistency/     # Compatibility import only
+├── tests/
+├── docs/
+├── Demo Notebooks/
+└── pyproject.toml
 ```
 
-### Key Components
-
-- **Main Class** (`check_data_consistency.py`): Core orchestration, initialization, and utilities
-- **Test Implementation Mixins** (`test_implementations/`): Organized test methods by category
-  - Each mixin contains `_check_*` and `_generate_*` methods for its category
-  - Mixins use single underscore (protected) naming to avoid Python name mangling
-  - Total: 332 test methods across 6 mixin files
-- **Test Definitions** (`tests_definitions/`): Metadata about each test (description, flags)
-- **Display/Plotting Mixins**: Separate concerns (display, plotting, synthetic data)
-- **Utilities**: Helper functions used across the codebase
-
-### Modular Architecture Benefits
-
-The modular structure provides several advantages:
-- **Maintainability**: Each category is self-contained and easier to understand
-- **Contribution**: Easier to add new tests in the appropriate category
-- **Testing**: Mixins can be tested independently
-- **File Size**: Main file reduced from 16,838 to 4,277 lines (74% reduction)
+Use package-relative imports inside `data_consistency_checker`. New user-facing
+examples should import `DataConsistencyChecker` from `data_consistency_checker`,
+not from the compatibility package.
 
 ## Adding New Tests
 
@@ -305,7 +284,7 @@ Create a test file in `tests/test_YOUR_TEST_ID.py`:
 ```python
 import pandas as pd
 import numpy as np
-from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker import DataConsistencyChecker
 
 def test_YOUR_TEST_ID():
     """Test YOUR_TEST_ID with synthetic data."""

@@ -46,7 +46,7 @@ The unusual data found may be due to data collection errors, mixing different ty
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10–3.14
 - Poetry for dependency management
 
 ### Technology Stack
@@ -80,17 +80,23 @@ pip install --no-index --find-links /path/to/wheels -r requirements.txt
 
 ### Usage
 
-Once installed, the package can be imported as:
+Once installed, use the package import:
+
+```python
+from data_consistency_checker import DataConsistencyChecker
+```
+The historical import remains available for compatibility:
 
 ```python
 from check_data_consistency import DataConsistencyChecker
 ```
 
+
 ## Getting Started
 ```python
 import pandas as pd
 import sklearn.datasets as datasets
-from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker import DataConsistencyChecker
 
 data = datasets.fetch_california_housing()
 df = pd.DataFrame(data.data, columns=data.feature_names)
@@ -106,7 +112,7 @@ It is necessary to first instantiate a DataConsistencyChecker object, call init_
 ## Example with More Output
 ```python
 import pandas as pd
-from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker import DataConsistencyChecker
 
 dc = DataConsistencyChecker()
 dc.init_data(df)
@@ -120,7 +126,7 @@ Where many patterns, with or without exceptions, are found, it may be impractica
 ## 2nd Example with More Output
 ```python
 import pandas as pd
-from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker import DataConsistencyChecker
 
 dc = DataConsistencyChecker()
 dc.init_data(df)
@@ -134,7 +140,7 @@ The display_next() API will output the results (or a sample of the results if th
 ## 3rd Example with More Output
 ```python
 import pandas as pd
-from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker import DataConsistencyChecker
 
 dc = DataConsistencyChecker()
 dc.init_data(df)
@@ -318,31 +324,35 @@ For a description of the APIs, see: [Full API Documentation](https://github.com/
 
 ## Project Structure
 
-The repository separates orchestration, test metadata, test implementations, presentation, and developer tooling:
+The repository uses a standard `src/` package layout:
 
 ```
 DataConsistencyChecker/
-├── check_data_consistency.py   # Core checker state, orchestration, and public API
-├── checker_utils.py            # Shared utility functions
-├── test_registry.py            # Test-definition constants
-├── tests_definitions/          # Metadata for the 164 consistency tests
-├── test_implementations/       # Category-based test implementation mixins
-├── display_mixin.py            # Result presentation helpers
-├── plots_mixin.py              # Plotting and visualization helpers
-├── synth_data_mixin.py         # Synthetic-data generation helpers
-├── tests/                      # Regression and integration tests
-├── docs/                       # API and conceptual documentation
-├── Demo Notebooks/             # Worked examples
-├── .github/workflows/          # Continuous integration
-├── pyproject.toml              # Project, dependency, and tool configuration
-└── poetry.lock                 # Reproducible dependency lock
+├── src/
+│   ├── data_consistency_checker/
+│   │   ├── __init__.py             # Public API
+│   │   ├── checker.py              # Core checker and orchestration
+│   │   ├── checker_utils.py        # Shared utilities
+│   │   ├── test_registry.py        # Test metadata constants
+│   │   ├── display_mixin.py        # Result presentation
+│   │   ├── plots_mixin.py          # Visualization helpers
+│   │   ├── synth_data_mixin.py     # Synthetic-data helpers
+│   │   ├── test_implementations/   # Category-specific test logic
+│   │   └── tests_definitions/      # Metadata for the 164 checks
+│   └── check_data_consistency/     # Legacy import compatibility
+├── tests/                          # Regression and integration tests
+├── docs/                           # API and conceptual documentation
+├── Demo Notebooks/                 # Worked examples
+├── .github/workflows/              # Continuous integration
+├── pyproject.toml                  # Package and tool configuration
+└── poetry.lock                     # Reproducible dependency lock
 ```
 
 ### Modular Architecture
 
-`DataConsistencyChecker` is composed from category-specific implementation mixins. Test metadata lives separately under `tests_definitions/`, while the main module owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API.
+The public package is `data_consistency_checker`. `DataConsistencyChecker` owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API. Category-specific checks are implemented through mixins, while test metadata is kept separately from implementation code.
 
-This separation keeps individual test families easier to review and extend without returning to the original monolithic implementation.
+The historical `check_data_consistency` import is retained as a compatibility package, but new code should import from `data_consistency_checker`.
 
 ## Performance
 For notes on reducing the execution times of the analysis, refer to:

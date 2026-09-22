@@ -14,8 +14,8 @@ from typing import Optional
 import pandas as pd
 from IPython.display import display, Markdown
 
-from checker_utils import is_notebook, print_text
-from test_registry import (
+from .checker_utils import is_notebook, print_text
+from .test_registry import (
     TEST_DEFN_SHORT_DESC,
     TEST_DEFN_DESC,
     TEST_DEFN_IMPLEMENTED,

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import seaborn as sns
 
-from checker_utils import clean_x_tick_labels, replace_special_with_space, print_text
+from .checker_utils import clean_x_tick_labels, replace_special_with_space, print_text
 
 
 class PlotsMixin:
