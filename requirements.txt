@@ -9,3 +9,4 @@ termcolor
 scipy
 dill
 pytest
+DataExcept>=1.6,<2.0

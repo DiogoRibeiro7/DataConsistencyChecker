@@ -5,6 +5,22 @@ description = "Toolkit for analyzing dataset consistency"
 authors = ["Diogo Ribeiro <dfr@esmad.ipp.pt>"]
 readme = "README.md"
 license = "MIT"
+homepage = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+repository = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+keywords = ["data-quality", "eda", "outlier-detection", "data-validation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 package-mode = false
 
 [tool.poetry.dependencies]

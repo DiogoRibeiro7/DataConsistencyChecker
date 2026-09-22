@@ -5,7 +5,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 ## Table of Contents
 
 - [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
+- [Development Setup](#mainment-setup)
 - [Project Structure](#project-structure)
 - [Adding New Tests](#adding-new-tests)
 - [Code Style Guidelines](#code-style-guidelines)
@@ -45,7 +45,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 
 ### Quick Start with Makefile
 
-For convenience, a Makefile is provided with common development tasks:
+For convenience, a Makefile is provided with common mainment tasks:
 
 ```bash
 # Install dependencies and set up pre-commit hooks
