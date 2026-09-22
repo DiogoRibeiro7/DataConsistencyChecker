@@ -16,9 +16,11 @@ from IPython.display import display, Markdown
 
 from .checker_utils import is_notebook, print_text
 from .test_registry import (
-    TEST_DEFN_SHORT_DESC,
+    TEST_DEFN_CODE,
     TEST_DEFN_DESC,
+    TEST_DEFN_FUNC,
     TEST_DEFN_IMPLEMENTED,
+    TEST_DEFN_SHORTLIST,
 )
 
 
