@@ -1800,16 +1800,50 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         self.display_detailed_results(test_id_list=[test_id], max_shown=25)
         self.current_display_test += 1
 
-    def get_outlier_scores(self):
-        """
-        Returns an outlier score for each row, similar to most outlier detectors.
-        Returns a python array with an element for each row in the original data. All values are non-negative integer
-        values, with most rows containing zero for most datasets.
+    def get_outlier_scores(self, normalized: bool = False) -> list[int] | list[float]:
+        """Return row-level outlier scores.
+
+        Args:
+            normalized: If False, return the historical raw count of patterns
+                flagging each row. If True, divide that count by the number of
+                active exception-result columns, yielding values in [0, 1].
+
+        Returns:
+            One score per row in the original dataframe.
         """
 
         if self.test_results_df is not None and not self.test_results_df.empty:
-            return self.test_results_df['FINAL SCORE'].tolist()
+            score_column = "NORMALIZED SCORE" if normalized else "FINAL SCORE"
+            if score_column not in self.test_results_df.columns:
+                self._calculate_final_scores()
+            return self.test_results_df[score_column].tolist()
+
+        if normalized:
+            return [0.0] * len(self.orig_df)
         return [0] * len(self.orig_df)
+
+    def get_outlier_score_summary(self) -> pd.DataFrame:
+        """Return raw and normalized outlier scores in a stable dataframe.
+
+        The returned index matches the checker row index. A copy is returned so
+        callers cannot mutate checker state.
+        """
+
+        if self.test_results_df is None:
+            return pd.DataFrame(
+                {
+                    "FINAL SCORE": [0] * len(self.orig_df),
+                    "NORMALIZED SCORE": [0.0] * len(self.orig_df),
+                }
+            )
+
+        required = {"FINAL SCORE", "NORMALIZED SCORE"}
+        if not required.issubset(self.test_results_df.columns):
+            self._calculate_final_scores()
+
+        return self.test_results_df[
+            ["FINAL SCORE", "NORMALIZED SCORE"]
+        ].copy()
 
     def get_results_by_row_id(self, row_num):
         """
@@ -2964,14 +2998,32 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         col_name_str = col_name_str[:-5]
         return col_name_str
 
-    def _calculate_final_scores(self):
-        """
-        Calculates the final score for each row in the original data. This treats each test on each column equally and
-        calculates their count.
+    def _calculate_final_scores(self) -> None:
+        """Calculate raw and normalized row-level outlier scores.
+
+        Only per-pattern result columns contribute to the score. Derived score
+        columns are excluded explicitly, so recalculating scores cannot inflate
+        them during repeated or appended analyses.
+
+        ``FINAL SCORE`` remains the historical raw count of exception-bearing
+        patterns that flagged each row. ``NORMALIZED SCORE`` divides that count
+        by the number of active result columns, producing a value in [0, 1].
         """
 
-        if self.test_results_df is not None:
-            self.test_results_df['FINAL SCORE'] = self.test_results_df.sum(axis=1)
+        if self.test_results_df is None:
+            return
+
+        result_columns = [
+            column for column in self.test_results_df.columns if " -- " in column
+        ]
+        if not result_columns:
+            self.test_results_df["FINAL SCORE"] = 0
+            self.test_results_df["NORMALIZED SCORE"] = 0.0
+            return
+
+        raw_scores = self.test_results_df[result_columns].sum(axis=1)
+        self.test_results_df["FINAL SCORE"] = raw_scores
+        self.test_results_df["NORMALIZED SCORE"] = raw_scores / len(result_columns)
 
     def _output_stats(self):
         """
