@@ -5,7 +5,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 ## Table of Contents
 
 - [Getting Started](#getting-started)
-- [Development Setup](#mainment-setup)
+- [Development Setup](#development-setup)
 - [Project Structure](#project-structure)
 - [Adding New Tests](#adding-new-tests)
 - [Code Style Guidelines](#code-style-guidelines)
@@ -45,7 +45,7 @@ Thank you for your interest in contributing to DataConsistencyChecker! This guid
 
 ### Quick Start with Makefile
 
-For convenience, a Makefile is provided with common mainment tasks:
+For convenience, a Makefile is provided with common development tasks:
 
 ```bash
 # Install dependencies and set up pre-commit hooks
@@ -305,7 +305,7 @@ Create a test file in `tests/test_YOUR_TEST_ID.py`:
 ```python
 import pandas as pd
 import numpy as np
-from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker import DataConsistencyChecker
 
 def test_YOUR_TEST_ID():
     """Test YOUR_TEST_ID with synthetic data."""
