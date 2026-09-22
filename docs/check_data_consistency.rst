@@ -1,7 +1,7 @@
 check\_data\_consistency module
 ===============================
 
-.. automodule:: check_data_consistency
+.. automodule:: data_consistency_checker
    :members:
    :undoc-members:
    :show-inheritance:
