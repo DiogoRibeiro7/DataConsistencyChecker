@@ -90,7 +90,8 @@
 
 ## check_data_quality
 **check_data_quality**(append_results=False, execute_list=None, exclude_list=None, test_start_id=0, fast_only=False,
-                    include_code_tests=True, freq_contamination_level=0.005, rare_contamination_level=0.1,run_parallel=False)
+                    include_code_tests=True, freq_contamination_level=0.005, rare_contamination_level=0.1,
+                    run_parallel=False, raise_on_error=False)
 
         Run the specified tests on the dataset specified init_data(). This method identifies the patterns and exceptions to
         these found in the data. Additional API calls may be made to access the results.
@@ -131,6 +132,18 @@
 
         run_parallel: bool
             If set True, the tests will be run in parallel, which can reduce overall execution time.
+
+        raise_on_error: bool
+            If False, a failed consistency-test implementation is converted to a structured DataExcept
+            OutlierDetectionError, retained in get_execution_failures(), and execution continues. If True,
+            the structured error is raised immediately with the original exception preserved as its cause.
+
+## get_execution_failures
+**get_execution_failures**()
+
+        Return a defensive copy of structured execution failures retained during the latest
+        check_data_quality() call. Each record contains the Test ID and a JSON-safe DataExcept
+        exception envelope, including the original cause chain when available.
 
 ## check_data_quality_by_feature_pairs
 **check_data_quality_by_feature_pairs**(max_features_shown=30)

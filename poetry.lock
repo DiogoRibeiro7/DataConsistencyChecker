@@ -363,6 +363,21 @@ docs = ["ipython", "matplotlib", "numpydoc", "sphinx"]
 tests = ["pytest", "pytest-cov", "pytest-xdist"]
 
 [[package]]
+name = "dataexcept"
+version = "1.6.0"
+description = "A Python package providing structured, easily-extendable custom exception types."
+optional = false
+python-versions = ">=3.10,<3.15"
+groups = ["main"]
+files = [
+    {file = "dataexcept-1.6.0-py3-none-any.whl", hash = "sha256:4315acf069e0017554f4f56f56929151a03687af88a068caa652fdb5d041683a"},
+    {file = "dataexcept-1.6.0.tar.gz", hash = "sha256:8f3b345e298c60875be401c2204dc5cd989ffde350a5d16353b7292841035745"},
+]
+
+[package.dependencies]
+tomli = {version = "*", markers = "python_version < \"3.11\""}
+
+[[package]]
 name = "decorator"
 version = "5.2.1"
 description = "Decorators for Humans"
@@ -2050,7 +2065,7 @@ version = "2.3.0"
 description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
 markers = "python_version == \"3.10\""
 files = [
     {file = "tomli-2.3.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:88bd15eb972f3664f5ed4b57c1634a97153b4bac4479dcb6a495f41921eb7f45"},
@@ -2174,5 +2189,5 @@ files = [
 
 [metadata]
 lock-version = "2.1"
-python-versions = "^3.10"
-content-hash = "b2214304b2453ca5123cb7693f819b83c7b5d20c0a4c4d79b747ef9ff3549370"
+python-versions = ">=3.10,<3.15"
+content-hash = "d7f7a9061bf351bf5b8b26717ee0c71cdf9653eae2508120c82769455bc7ce6b"

@@ -190,7 +190,8 @@ dc.check_data_quality(
     execute_list=None,        # Run specific tests
     exclude_list=None,        # Skip specific tests
     fast_only=False,          # Run only fast single-column tests
-    run_parallel=False        # Enable parallel execution
+    run_parallel=False,       # Enable parallel execution
+    raise_on_error=False      # Retain failed-test diagnostics and continue
 )
 ```
 
@@ -203,7 +204,29 @@ dc.display_detailed_results()             # Detailed display with plots
 dc.get_outlier_scores()                   # Row-by-row outlier scores
 dc.display_most_flagged_rows()            # Show most anomalous rows
 dc.quick_report()                         # Convenience method for summary
+dc.get_execution_failures()               # Structured DataExcept failures from the latest run
 ```
+
+### Structured Test Execution Failures
+
+DataConsistencyChecker distinguishes data exceptions discovered by its tests from failures of the test implementations themselves. When an individual consistency test raises unexpectedly, the default behavior is to continue the audit and retain a structured DataExcept envelope:
+
+```python
+dc.check_data_quality()
+
+for failure in dc.get_execution_failures():
+    print(failure["test_id"])
+    print(failure["error"]["type"])
+    print(failure["error"].get("cause"))
+```
+
+Each retained failure is represented as an `OutlierDetectionError` and preserves the original exception as its cause. This makes execution failures machine-readable without requiring callers to parse terminal output. For batch or CI workflows where any failed consistency test should stop execution immediately, use:
+
+```python
+dc.check_data_quality(raise_on_error=True)
+```
+
+In fail-fast mode the structured `OutlierDetectionError` is raised with the original exception chained as `__cause__`.
 
 ### Utility Methods
 ```python
