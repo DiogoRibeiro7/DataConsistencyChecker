@@ -8,7 +8,8 @@ license = "MIT"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.15"
+DataExcept = ">=1.6,<2.0"
 pandas = "*"
 numpy = "*"
 scikit-learn = "*"
