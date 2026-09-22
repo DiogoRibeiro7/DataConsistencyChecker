@@ -41,3 +41,17 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local and temporary artifacts
+*.backup
+*.bak
+*.tmp
+*.log
+coverage.xml
+dc_cache/
+
+# Local notebooks / editors
+.ipynb_checkpoints/
+
+# Generated analysis artifacts
+method_mapping.json
