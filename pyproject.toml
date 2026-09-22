@@ -21,7 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
-package-mode = false
+packages = [{ include = "data_consistency_checker", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.15"
@@ -115,6 +115,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
