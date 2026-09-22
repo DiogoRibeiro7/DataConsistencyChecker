@@ -201,7 +201,9 @@ dc.get_patterns_list()                    # List all identified patterns
 dc.get_exceptions_list()                  # List all exceptions to patterns
 dc.summarize_patterns_and_exceptions()    # Overview of findings
 dc.display_detailed_results()             # Detailed display with plots
-dc.get_outlier_scores()                   # Row-by-row outlier scores
+dc.get_outlier_scores()                   # Raw row-by-row flag counts
+dc.get_outlier_scores(normalized=True)     # Scores normalized to [0, 1]
+dc.get_outlier_score_summary()             # Raw + normalized scores as a DataFrame
 dc.display_most_flagged_rows()            # Show most anomalous rows
 dc.quick_report()                         # Convenience method for summary
 dc.get_execution_failures()               # Structured DataExcept failures from the latest run
@@ -227,6 +229,21 @@ dc.check_data_quality(raise_on_error=True)
 ```
 
 In fail-fast mode the structured `OutlierDetectionError` is raised with the original exception chained as `__cause__`.
+
+### Outlier Score Semantics
+
+The historical outlier score is a transparent raw count: each exception-bearing pattern that flags a row contributes one point. This remains the default behavior of `get_outlier_scores()`.
+
+For comparisons across runs that produce different numbers of exception-result columns, use `get_outlier_scores(normalized=True)`. The normalized score is
+
+\[
+\text{normalized score}_i =
+\frac{\text{raw score}_i}{\text{number of active exception-result columns}}.
+\]
+
+It is therefore bounded between 0 and 1. A value of 0.5 means that the row was flagged by half of the active exception-bearing pattern checks in that run. It is **not** a probability, calibrated anomaly probability, p-value, or statistical significance measure.
+
+`get_outlier_score_summary()` returns both forms in a DataFrame with columns `FINAL SCORE` and `NORMALIZED SCORE`.
 
 ### Utility Methods
 ```python
