@@ -256,43 +256,43 @@ dc.clear_results() / dc.restore_results() # Manual result management
 
 **APIs Demo**
 
-The [APIs Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_APIs.ipynb) notebook provides examples of many of the APIs provided with the tool, though many of more common APIs are covered by the California Housing and Breast Cancer demo notebooks, and are not covered here. This notebook goes through an example with the Boston Housing dataset. Note, in some cases the background coloring in the displayed notebooks will not render in github.
+The [APIs Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_APIs.ipynb) notebook provides examples of many of the APIs provided with the tool, though many of more common APIs are covered by the California Housing and Breast Cancer demo notebooks, and are not covered here. This notebook goes through an example with the Boston Housing dataset. Note, in some cases the background coloring in the displayed notebooks will not render in github.
 
 Each of the notebooks provides examples of some of the plots available. 
 
 Example display of a row identified as an outler:
 
-![example](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/images/img1.jpg)
+![example](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/images/img1.jpg)
 
 <br>
 
 **Hypothyroid Demo**
 
-The [Hypothyroid Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) notebook is a simple example, examining a dataset, getting a list of the patterns and exceptions found, and getting more detail on a subset of these that appear most interesting.
+The [Hypothyroid Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) notebook is a simple example, examining a dataset, getting a list of the patterns and exceptions found, and getting more detail on a subset of these that appear most interesting.
 
 <br>
 
 **California Housing Demo**
 
-The [California Housing Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) notebook goes through a more typical example examining a dataset. This focusses on the quick_report() API, which is a convenience method wrapping several other APIs, to give an overview of the findings. After this, display_detailed_results() is called to provide more information on specific issues flagged.  
+The [California Housing Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) notebook goes through a more typical example examining a dataset. This focusses on the quick_report() API, which is a convenience method wrapping several other APIs, to give an overview of the findings. After this, display_detailed_results() is called to provide more information on specific issues flagged.  
 
 <br>
 
 **Breast Cancer Demo**
 
-The [Breast Cancer Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Real_Breast_Cancer.ipynb) notebook goes though another typical example of examinging a dataset, calling somewhat different APIs than the [California Housing Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) example. 
+The [Breast Cancer Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Real_Breast_Cancer.ipynb) notebook goes though another typical example of examinging a dataset, calling somewhat different APIs than the [California Housing Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) example. 
 
 <br>
 
 **Multiple Exectutions Demo**
 
-The [Multiple Exectutions Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) notebook demonstrates examples of working with the tool in a couple different ways: 1) where a set of tests are run, then another set of tests are run, replacing the first results, and another case where the additional tests append to the set of results found, gradually buiding up a complete set, potentially for further anaysis, or for a final report. 
+The [Multiple Exectutions Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) notebook demonstrates examples of working with the tool in a couple different ways: 1) where a set of tests are run, then another set of tests are run, replacing the first results, and another case where the additional tests append to the set of results found, gradually buiding up a complete set, potentially for further anaysis, or for a final report. 
 
 <br>
 
 **OpenML Demo**
 
-The [OpenML](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_OpenML_Datasets.ipynb) notebook runs DataConsistencyChecker on several datasets from OpenML, and displays a small number of findings for each. In most cases, other patterns were also identified, which may or may not be interesting. In general, when using DataConsistencyChecker, there may be a step involved with examining the patterns discovered to identify the relevant ones, but this is typically quite quick and worthwhile to identify the interesting patterns. APIs are provided to assist with processessing patterns where many are discovered, with examples in the other notebooks.
+The [OpenML](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_OpenML_Datasets.ipynb) notebook runs DataConsistencyChecker on several datasets from OpenML, and displays a small number of findings for each. In most cases, other patterns were also identified, which may or may not be interesting. In general, when using DataConsistencyChecker, there may be a step involved with examining the patterns discovered to identify the relevant ones, but this is typically quite quick and worthwhile to identify the interesting patterns. APIs are provided to assist with processessing patterns where many are discovered, with examples in the other notebooks.
 
 This notebook, for each dataset, runs the checker for a small number of tests, then displays some subset of the results found, often filtering the results to show only a single issue, or the issues related to a single feature. Many more patterns are found in each of these, but the purpose of the notebook is to provide examples of some of the patterns that can be found relatively often. 
 
@@ -301,68 +301,52 @@ The tests are able to find instances where columns are correlated, where columns
 An example where two columns were found to be correlated with an exception:
 
 
-![example](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/images/img2.jpg)
+![example](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/images/img2.jpg)
 
 An example where one column was found to be the sum of two other columns with two exceptions:
 
 
-![example](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/images/img3.jpg)
+![example](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/images/img3.jpg)
 
 
 **Test_Demo API Demo**
 
-The [Test_Demo API Demo](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Test_Method.ipynb) notebook demonstrates the test_demo() API, which provides examples of a specified test ID using the provided synthetic data. 
+The [Test_Demo API Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Test_Method.ipynb) notebook demonstrates the test_demo() API, which provides examples of a specified test ID using the provided synthetic data. 
 
 ## Full API
-For a description of the APIs, see: [Full API Documentation](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/api.md)
+For a description of the APIs, see: [Full API Documentation](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/api.md)
 
 ## Project Structure
 
-The codebase is organized into modular components for maintainability:
+The repository separates orchestration, test metadata, test implementations, presentation, and developer tooling:
 
 ```
 DataConsistencyChecker/
-├── check_data_consistency.py   # Main checker class (~16,800 lines)
-├── test_registry.py             # Test definition constants and registry
-├── tests_definitions/           # Test definitions organized by category
-│   ├── __init__.py              # Package aggregator
-│   ├── base_tests.py            # Single/pair column tests (any type)
-│   ├── numeric_tests.py         # Numeric column tests
-│   ├── date_tests.py            # Date/time column tests
-│   ├── string_tests.py          # String/text column tests
-│   ├── binary_tests.py          # Binary column tests
-│   └── multi_column_tests.py    # Multi-column & row-level tests
-├── checker_utils.py             # Utility functions (type checking, styling, etc.)
-├── display_mixin.py             # Display and output helper methods
-├── plots_mixin.py               # Visualization and plotting utilities
-├── synth_data_mixin.py          # Synthetic data generation for testing
-├── docs/                        # Comprehensive documentation
-│   ├── api.md                   # Complete API reference
-│   ├── performance.md           # Performance optimization guide
-│   ├── additional_documentation.md
-│   └── unit_tests.md
-├── Demo Notebooks/              # 8 Jupyter notebooks with examples
-├── tests/                       # 161 unit test files
-└── pyproject.toml              # Poetry configuration
+├── check_data_consistency.py   # Core checker state, orchestration, and public API
+├── checker_utils.py            # Shared utility functions
+├── test_registry.py            # Test-definition constants
+├── tests_definitions/          # Metadata for the 164 consistency tests
+├── test_implementations/       # Category-based test implementation mixins
+├── display_mixin.py            # Result presentation helpers
+├── plots_mixin.py              # Plotting and visualization helpers
+├── synth_data_mixin.py         # Synthetic-data generation helpers
+├── tests/                      # Regression and integration tests
+├── docs/                       # API and conceptual documentation
+├── Demo Notebooks/             # Worked examples
+├── .github/workflows/          # Continuous integration
+├── pyproject.toml              # Project, dependency, and tool configuration
+└── poetry.lock                 # Reproducible dependency lock
 ```
 
 ### Modular Architecture
 
-The codebase has been refactored for better maintainability:
+`DataConsistencyChecker` is composed from category-specific implementation mixins. Test metadata lives separately under `tests_definitions/`, while the main module owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API.
 
-- **Main class** (`check_data_consistency.py`): Core API, test execution logic, and all 164 test implementations
-- **Test definitions** (`tests_definitions/`): Test metadata organized into 6 category-based modules (~250 lines each)
-- **Mixins**: DisplayMixin, PlotsMixin, and SynthDataMixin provide specialized functionality through multiple inheritance
-- **Utilities**: Shared helper functions for type checking, styling, and data manipulation
-
-This modular structure makes it easier to:
-- Add new tests (just add to the appropriate category module)
-- Understand test organization (tests grouped by column types)
-- Maintain and review code (smaller, focused modules)
+This separation keeps individual test families easier to review and extend without returning to the original monolithic implementation.
 
 ## Performance
 For notes on reducing the execution times of the analysis, refer to:
-[Performance Notes](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/performance.md)
+[Performance Notes](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/performance.md)
 
 ## Development & Testing
 
@@ -374,15 +358,17 @@ The project includes comprehensive unit tests with 161 test files covering all 1
 poetry run pytest -q
 ```
 
-For contributors and detailed information about the testing framework, see: [Notes on unit tests](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/unit_tests.md)
+For contributors and detailed information about the testing framework, see: [Notes on unit tests](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/unit_tests.md)
 
 ### CI/CD
 
 The project uses GitHub Actions for continuous integration:
-- Automated testing on Python 3.10
-- Poetry-based dependency management
-- Test suite execution on each commit
+- Automated testing across Python 3.10–3.14
+- Poetry lock-file validation before installation
+- Ruff linting and formatting checks
+- Mypy type checking
+- Pytest coverage runs on pull requests and pushes to `main`
 
 ## Additional Documentation
-Notes on additional topics, inlcuding date columns, clearing issues, contamination levels, the sort order of the data, and the use of synthetic may be found at: [Additional Documentation](https://github.com/Brett-Kennedy/DataConsistencyChecker/blob/main/docs/additional_documentation.md)
+Notes on additional topics, including date columns, clearing issues, contamination levels, the sort order of the data, and the use of synthetic may be found at: [Additional Documentation](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/additional_documentation.md)
 
