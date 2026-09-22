@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing import Any, Callable
 
+from dataexcept import OutlierDetectionError, exception_to_dict, wrap
+
 import pandas as pd
 import numpy as np
 import numbers
 import os
-import sys
 from sklearn import metrics
 from sklearn.linear_model import Lasso
 from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
@@ -226,6 +227,7 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         # Debugging information
         self.DEBUG_MSG = True
         self.num_exceptions = 0
+        self.execution_failures: list[dict[str, Any]] = []
 
         # Variables used for calls to display_next()
         self.found_tests = []
@@ -572,6 +574,49 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         self.common_vals_dict = None
 
 
+    def _record_execution_failure(
+        self,
+        test_id: str,
+        error: Exception,
+        *,
+        raise_on_error: bool,
+    ) -> OutlierDetectionError:
+        """Translate and retain one failed consistency-test execution.
+
+        The original exception is preserved as ``__cause__`` by DataExcept.
+        The serialized envelope is retained so callers can inspect failures
+        without parsing console output.
+
+        Args:
+            test_id: Identifier of the consistency test that failed.
+            error: Original exception raised by the test implementation.
+            raise_on_error: If True, re-raise the structured failure.
+
+        Returns:
+            The structured DataExcept error representing the failed test.
+        """
+        structured = wrap(
+            error,
+            OutlierDetectionError,
+            method=test_id,
+            details=str(error),
+        )
+        self.execution_failures.append(
+            {
+                "test_id": test_id,
+                "error": exception_to_dict(structured),
+            }
+        )
+        self.num_exceptions += 1
+
+        if raise_on_error:
+            raise structured from error
+        return structured
+
+    def get_execution_failures(self) -> list[dict[str, Any]]:
+        """Return a defensive copy of failures from the latest quality run."""
+        return copy.deepcopy(self.execution_failures)
+
     def check_data_quality(
         self,
         append_results: bool = False,
@@ -582,7 +627,8 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         include_code_tests: bool = True,
         freq_contamination_level: int | float = 0.005,
         rare_contamination_level: int | float = 0.1,
-        run_parallel: bool = False
+        run_parallel: bool = False,
+        raise_on_error: bool = False,
     ) -> None:
         """
         Execute data quality tests on the dataset specified in init_data().
@@ -602,12 +648,16 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
             rare_contamination_level: Max fraction (or count) of rows violating a pattern
                 for tests that rarely find results. Higher values reduce false negatives
             run_parallel: If True, run tests in parallel for faster execution
+            raise_on_error: If True, stop on the first failed test and raise a
+                structured OutlierDetectionError. If False, retain failures and
+                continue running the remaining tests.
 
         Returns:
             None. Results stored in instance variables accessible via other methods.
 
         Raises:
             AssertionError: If both execute_list and exclude_list are specified
+            OutlierDetectionError: If a test fails and raise_on_error is True
         """
 
         if self.orig_df is None or len(self.orig_df) == 0:
@@ -679,6 +729,7 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         self.n_tests_executed = 0
         self.execution_times = {}
         self.num_exceptions = 0
+        self.execution_failures = []
 
         # Initialize the variables related to the results found, unless append_results is specified.
         if not append_results:
@@ -704,13 +755,20 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
             with concurrent.futures.ProcessPoolExecutor() as executor:
                 for test_id in self.execution_test_list:
                     self._output_current_test(test_idx_dict[test_id], test_id)
-                    # f = executor.submit(self.test_dict[test_id][TEST_DEFN_FUNC], test_id)
-                    # func = self.test_dict[test_id][TEST_DEFN_FUNC]
-                    f = executor.submit(call_test, self, test_id)
-                    process_arr.append(f)
+                    future = executor.submit(call_test, self, test_id)
+                    process_arr.append((test_id, future))
                     self.n_tests_executed += 1
-                for f in process_arr:
-                    f.result()
+                for test_id, future in process_arr:
+                    try:
+                        future.result()
+                    except Exception as error:
+                        structured = self._record_execution_failure(
+                            test_id,
+                            error,
+                            raise_on_error=raise_on_error,
+                        )
+                        if self.verbose >= 0:
+                            print(f"Error executing {test_id}: {structured}")
         else:
             for test_id in self.execution_test_list:
                 self._output_current_test(test_idx_dict[test_id], test_id)
@@ -719,17 +777,17 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
                     self.test_dict[test_id][TEST_DEFN_FUNC](test_id=test_id)
                     t2 = time.time()
                     self.execution_times[test_id] = t2 - t1
-                except Exception as e:
-                    exc_type, exc_obj, exc_tb = sys.exc_info()
-                    line_number_str = str(exc_tb.tb_lineno)
-                    while exc_tb.tb_next:
-                        exc_tb = exc_tb.tb_next
-                        line_number_str += " -- " + str(exc_tb.tb_lineno)
+                except Exception as error:
+                    structured = self._record_execution_failure(
+                        test_id,
+                        error,
+                        raise_on_error=raise_on_error,
+                    )
+                    message = f"Error executing {test_id}: {structured}"
                     if colored:
-                        print(colored(f"Error executing {test_id}: {e}, line number: {line_number_str}", 'red'))
+                        print(colored(message, "red"))
                     else:
-                        print(f"Error executing {test_id}: {e}, line number: {line_number_str}")
-                    self.num_exceptions += 1
+                        print(message)
                 self.n_tests_executed += 1
 
         # Populate the test_results_df dataframe with all results found
