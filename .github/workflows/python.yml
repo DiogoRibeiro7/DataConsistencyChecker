@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: DiogoRibeiro7/git-actions-collection/.github/actions/setup-poetry@v1
         with:
           python-version: '3.10'
-      - uses: abatilo/actions-poetry@v3
+          install-deps: 'false'
       - name: Validate dependency lock
         run: poetry check --lock
       - name: Install dependencies
@@ -32,10 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: DiogoRibeiro7/git-actions-collection/.github/actions/setup-poetry@v1
         with:
           python-version: '3.10'
-      - uses: abatilo/actions-poetry@v3
+          install-deps: 'false'
       - name: Install dependencies
         run: |
           poetry install --no-interaction
@@ -53,10 +53,10 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: DiogoRibeiro7/git-actions-collection/.github/actions/setup-poetry@v1
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v3
+          install-deps: 'false'
       - name: Install dependencies
         run: |
           poetry install --no-interaction
@@ -76,10 +76,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: DiogoRibeiro7/git-actions-collection/.github/actions/setup-poetry@v1
         with:
           python-version: '3.12'
-      - uses: abatilo/actions-poetry@v3
+          install-deps: 'false'
       - name: Validate dependency lock
         run: poetry check --lock
       - name: Install dependencies
