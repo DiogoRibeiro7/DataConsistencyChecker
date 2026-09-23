@@ -213,7 +213,21 @@ dc.get_outlier_score_summary()             # Raw + normalized scores as a DataFr
 dc.display_most_flagged_rows()            # Show most anomalous rows
 dc.quick_report()                         # Convenience method for summary
 dc.get_execution_failures()               # Structured DataExcept failures from the latest run
+dc.get_report()                           # Serializable snapshot of the full analysis
 ```
+
+### Structured Report API
+
+For pipelines, services, experiment tracking, or persisted analysis results, use `get_report()` instead of reading internal DataFrames directly:
+
+```python
+report = dc.get_report()
+payload = report.to_dict()
+```
+
+`DataConsistencyReport` contains dataset dimensions, executed test IDs, discovered patterns, exceptions, raw and normalized row scores, and structured execution failures. `to_dict()` returns strict JSON-safe primitives, including normalization of NumPy scalars, dates, missing values, and non-finite floating-point values.
+
+The report is a snapshot. Mutating the returned dictionary does not mutate the checker state.
 
 ### Structured Test Execution Failures
 

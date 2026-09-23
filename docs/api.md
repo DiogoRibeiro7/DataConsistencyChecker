@@ -138,6 +138,16 @@
             OutlierDetectionError, retained in get_execution_failures(), and execution continues. If True,
             the structured error is raised immediately with the original exception preserved as its cause.
 
+## get_report
+**get_report**()
+
+        Return a DataConsistencyReport snapshot of the current checker state. The report includes:
+        dataset row and column counts, executed test IDs, patterns, exceptions, row-level raw and
+        normalized scores, and structured execution failures.
+
+        DataConsistencyReport.to_dict() returns strict JSON-safe primitives and does not expose
+        live pandas objects or mutable checker internals.
+
 ## get_execution_failures
 **get_execution_failures**()
 
