@@ -11,6 +11,7 @@ from typing import Sequence
 import pandas as pd
 
 from .checker import DataConsistencyChecker
+from .config import DataConsistencyConfig
 
 
 def _load_dataframe(path: Path) -> pd.DataFrame:
@@ -73,6 +74,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     check_parser.add_argument("input", type=Path, help="Input dataset path.")
     check_parser.add_argument(
+        "--config",
+        type=Path,
+        help="Load analysis settings from a JSON or TOML configuration file.",
+    )
+    check_parser.add_argument(
         "-o",
         "--output",
         type=Path,
@@ -94,23 +100,25 @@ def _build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--date-column",
         action="append",
-        default=[],
+        default=None,
         help="Treat this column as a date column. Repeat for multiple columns.",
     )
     check_parser.add_argument(
         "--fast-only",
         action="store_true",
+        default=None,
         help="Run only checks marked as fast.",
     )
     check_parser.add_argument(
         "--max-combinations",
         type=int,
-        default=100_000,
+        default=None,
         help="Maximum number of feature combinations to evaluate.",
     )
     check_parser.add_argument(
         "--raise-on-error",
         action="store_true",
+        default=None,
         help="Stop immediately if a consistency-test implementation fails.",
     )
     check_parser.add_argument(
@@ -118,7 +126,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--verbose",
         type=int,
         choices=(-1, 0, 1, 2),
-        default=0,
+        default=None,
         help="Checker verbosity level (-1 through 2).",
     )
     return parser
@@ -136,23 +144,54 @@ def _run_list_tests(*, as_json: bool) -> int:
 
 
 def _run_check(args: argparse.Namespace) -> int:
-    checker = DataConsistencyChecker(
-        verbose=args.verbose,
-        max_combinations=args.max_combinations,
+    config = (
+        DataConsistencyConfig.from_file(args.config)
+        if args.config is not None
+        else DataConsistencyConfig()
     )
-    _validate_test_ids(checker, args.tests)
-    _validate_test_ids(checker, args.exclude_tests)
+
+    overrides = config.to_dict()
+    if args.tests is not None:
+        overrides["execute_tests"] = args.tests
+        overrides["exclude_tests"] = []
+    if args.exclude_tests is not None:
+        overrides["exclude_tests"] = args.exclude_tests
+        overrides["execute_tests"] = []
+    if args.date_column is not None:
+        overrides["known_date_cols"] = args.date_column
+    if args.fast_only is not None:
+        overrides["fast_only"] = args.fast_only
+    if args.max_combinations is not None:
+        overrides["max_combinations"] = args.max_combinations
+    if args.raise_on_error is not None:
+        overrides["raise_on_error"] = args.raise_on_error
+    if args.verbose is not None:
+        overrides["verbose"] = args.verbose
+
+    config = DataConsistencyConfig.from_dict(overrides)
+    checker = DataConsistencyChecker(
+        iqr_limit=config.iqr_limit,
+        idr_limit=config.idr_limit,
+        verbose=config.verbose,
+        max_combinations=config.max_combinations,
+    )
+    _validate_test_ids(checker, config.execute_tests)
+    _validate_test_ids(checker, config.exclude_tests)
 
     dataframe = _load_dataframe(args.input)
     checker.init_data(
         dataframe,
-        known_date_cols=args.date_column or None,
+        known_date_cols=list(config.known_date_cols) or None,
     )
     checker.check_data_quality(
-        execute_list=args.tests,
-        exclude_list=args.exclude_tests,
-        fast_only=args.fast_only,
-        raise_on_error=args.raise_on_error,
+        execute_list=list(config.execute_tests) or None,
+        exclude_list=list(config.exclude_tests) or None,
+        fast_only=config.fast_only,
+        include_code_tests=config.include_code_tests,
+        freq_contamination_level=config.freq_contamination_level,
+        rare_contamination_level=config.rare_contamination_level,
+        run_parallel=config.run_parallel,
+        raise_on_error=config.raise_on_error,
     )
 
     report = checker.get_report()

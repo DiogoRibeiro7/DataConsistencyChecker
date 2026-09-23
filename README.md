@@ -112,6 +112,26 @@ payload = report.to_dict()
 
 `DataConsistencyConfig` is immutable. It captures constructor settings, date-column overrides, test filters, contamination thresholds, parallel execution, and fail-fast behavior in one reproducible object. Stateful operations such as appending to an existing analysis or resuming from a test index remain available through the lower-level `DataConsistencyChecker` API.
 
+### Reusable Configuration Files
+
+`DataConsistencyConfig` can be serialized and reconstructed with `to_dict()` and `from_dict()`, or loaded directly from JSON/TOML:
+
+```toml
+[data_consistency_checker]
+execute_tests = ["MISSING_VALUES", "VERY_LARGE"]
+known_date_cols = ["event_date"]
+max_combinations = 50000
+verbose = -1
+```
+
+```bash
+data-consistency-checker check data.csv \
+  --config checker.toml \
+  --output report.json
+```
+
+JSON files use the same field names at the top level. CLI flags explicitly supplied by the user override values from the config file; unspecified CLI options leave the file configuration unchanged. This makes the same checked-in configuration reusable from Python, local shell commands, and CI.
+
 ## Command-Line Interface
 
 After installation, datasets can be checked without writing Python code:

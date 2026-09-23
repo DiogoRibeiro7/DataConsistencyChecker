@@ -2,6 +2,12 @@
 
 Immutable configuration object for one-shot analyses. It groups checker thresholds, test filters, date-column overrides, contamination settings, parallel execution, and fail-fast behavior.
 
+### Configuration serialization
+
+`DataConsistencyConfig.to_dict()` returns a JSON-friendly representation. `DataConsistencyConfig.from_dict()` validates and reconstructs the immutable configuration. `DataConsistencyConfig.from_file(path)` accepts JSON and TOML; TOML may use a `[data_consistency_checker]` table or place fields at the top level.
+
+When used with the CLI via `--config`, explicitly supplied CLI flags override file values.
+
 ## analyze
 **analyze**(df, config=None)
 
