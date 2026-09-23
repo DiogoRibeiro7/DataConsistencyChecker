@@ -1,3 +1,13 @@
+## TestMetadata
+
+Immutable public metadata for one implemented consistency check. Fields include `test_id`, `short_description`, `description`, `shortlist`, `implemented`, `fast`, and `code`.
+
+## get_test_catalog
+**get_test_catalog**()
+
+        Return a list of TestMetadata objects for all implemented checks. This is the supported
+        introspection API; callers do not need to depend on the internal registry tuple layout.
+
 ## DataConsistencyConfig
 
 Immutable configuration object for one-shot analyses. It groups checker thresholds, test filters, date-column overrides, contamination settings, parallel execution, and fail-fast behavior.
