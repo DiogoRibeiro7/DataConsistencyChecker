@@ -80,3 +80,24 @@ def test_empty_result_set_returns_zero_scores() -> None:
     summary = checker.get_outlier_score_summary()
     assert summary["FINAL SCORE"].tolist() == [0, 0, 0]
     assert summary["NORMALIZED SCORE"].tolist() == [0.0, 0.0, 0.0]
+
+
+def test_pattern_only_run_returns_zero_score_rows() -> None:
+    """A run with patterns but no exceptions still returns one score per row."""
+    checker = DataConsistencyChecker(verbose=-1)
+    checker.init_data(
+        pd.DataFrame(
+            {
+                "value": list(range(12)),
+                "group": ["a", "b"] * 6,
+            }
+        )
+    )
+    checker.check_data_quality(execute_list=["MISSING_VALUES"])
+
+    summary = checker.get_outlier_score_summary()
+
+    assert len(summary) == 12
+    assert summary.index.tolist() == list(range(12))
+    assert summary["FINAL SCORE"].tolist() == [0] * 12
+    assert summary["NORMALIZED SCORE"].tolist() == [0.0] * 12
