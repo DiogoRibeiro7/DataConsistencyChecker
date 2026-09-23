@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Callable
+from typing import Any
+
+from .test_registry import TestDefinition
 
 
 @dataclass(frozen=True)
@@ -23,29 +25,20 @@ class TestMetadata:
         return asdict(self)
 
 
-def metadata_from_tuple(
+def metadata_from_definition(
     test_id: str,
-    definition: tuple[
-        str,
-        str,
-        Callable[..., Any],
-        Callable[..., Any] | None,
-        bool,
-        bool,
-        bool,
-        bool,
-    ],
+    definition: TestDefinition,
 ) -> TestMetadata:
-    """Convert an internal legacy tuple to typed public metadata."""
+    """Convert an internal executable definition to public metadata."""
     return TestMetadata(
         test_id=test_id,
-        short_description=definition[0],
-        description=definition[1],
-        shortlist=definition[4],
-        implemented=definition[5],
-        fast=definition[6],
-        code=definition[7],
+        short_description=definition.short_description,
+        description=definition.description,
+        shortlist=definition.shortlist,
+        implemented=definition.implemented,
+        fast=definition.fast,
+        code=definition.code,
     )
 
 
-__all__ = ["TestMetadata", "metadata_from_tuple"]
+__all__ = ["TestMetadata", "metadata_from_definition"]

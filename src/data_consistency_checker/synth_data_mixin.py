@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 
 from .checker_utils import print_text
-from .test_registry import TEST_DEFN_GEN_FUNC
 
 
 class SynthDataMixin:
@@ -66,7 +65,9 @@ class SynthDataMixin:
                 or (execute_list and test_id in execute_list)
                 or (exclude_list and test_id not in exclude_list)
             ):
-                self.test_dict[test_id][TEST_DEFN_GEN_FUNC]()
+                generator = self.test_dict[test_id].gen_func
+                if generator is not None:
+                    generator()
 
         if add_nones == "one-row":
             for col_name in self.synth_df.columns:
