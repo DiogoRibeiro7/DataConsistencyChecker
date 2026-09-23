@@ -1,13 +1,8 @@
-"""Test definitions package for DataConsistencyChecker.
-
-Base, numeric, date, binary, and multi-column definition modules now return
-typed TestDefinition objects directly. Only string definitions still use the
-legacy tuple form temporarily and are normalized at aggregation.
-"""
+"""Typed test-definition aggregation for DataConsistencyChecker."""
 
 from __future__ import annotations
 
-from ..test_registry import TestDefinition, normalize_test_definitions
+from ..test_registry import TestDefinition
 from .base_tests import get_base_tests
 from .binary_tests import get_binary_tests
 from .date_tests import get_date_tests
@@ -27,12 +22,12 @@ __all__ = [
 
 
 def get_all_test_definitions(checker_instance) -> dict[str, TestDefinition]:
-    """Aggregate and normalize all test definitions."""
-    test_dict = {}
+    """Aggregate all typed test definitions."""
+    test_dict: dict[str, TestDefinition] = {}
     test_dict.update(get_base_tests(checker_instance))
     test_dict.update(get_numeric_tests(checker_instance))
     test_dict.update(get_date_tests(checker_instance))
     test_dict.update(get_string_tests(checker_instance))
     test_dict.update(get_binary_tests(checker_instance))
     test_dict.update(get_multi_column_tests(checker_instance))
-    return normalize_test_definitions(test_dict)
+    return test_dict
