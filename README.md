@@ -1,5 +1,10 @@
 # DataConsistencyChecker
 
+[![CI](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/python.yml)
+[![codecov](https://codecov.io/gh/DiogoRibeiro7/DataConsistencyChecker/branch/main/graph/badge.svg)](https://codecov.io/gh/DiogoRibeiro7/DataConsistencyChecker)
+![Python](https://img.shields.io/badge/python-3.10--3.14-blue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A Python tool for automated exploratory data analysis (EDA) and interpretable outlier detection. It performs **164 distinct tests** on tabular datasets, identifying patterns in the data and any exceptions to these patterns. The tool works seamlessly with categorical, numeric, and datetime data without requiring encoding or binning.
 
 ## Key Features
