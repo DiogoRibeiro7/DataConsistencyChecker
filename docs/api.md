@@ -1,3 +1,13 @@
+## DataConsistencyConfig
+
+Immutable configuration object for one-shot analyses. It groups checker thresholds, test filters, date-column overrides, contamination settings, parallel execution, and fail-fast behavior.
+
+## analyze
+**analyze**(df, config=None)
+
+        Run a complete analysis in one call and return a DataConsistencyReport.
+        If config is omitted, DataConsistencyConfig defaults are used.
+
 # Full API
 
    #### &nbsp;&nbsp;&nbsp; The main APIs
