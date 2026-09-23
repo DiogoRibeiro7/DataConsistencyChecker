@@ -15,14 +15,7 @@ import pandas as pd
 from IPython.display import display, Markdown
 
 from .checker_utils import is_notebook, print_text
-from .test_metadata import TestMetadata, metadata_from_tuple
-from .test_registry import (
-    TEST_DEFN_CODE,
-    TEST_DEFN_DESC,
-    TEST_DEFN_FUNC,
-    TEST_DEFN_IMPLEMENTED,
-    TEST_DEFN_SHORTLIST,
-)
+from .test_metadata import TestMetadata, metadata_from_definition
 
 
 class DisplayMixin:
@@ -33,22 +26,22 @@ class DisplayMixin:
     # ------------------------------------------------------------------
     def get_test_list(self) -> list[str]:
         """Return the list of implemented test IDs."""
-        return [x for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_IMPLEMENTED]]
+        return [test_id for test_id, definition in self.test_dict.items() if definition.implemented]
 
     def get_test_descriptions(self) -> dict:
         """Return a dictionary mapping test IDs to short descriptions."""
         return {
-            x: self.test_dict[x][TEST_DEFN_DESC]
-            for x in self.test_dict.keys()
-            if self.test_dict[x][TEST_DEFN_IMPLEMENTED]
+            test_id: definition.description
+            for test_id, definition in self.test_dict.items()
+            if definition.implemented
         }
 
     def get_test_catalog(self) -> list[TestMetadata]:
         """Return typed metadata for all implemented consistency checks."""
         return [
-            metadata_from_tuple(test_id, definition)
+            metadata_from_definition(test_id, definition)
             for test_id, definition in self.test_dict.items()
-            if definition[TEST_DEFN_IMPLEMENTED]
+            if definition.implemented
         ]
 
     def print_test_descriptions(self, long_desc: bool = False, f: Optional[object] = None) -> None:
@@ -61,9 +54,9 @@ class DisplayMixin:
                 as HTML.
         """
         for test_id in self.test_dict.keys():
-            text = self.test_dict[test_id][TEST_DEFN_DESC]
+            text = self.test_dict[test_id].description
             if long_desc:
-                doc_str = self.test_dict[test_id][TEST_DEFN_FUNC].__doc__
+                doc_str = self.test_dict[test_id].test_func.__doc__
                 if doc_str:
                     text += doc_str
                     text = " ".join(text.split())
@@ -81,11 +74,11 @@ class DisplayMixin:
 
     def get_patterns_shortlist(self) -> list[str]:
         """Return IDs of tests included in the short list."""
-        return [x for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_SHORTLIST]]
+        return [test_id for test_id, definition in self.test_dict.items() if definition.shortlist]
 
     def get_tests_for_codes(self) -> list[str]:
         """Return IDs of tests related to code/ID style values."""
-        return [x for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_CODE]]
+        return [test_id for test_id, definition in self.test_dict.items() if definition.code]
 
     def demo_test(self, test_id: str, include_nulls: bool = False) -> None:
         """Demonstrate a single test on synthetic data.
