@@ -7,6 +7,7 @@ import pytest
 from dataexcept import OutlierDetectionError
 
 from check_data_consistency import DataConsistencyChecker
+from data_consistency_checker.test_registry import TestDefinition
 
 
 TEST_ID = "DATAEXCEPT_FAILURE_TEST"
@@ -28,15 +29,15 @@ def _checker_with_failing_test() -> DataConsistencyChecker:
             }
         )
     )
-    checker.test_dict[TEST_ID] = (
-        "Intentional execution failure",
-        "Intentional execution failure for DataExcept integration testing.",
-        _failing_test,
-        None,
-        False,
-        True,
-        True,
-        False,
+    checker.test_dict[TEST_ID] = TestDefinition(
+        short_description="Intentional execution failure",
+        description="Intentional execution failure for DataExcept integration testing.",
+        test_func=_failing_test,
+        gen_func=None,
+        shortlist=False,
+        implemented=True,
+        fast=True,
+        code=False,
     )
     return checker
 
