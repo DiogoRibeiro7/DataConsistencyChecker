@@ -22,6 +22,17 @@ PRINT_OUTPUT = True
 
 cache_folder = "dc_cache"
 
+def _column_signature(value):
+	"""Canonicalize a serialized column set for order-independent comparison."""
+	parts = [part.strip().strip('"') for part in str(value).split(" AND ")]
+	return tuple(sorted(parts))
+
+
+def _contains_column_set(values, expected):
+	"""Return whether expected matches one serialized column set in values."""
+	expected_signature = _column_signature(expected)
+	return any(_column_signature(value) == expected_signature for value in values)
+
 
 def build_default_results():
 	d = {dataset: ([], []) for dataset in real_files}
