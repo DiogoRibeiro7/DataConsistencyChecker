@@ -440,6 +440,7 @@ DataConsistencyChecker/
 │   │   ├── display_mixin.py        # Result presentation
 │   │   ├── plots_mixin.py          # Visualization helpers
 │   │   ├── synth_data_mixin.py     # Synthetic-data helpers
+│   │   ├── results_mixin.py        # Result queries, summaries, and scoring
 │   │   ├── test_implementations/   # Category-specific test logic
 │   │   └── tests_definitions/      # Metadata for the 164 checks
 │   └── check_data_consistency/     # Legacy import compatibility
@@ -453,7 +454,7 @@ DataConsistencyChecker/
 
 ### Modular Architecture
 
-The public package is `data_consistency_checker`. `DataConsistencyChecker` owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API. Category-specific checks are implemented through mixins, while test metadata is kept separately from implementation code.
+The public package is `data_consistency_checker`. `DataConsistencyChecker` owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API. Category-specific checks are implemented through mixins, while result access/scoring lives in `ResultsMixin` and test metadata is kept separately from implementation code.
 
 The historical `check_data_consistency` import is retained as a compatibility package, but new code should import from `data_consistency_checker`.
 
