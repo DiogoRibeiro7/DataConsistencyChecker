@@ -48,6 +48,9 @@ mypy = "*"
 pre-commit = "*"
 bandit = {extras = ["toml"], version = "*"}
 
+[tool.poetry.scripts]
+data-consistency-checker = "data_consistency_checker.cli:main"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
