@@ -85,16 +85,7 @@ from .checker_utils import (
 )
 
 # Test registry and definitions
-from .test_registry import (
-    TEST_DEFN_SHORT_DESC,
-    TEST_DEFN_DESC,
-    TEST_DEFN_FUNC,
-    TEST_DEFN_GEN_FUNC,
-    TEST_DEFN_SHORTLIST,
-    TEST_DEFN_IMPLEMENTED,
-    TEST_DEFN_FAST,
-    TEST_DEFN_CODE,
-)
+from .test_registry import TestDefinition
 from .tests_definitions import get_all_test_definitions
 from .report import DataConsistencyReport
 
@@ -257,8 +248,11 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         self.test_dict = get_all_test_definitions(self)
 
         # Remove any tests not yet implemented (legacy filter, kept for compatibility)
-        self.test_dict = {x: self.test_dict[x]
-                          for x in self.test_dict.keys() if self.test_dict[x][TEST_DEFN_IMPLEMENTED]}
+        self.test_dict: dict[str, TestDefinition] = {
+            test_id: definition
+            for test_id, definition in self.test_dict.items()
+            if definition.implemented
+        }
 
 
     def init_data(
@@ -753,14 +747,14 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         for test_idx, test_id in enumerate(self.test_dict.keys()):
             if test_idx < test_start_id:
                 continue
-            if fast_only and not self.test_dict[test_id][TEST_DEFN_FAST]:
+            if fast_only and not self.test_dict[test_id].fast:
                 continue
-            if (not include_code_tests) and self.test_dict[test_id][TEST_DEFN_CODE]:
+            if (not include_code_tests) and self.test_dict[test_id].code:
                 continue
             if (self.execute_list is None and self.exclude_list is None) or \
                     (self.execute_list and test_id in self.execute_list) or \
                     (self.exclude_list and test_id not in self.exclude_list):
-                if self.test_dict[test_id][TEST_DEFN_IMPLEMENTED]:
+                if self.test_dict[test_id].implemented:
                     self.execution_test_list.append(test_id)
 
         # Check at least one valid test was specified
@@ -787,7 +781,7 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         # Get the test index of each test
         test_idx_dict = {x: y for x, y in
                          zip(self.test_dict.keys(), range(len(self.test_dict.keys())))
-                         if self.test_dict[x][TEST_DEFN_IMPLEMENTED]}
+                         if self.test_dict[x].implemented}
 
         # Initialize the results for tests on single columns
         self.single_test_summary_dict = {}
@@ -817,7 +811,7 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
                 self._output_current_test(test_idx_dict[test_id], test_id)
                 try:
                     t1 = time.time()
-                    self.test_dict[test_id][TEST_DEFN_FUNC](test_id=test_id)
+                    self.test_dict[test_id].test_func(test_id=test_id)
                     t2 = time.time()
                     self.execution_times[test_id] = t2 - t1
                 except Exception as error:
@@ -1836,7 +1830,7 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         else:
             print("\n\n\n")
             print(test_id)
-        print_text(f"**Description**: {self.test_dict[test_id][TEST_DEFN_DESC]}")
+        print_text(f"**Description**: {self.test_dict[test_id].description}")
         print()
 
         self.display_detailed_results(test_id_list=[test_id], max_shown=25)
@@ -3261,9 +3255,9 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
             return
 
         # Many tests have sufficiently short descriptions, and so do not specify a separate short description.
-        desc = self.test_dict[test_id][TEST_DEFN_SHORT_DESC]
+        desc = self.test_dict[test_id].short_description
         if desc == "":
-            desc = self.test_dict[test_id][TEST_DEFN_DESC]
+            desc = self.test_dict[test_id].description
 
         # Strip out any periods from short descriptions to be consistent.
         if desc[-1] == '.':
