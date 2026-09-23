@@ -8,6 +8,24 @@ This module contains test definitions for binary columns including:
 - Binary-string combinations
 """
 
+from ..test_registry import TestDefinition
+
+
+def _test(short_description, description, test_func, gen_func, shortlist, implemented, fast, code):
+    """Build one typed test definition."""
+    return TestDefinition(
+        short_description=short_description,
+        description=description,
+        test_func=test_func,
+        gen_func=gen_func,
+        shortlist=shortlist,
+        implemented=implemented,
+        fast=fast,
+        code=code,
+    )
+
+
+
 
 def get_binary_tests(checker):
     """
@@ -21,7 +39,7 @@ def get_binary_tests(checker):
     """
     return {
         # Tests on pairs of binary columns
-        'BINARY_SAME': (
+        'BINARY_SAME': _test(
             'Check if two binary columns are the same.',
             ('For each pair of binary columns with the same set of two values, check if they '
              'consistently have the same value.'),
@@ -29,7 +47,7 @@ def get_binary_tests(checker):
             checker._generate_binary_same,
             True, True, False, False
         ),
-        'BINARY_OPPOSITE': (
+        'BINARY_OPPOSITE': _test(
             'Check if two binary columns have opposite values.',
             ('For each pair of binary columns with the same set of two values, check if they '
              'consistently have the opposite value.'),
@@ -37,7 +55,7 @@ def get_binary_tests(checker):
             checker._generate_binary_opposite,
             True, True, False, False
         ),
-        'BINARY_IMPLIES': (
+        'BINARY_IMPLIES': _test(
             'Check if one value in a binary column implies a value in another column.',
             ('For each pair of binary columns with the same set of two values, check if when '
              'one has a given value, the other consistently does as well, though the other '
@@ -48,7 +66,7 @@ def get_binary_tests(checker):
         ),
 
         # Tests on sets of binary columns
-        'BINARY_AND': (
+        'BINARY_AND': _test(
             'Check if one column is the AND of other binary columns.',
             ('For sets of binary columns with the same set of two values, check if one column '
              'is consistently the result of ANDing the other columns.'),
@@ -56,7 +74,7 @@ def get_binary_tests(checker):
             checker._generate_binary_and,
             True, True, False, False
         ),
-        'BINARY_OR': (
+        'BINARY_OR': _test(
             'Check if one column is the OR of other binary columns.',
             ('For sets of binary columns with the same set of two values, check if one column '
              'is consistently the result of ORing the other columns.'),
@@ -64,7 +82,7 @@ def get_binary_tests(checker):
             checker._generate_binary_or,
             True, True, False, False
         ),
-        'BINARY_XOR': (
+        'BINARY_XOR': _test(
             'Check if one column is the XOR of other binary columns.',
             ('For sets of binary columns with the same set of two values, check if one column '
              'is consistently the result of XORing the other columns.'),
@@ -72,7 +90,7 @@ def get_binary_tests(checker):
             checker._generate_binary_xor,
             True, True, False, False
         ),
-        'BINARY_NUM_SAME': (
+        'BINARY_NUM_SAME': _test(
             'Check for sets of columns with a constant number of matching values',
             ('For sets of binary columns with the same set of two values, check if there is a '
              'consistent number of these columns with the same value.'),
@@ -80,7 +98,7 @@ def get_binary_tests(checker):
             checker._generate_binary_num_same,
             True, True, False, False
         ),
-        'BINARY_RARE_COMBINATION': (
+        'BINARY_RARE_COMBINATION': _test(
             '',
             'Check for rare sets of values in sets of three or more binary columns.',
             checker._check_binary_rare_combo,
@@ -89,7 +107,7 @@ def get_binary_tests(checker):
         ),
 
         # Tests on pairs of columns where one is binary and one is numeric
-        'BINARY_MATCHES_VALUES': (
+        'BINARY_MATCHES_VALUES': _test(
             'Check for binary columns that match the values in a numeric column',
             ('Check if the binary column is consistently one value when the values in a numeric '
              'column have low values, or when they have high values.'),
@@ -99,7 +117,7 @@ def get_binary_tests(checker):
         ),
 
         # Tests on sets of three columns, where one must be binary
-        'BINARY_TWO_OTHERS_MATCH': (
+        'BINARY_TWO_OTHERS_MATCH': _test(
             'Check for binary columns that indicate if two other columns match',
             ('Check if a binary column is consistently one value when two other columns have '
              'the same value as each other.'),
@@ -109,7 +127,7 @@ def get_binary_tests(checker):
         ),
 
         # Tests on sets of three columns, where one is binary and the other two string
-        'BINARY_TWO_STR_SIMILAR': (
+        'BINARY_TWO_STR_SIMILAR': _test(
             '',
             ('Check if a binary column is consistently one value when two other string have '
              'similar values as each other, with respect to string length and the characters used.'),
@@ -119,7 +137,7 @@ def get_binary_tests(checker):
         ),
 
         # Tests on sets of multiple columns, where one is binary and the others are numeric
-        'BINARY_MATCHES_SUM': (
+        'BINARY_MATCHES_SUM': _test(
             'Check for binary columns that match the sum of two numeric columns',
             ('Check if the binary column is consistently true when the sum of a set of numeric '
              'columns is over some threshold.'),
