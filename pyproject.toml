@@ -1,18 +1,19 @@
-[tool.poetry]
+[project]
 name = "data-consistency-checker"
 version = "0.1.0"
 description = "Toolkit for analyzing dataset consistency"
-authors = ["Diogo Ribeiro <dfr@esmad.ipp.pt>"]
 readme = "README.md"
-license = "MIT"
-homepage = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
-repository = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+requires-python = ">=3.10,<3.15"
+dynamic = ["dependencies"]
+license = { text = "MIT" }
+authors = [
+    { name = "Diogo Ribeiro", email = "dfr@esmad.ipp.pt" },
+]
 keywords = ["data-quality", "eda", "outlier-detection", "data-validation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -21,6 +22,15 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
+
+[project.urls]
+Homepage = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+Repository = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+
+[project.scripts]
+data-consistency-checker = "data_consistency_checker.cli:main"
+
+[tool.poetry]
 packages = [
     { include = "data_consistency_checker", from = "src" },
     { include = "check_data_consistency", from = "src" },
@@ -47,9 +57,6 @@ ruff = "*"
 mypy = "*"
 pre-commit = "*"
 bandit = {extras = ["toml"], version = "*"}
-
-[tool.poetry.scripts]
-data-consistency-checker = "data_consistency_checker.cli:main"
 
 [build-system]
 requires = ["poetry-core"]
