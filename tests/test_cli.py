@@ -94,3 +94,68 @@ def test_check_rejects_unsupported_extension(tmp_path) -> None:
         main(["check", str(path), "--verbose", "-1"])
 
     assert captured.value.code == 2
+
+
+def test_check_uses_json_config_file(tmp_path, capsys) -> None:
+    """CLI analysis settings can come entirely from a reusable config file."""
+    input_path = _write_csv(tmp_path)
+    output_path = tmp_path / "report.json"
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "execute_tests": ["MISSING_VALUES"],
+                "verbose": -1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "check",
+            str(input_path),
+            "--config",
+            str(config_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert payload["executed_tests"] == ["MISSING_VALUES"]
+    assert "tests=1" in capsys.readouterr().out
+
+
+def test_cli_test_filter_overrides_config_file(tmp_path) -> None:
+    """Explicit CLI test filters override filters from the config file."""
+    input_path = _write_csv(tmp_path)
+    output_path = tmp_path / "report.json"
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "execute_tests": ["VERY_LARGE"],
+                "verbose": -1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "check",
+            str(input_path),
+            "--config",
+            str(config_path),
+            "--tests",
+            "MISSING_VALUES",
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert payload["executed_tests"] == ["MISSING_VALUES"]
