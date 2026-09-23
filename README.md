@@ -92,6 +92,36 @@ from check_data_consistency import DataConsistencyChecker
 ```
 
 
+## Command-Line Interface
+
+After installation, datasets can be checked without writing Python code:
+
+```bash
+data-consistency-checker check data.csv --output report.json
+```
+
+Run only selected checks:
+
+```bash
+data-consistency-checker check data.csv \
+  --tests MISSING_VALUES VERY_LARGE RARE_VALUES \
+  --output report.json
+```
+
+List the implemented test IDs:
+
+```bash
+data-consistency-checker list-tests
+```
+
+The package can also be invoked with Python:
+
+```bash
+python -m data_consistency_checker check data.csv --fast-only
+```
+
+The CLI currently accepts CSV, TSV, JSON, and JSONL input. Use `--date-column` repeatedly to mark known date columns, `--exclude-tests` to omit checks, `--max-combinations` to cap combinatorial work, and `--raise-on-error` for fail-fast execution. When `--output` is supplied, the JSON file contains the same structured `DataConsistencyReport` available through `get_report()`.
+
 ## Getting Started
 ```python
 import pandas as pd

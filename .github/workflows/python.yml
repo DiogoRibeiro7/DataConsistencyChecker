@@ -90,3 +90,7 @@ jobs:
         run: |
           poetry run python -c "from data_consistency_checker import DataConsistencyChecker; assert DataConsistencyChecker.__name__ == 'DataConsistencyChecker'"
           poetry run python -c "from check_data_consistency import DataConsistencyChecker; assert DataConsistencyChecker.__name__ == 'DataConsistencyChecker'"
+      - name: Smoke-test CLI entry point
+        run: |
+          poetry run data-consistency-checker --help
+          poetry run python -m data_consistency_checker --help
