@@ -1,7 +1,7 @@
 [project]
 name = "data-consistency-checker"
 version = "0.1.0"
-description = "Toolkit for analyzing dataset consistency"
+description = "Interpretable data-quality, pattern-discovery, and outlier-detection toolkit for tabular datasets"
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
 dynamic = ["dependencies"]
@@ -9,11 +9,24 @@ license = { text = "MIT" }
 authors = [
     { name = "Diogo Ribeiro", email = "dfr@esmad.ipp.pt" },
 ]
-keywords = ["data-quality", "eda", "outlier-detection", "data-validation"]
+keywords = [
+    "anomaly-detection",
+    "data-analysis",
+    "data-consistency",
+    "data-profiling",
+    "data-quality",
+    "data-validation",
+    "eda",
+    "outlier-detection",
+    "pattern-detection",
+    "tabular-data",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -21,11 +34,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Quality Assurance",
 ]
 
 [project.urls]
 Homepage = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
 Repository = "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+Issues = "https://github.com/DiogoRibeiro7/DataConsistencyChecker/issues"
 
 [project.scripts]
 data-consistency-checker = "data_consistency_checker.cli:main"
