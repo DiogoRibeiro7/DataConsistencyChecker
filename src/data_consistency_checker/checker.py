@@ -1864,12 +1864,18 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         callers cannot mutate checker state.
         """
 
-        if self.test_results_df is None:
+        if self.test_results_df is None or self.test_results_df.empty:
+            index = (
+                self.orig_df.index.copy()
+                if self.orig_df is not None
+                else pd.RangeIndex(0)
+            )
             return pd.DataFrame(
                 {
-                    "FINAL SCORE": [0] * len(self.orig_df),
-                    "NORMALIZED SCORE": [0.0] * len(self.orig_df),
-                }
+                    "FINAL SCORE": [0] * len(index),
+                    "NORMALIZED SCORE": [0.0] * len(index),
+                },
+                index=index,
             )
 
         required = {"FINAL SCORE", "NORMALIZED SCORE"}
