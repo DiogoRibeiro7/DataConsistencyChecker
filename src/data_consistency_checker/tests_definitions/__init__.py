@@ -39,7 +39,7 @@ def get_all_test_definitions(checker_instance):
         checker_instance: Instance of DataConsistencyChecker to bind test methods
 
     Returns:
-        dict: Complete test_dict with all 164 tests
+        dict[str, TestDefinition]: Complete typed test dictionary
     """
     test_dict = {}
 
