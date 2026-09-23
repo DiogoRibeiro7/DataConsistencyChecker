@@ -92,6 +92,26 @@ from check_data_consistency import DataConsistencyChecker
 ```
 
 
+## One-Shot Analysis API
+
+For reproducible pipelines, configure and run an analysis in one call:
+
+```python
+from data_consistency_checker import DataConsistencyConfig, analyze
+
+config = DataConsistencyConfig(
+    execute_tests=("MISSING_VALUES", "VERY_LARGE"),
+    known_date_cols=("event_date",),
+    max_combinations=50_000,
+    verbose=-1,
+)
+
+report = analyze(df, config)
+payload = report.to_dict()
+```
+
+`DataConsistencyConfig` is immutable. It captures constructor settings, date-column overrides, test filters, contamination thresholds, parallel execution, and fail-fast behavior in one reproducible object. Stateful operations such as appending to an existing analysis or resuming from a test index remain available through the lower-level `DataConsistencyChecker` API.
+
 ## Command-Line Interface
 
 After installation, datasets can be checked without writing Python code:

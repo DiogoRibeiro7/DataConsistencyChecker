@@ -418,11 +418,18 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
                 try:
                     self.orig_df[col_name] = pd.to_datetime(self.orig_df[col_name])
                     new_date_cols.append(col_name)
-                    self.date_cols.append(col_name)
+                    if col_name not in self.date_cols:
+                        self.date_cols.append(col_name)
                 except Exception:
                     pass
+
             for datecol in new_date_cols:
-                self.string_cols.remove(datecol)
+                if datecol in self.string_cols:
+                    self.string_cols.remove(datecol)
+                if datecol in self.numeric_cols:
+                    self.numeric_cols.remove(datecol)
+                if datecol in self.binary_cols:
+                    self.binary_cols.remove(datecol)
         set_warnings_levels()
 
         # For any columns flagged as string columns, the dtype may be category.  Convert the columns to string to
