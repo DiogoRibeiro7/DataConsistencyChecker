@@ -65,6 +65,7 @@ exclude = [
     "__pycache__",
     "build",
     "dist",
+    "Demo Notebooks",
 ]
 
 [tool.ruff.lint]

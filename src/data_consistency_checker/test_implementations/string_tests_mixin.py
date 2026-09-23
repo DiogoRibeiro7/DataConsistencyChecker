@@ -29,6 +29,17 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from itertools import combinations
 from decimal import Decimal, ROUND_HALF_UP
 
+import pandas.api.types as pandas_types
+
+try:
+    from termcolor import colored
+except ImportError:  # pragma: no cover - optional presentation dependency
+    colored = None
+
+letters = string.ascii_letters
+digits = string.digits
+alphanumeric = letters + digits
+
 from ..checker_utils import (
     safe_div,
     is_number,
@@ -38,6 +49,7 @@ from ..checker_utils import (
     is_missing,
     array_to_str,
     replace_special_with_space,
+    is_uppercase,
 )
 
 

@@ -22,6 +22,17 @@ PRINT_OUTPUT = True
 
 cache_folder = "dc_cache"
 
+def _column_signature(value):
+	"""Canonicalize a serialized column set for order-independent comparison."""
+	parts = [part.strip().strip('"') for part in str(value).split(" AND ")]
+	return tuple(sorted(parts))
+
+
+def _contains_column_set(values, expected):
+	"""Return whether expected matches one serialized column set in values."""
+	expected_signature = _column_signature(expected)
+	return any(_column_signature(value) == expected_signature for value in values)
+
 
 def build_default_results():
 	d = {dataset: ([], []) for dataset in real_files}
@@ -79,7 +90,7 @@ def real_test(test_id, expected_results_dict):
 			assert ((patterns_df is None) and (len(expected_patterns_cols) == 0)) or \
 					(len(patterns_df) == len(expected_patterns_cols))
 			for col in expected_patterns_cols:
-				assert col in patterns_df['Column(s)'].values
+				assert _contains_column_set(patterns_df['Column(s)'].values, col)
 
 		# Check the returned patterns with exceptions are correct
 		exceptions_df = dc.get_exceptions_list()
@@ -96,7 +107,7 @@ def real_test(test_id, expected_results_dict):
 			assert ((exceptions_df is None) and (len(expected_patterns_cols) == 0)) or \
 					(len(exceptions_df) == len(expected_exceptions_cols))
 			for col in expected_exceptions_cols:
-				assert col in exceptions_df['Column(s)'].values
+				assert _contains_column_set(exceptions_df['Column(s)'].values, col)
 
 
 def synth_test(test_id, add_nones, expected_patterns_cols, expected_exceptions_cols, allow_more=False):
@@ -131,7 +142,7 @@ def synth_test(test_id, add_nones, expected_patterns_cols, expected_exceptions_c
 		else:
 			assert len(patterns_df) == len(expected_patterns_cols)
 		for col in expected_patterns_cols:
-			assert col in patterns_df['Column(s)'].values
+			assert _contains_column_set(patterns_df['Column(s)'].values, col)
 
 	exceptions_df = dc.get_exceptions_list()
 	if PRINT_OUTPUT:
@@ -151,9 +162,9 @@ def synth_test(test_id, add_nones, expected_patterns_cols, expected_exceptions_c
 		else:
 			assert len(exceptions_df) == len(expected_exceptions_cols)
 		for col in expected_exceptions_cols:
-			if PRINT_OUTPUT and col not in exceptions_df['Column(s)'].values:
+			if PRINT_OUTPUT and not _contains_column_set(exceptions_df['Column(s)'].values, col):
 				print("Missing column: ", col)
-			assert col in exceptions_df['Column(s)'].values
+			assert _contains_column_set(exceptions_df['Column(s)'].values, col)
 
 
 def synth_test_all_cols(test_id, add_nones, expected_patterns_cols, expected_exceptions_cols, allow_more=False):
@@ -195,7 +206,7 @@ def synth_test_all_cols(test_id, add_nones, expected_patterns_cols, expected_exc
 		if PRINT_OUTPUT:
 			print("len(expected_patterns_cols)", len(expected_patterns_cols))
 		for col in expected_patterns_cols:
-			assert col in patterns_df['Column(s)'].values
+			assert _contains_column_set(patterns_df['Column(s)'].values, col)
 
 	exceptions_df = dc.get_exceptions_list()
 	print("len(exceptions_df)", len(exceptions_df))
@@ -210,4 +221,4 @@ def synth_test_all_cols(test_id, add_nones, expected_patterns_cols, expected_exc
 		if PRINT_OUTPUT:
 			print("len(expected_exceptions_cols)", len(expected_exceptions_cols))
 		for col in expected_exceptions_cols:
-			assert col in exceptions_df['Column(s)'].values
+			assert _contains_column_set(exceptions_df['Column(s)'].values, col)

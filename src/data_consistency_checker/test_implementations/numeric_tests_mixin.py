@@ -29,6 +29,13 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from itertools import combinations
 from decimal import Decimal, ROUND_HALF_UP
 
+try:
+    from termcolor import colored
+except ImportError:  # pragma: no cover - optional presentation dependency
+    colored = None
+
+digits = string.digits
+
 from ..checker_utils import (
     safe_div,
     is_number,
