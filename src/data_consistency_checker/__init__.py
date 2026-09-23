@@ -6,8 +6,9 @@ from .api import analyze
 from .checker import DataConsistencyChecker
 from .config import DataConsistencyConfig
 from .report import DataConsistencyReport
+from .test_metadata import TestMetadata
 
-__all__ = ["DataConsistencyChecker", "DataConsistencyConfig", "DataConsistencyReport", "analyze"]
+__all__ = ["DataConsistencyChecker", "DataConsistencyConfig", "DataConsistencyReport", "TestMetadata", "analyze"]
 
 try:
     __version__ = version("data-consistency-checker")

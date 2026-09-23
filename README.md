@@ -92,6 +92,25 @@ from check_data_consistency import DataConsistencyChecker
 ```
 
 
+### Test Catalog
+
+Use the typed catalog API to inspect the implemented checks without depending on internal tuple positions:
+
+```python
+catalog = dc.get_test_catalog()
+for test in catalog:
+    print(test.test_id, test.description, test.fast)
+```
+
+Each entry is an immutable `TestMetadata` object containing the test ID, descriptions, shortlist flag, implementation status, fast-test flag, and code/ID semantics. Callable implementation details remain private.
+
+The CLI exposes the same catalog:
+
+```bash
+data-consistency-checker list-tests --details
+data-consistency-checker list-tests --details --json
+```
+
 ## One-Shot Analysis API
 
 For reproducible pipelines, configure and run an analysis in one call:

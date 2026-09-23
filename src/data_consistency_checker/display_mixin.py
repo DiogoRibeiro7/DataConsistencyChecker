@@ -15,6 +15,7 @@ import pandas as pd
 from IPython.display import display, Markdown
 
 from .checker_utils import is_notebook, print_text
+from .test_metadata import TestMetadata, metadata_from_tuple
 from .test_registry import (
     TEST_DEFN_CODE,
     TEST_DEFN_DESC,
@@ -41,6 +42,14 @@ class DisplayMixin:
             for x in self.test_dict.keys()
             if self.test_dict[x][TEST_DEFN_IMPLEMENTED]
         }
+
+    def get_test_catalog(self) -> list[TestMetadata]:
+        """Return typed metadata for all implemented consistency checks."""
+        return [
+            metadata_from_tuple(test_id, definition)
+            for test_id, definition in self.test_dict.items()
+            if definition[TEST_DEFN_IMPLEMENTED]
+        ]
 
     def print_test_descriptions(self, long_desc: bool = False, f: Optional[object] = None) -> None:
         """Print test descriptions.

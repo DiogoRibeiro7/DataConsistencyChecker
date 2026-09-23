@@ -159,3 +159,24 @@ def test_cli_test_filter_overrides_config_file(tmp_path) -> None:
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert exit_code == 0
     assert payload["executed_tests"] == ["MISSING_VALUES"]
+
+
+def test_list_tests_details_json_returns_metadata(capsys) -> None:
+    """Detailed JSON listing exposes structured test metadata."""
+    exit_code = main(["list-tests", "--details", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    missing = next(item for item in payload if item["test_id"] == "MISSING_VALUES")
+    assert exit_code == 0
+    assert isinstance(missing["description"], str)
+    assert isinstance(missing["fast"], bool)
+
+
+def test_list_tests_details_text_is_human_readable(capsys) -> None:
+    """Detailed text listing includes IDs and descriptions."""
+    exit_code = main(["list-tests", "--details"])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "MISSING_VALUES" in output
+    assert ":" in output

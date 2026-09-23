@@ -67,6 +67,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit the test list as JSON.",
     )
+    list_parser.add_argument(
+        "--details",
+        action="store_true",
+        help="Include descriptions and execution metadata.",
+    )
 
     check_parser = subparsers.add_parser(
         "check",
@@ -132,8 +137,26 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_list_tests(*, as_json: bool) -> int:
+def _run_list_tests(*, as_json: bool, details: bool) -> int:
     checker = DataConsistencyChecker(verbose=-1)
+    if details:
+        catalog = checker.get_test_catalog()
+        payload = [item.to_dict() for item in catalog]
+        if as_json:
+            print(json.dumps(payload, indent=2))
+        else:
+            for item in catalog:
+                flags = []
+                if item.fast:
+                    flags.append("fast")
+                if item.shortlist:
+                    flags.append("shortlist")
+                if item.code:
+                    flags.append("code")
+                flag_text = f" [{', '.join(flags)}]" if flags else ""
+                print(f"{item.test_id}{flag_text}: {item.description}")
+        return 0
+
     test_ids = checker.get_test_list()
     if as_json:
         print(json.dumps(test_ids, indent=2))
@@ -213,7 +236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "list-tests":
-            return _run_list_tests(as_json=args.json)
+            return _run_list_tests(as_json=args.json, details=args.details)
         if args.command == "check":
             return _run_check(args)
     except (FileNotFoundError, OSError, ValueError) as error:
