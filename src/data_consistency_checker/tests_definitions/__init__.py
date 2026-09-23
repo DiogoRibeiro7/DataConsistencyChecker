@@ -1,8 +1,8 @@
 """Test definitions package for DataConsistencyChecker.
 
-Base, date, binary, and multi-column definition modules now return typed
-TestDefinition objects directly. Numeric and string definition modules still
-use the legacy tuple form temporarily and are normalized at aggregation.
+Base, numeric, date, binary, and multi-column definition modules now return
+typed TestDefinition objects directly. Only string definitions still use the
+legacy tuple form temporarily and are normalized at aggregation.
 """
 
 from __future__ import annotations
