@@ -1,8 +1,8 @@
 """Test definitions package for DataConsistencyChecker.
 
-Definition modules still declare legacy 8-element tuples for compatibility.
-The aggregation boundary converts them immediately into typed TestDefinition
-objects before they reach the checker execution engine.
+Base, date, binary, and multi-column definition modules now return typed
+TestDefinition objects directly. Numeric and string definition modules still
+use the legacy tuple form temporarily and are normalized at aggregation.
 """
 
 from __future__ import annotations
