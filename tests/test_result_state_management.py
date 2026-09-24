@@ -239,3 +239,15 @@ def test_restore_results_restores_safe_snapshot_with_copies() -> None:
 
     checker.patterns_arr.clear()
     assert len(checker.safe_patterns_arr) == 2
+
+
+def test_output_stats_handles_no_executed_tests(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Statistics output should handle an empty execution cleanly."""
+    checker = DataConsistencyChecker(verbose=-1)
+    checker.n_tests_executed = 0
+
+    checker._output_stats()
+
+    assert capsys.readouterr().out.strip() == "No tests executed."
