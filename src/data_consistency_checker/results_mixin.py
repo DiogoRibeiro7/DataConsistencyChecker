@@ -2,16 +2,59 @@
 
 from __future__ import annotations
 
+import copy
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
 from .checker_utils import print_text, truncate_description
+from .report import DataConsistencyReport
 
 
 class ResultsMixin:
-    """Mixin providing result queries, summaries, state management, and row-level scoring."""
+    """Mixin providing result queries, reports, summaries, state management, and row-level scoring."""
+
+    def get_execution_failures(self) -> list[dict[str, Any]]:
+        """Return a defensive copy of failures from the latest quality run."""
+        return copy.deepcopy(self.execution_failures)
+
+    def get_report(self) -> DataConsistencyReport:
+        """Return a structured snapshot of the current analysis results.
+
+        The report contains only JSON-safe primitives and does not expose live
+        pandas objects or mutable checker state.
+        """
+        patterns_df = self.get_patterns_list(show_short_list_only=False)
+        exceptions_df = self.get_exceptions_list()
+        scores_df = self.get_outlier_score_summary()
+
+        patterns = () if patterns_df is None else tuple(
+            patterns_df.to_dict(orient="records")
+        )
+        exceptions = () if exceptions_df is None else tuple(
+            exceptions_df.to_dict(orient="records")
+        )
+
+        score_records = scores_df.reset_index().rename(
+            columns={"index": "row_id"}
+        ).to_dict(orient="records")
+
+        n_rows = 0 if self.orig_df is None else len(self.orig_df)
+        n_columns = 0 if self.orig_df is None else len(self.orig_df.columns)
+
+        return DataConsistencyReport.from_values(
+            n_rows=n_rows,
+            n_columns=n_columns,
+            executed_tests=tuple(self.execution_test_list),
+            patterns=patterns,
+            exceptions=exceptions,
+            row_scores=tuple(score_records),
+            execution_failures=tuple(self.get_execution_failures()),
+        )
+
 
     def get_test_ids_with_results(self, include_patterns=True, include_exceptions=True):
         """
