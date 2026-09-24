@@ -2381,64 +2381,6 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
     # Internal methods to aid in analysing the data and executing tests
     ##################################################################################################################
 
-    def get_decision_tree_rules_as_categories(self, rules, categorical_features):
-        rules_arr = rules.split('\n')
-        for rule in rules_arr:
-            for c_name in categorical_features:
-                c_name_prefix = c_name + '_'
-                if c_name_prefix in rule:
-                    part_a, part_b = rule.split(c_name_prefix)
-                    val_name = part_b.split()[0]
-                    for v in self.orig_df[c_name].unique().astype(str):
-                        if val_name.startswith(v):
-                            val_name = v
-                            break
-                    replace_str = c_name_prefix + rule.split(c_name_prefix)[1]
-                    if "<" in rule:
-                        rules = rules.replace(replace_str, f'{c_name} is not {val_name}')
-                    else:
-                        rules = rules.replace(replace_str, f'{c_name} is {val_name}')
-        return rules
-
-    def _output_current_test(self, test_num, test_id):
-        """
-        Executed as tests run to allow monitoring progress.
-        """
-        if self.verbose <= 0:
-            return
-        if self.verbose == 1:
-            print(f"Executing test {test_num:3}: {test_id:<30}")
-            return
-
-        # Many tests have sufficiently short descriptions, and so do not specify a separate short description.
-        desc = self.test_dict[test_id].short_description
-        if desc == "":
-            desc = self.test_dict[test_id].description
-
-        # Strip out any periods from short descriptions to be consistent.
-        if desc[-1] == '.':
-            desc = desc[:-1]
-
-        if is_notebook():
-            multiline_test_desc = wrap(desc, 70)
-            print(f"Executing test {test_num:3}: {test_id}")
-            print(f"  {multiline_test_desc[0]}")
-            filler = ''.join([" "]*52)
-            for line in multiline_test_desc[1:]:
-               print(f'{filler} {line}')
-        else:
-            print(f"Executing test {test_num:3}: {test_id} \n  {desc}")
-
-    def _add_synthetic_column(self, col_name, col_values):
-        """
-        Add a column with the specified name and values to self.synth_df.
-        This uses concat(), instead of simply adding columns, to avoid inefficiency issues.
-        """
-        self.synth_df = pd.concat([
-            self.synth_df,
-            pd.DataFrame({col_name: col_values})],
-            axis=1)
-
     ##################################################################################################################
     # Tune the contamination rate
     ##################################################################################################################

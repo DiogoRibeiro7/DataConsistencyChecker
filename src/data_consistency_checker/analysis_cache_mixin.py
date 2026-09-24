@@ -124,6 +124,26 @@ class AnalysisCacheMixin:
         return limit_subset_sizes, max_subset_size, can_process
 
 
+    def get_decision_tree_rules_as_categories(self, rules, categorical_features):
+        rules_arr = rules.split('\n')
+        for rule in rules_arr:
+            for c_name in categorical_features:
+                c_name_prefix = c_name + '_'
+                if c_name_prefix in rule:
+                    part_a, part_b = rule.split(c_name_prefix)
+                    val_name = part_b.split()[0]
+                    for v in self.orig_df[c_name].unique().astype(str):
+                        if val_name.startswith(v):
+                            val_name = v
+                            break
+                    replace_str = c_name_prefix + rule.split(c_name_prefix)[1]
+                    if "<" in rule:
+                        rules = rules.replace(replace_str, f'{c_name} is not {val_name}')
+                    else:
+                        rules = rules.replace(replace_str, f'{c_name} is {val_name}')
+        return rules
+
+
     def check_columns_same_scale_2(self, col_name_1, col_name_2, order=2):
         med_1 = self.column_medians[col_name_1]
         med_2 = self.column_medians[col_name_2]

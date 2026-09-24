@@ -93,6 +93,17 @@ class SynthDataMixin:
 
         return self.synth_df
 
+    def _add_synthetic_column(self, col_name, col_values):
+        """
+        Add a column with the specified name and values to self.synth_df.
+        This uses concat(), instead of simply adding columns, to avoid inefficiency issues.
+        """
+        self.synth_df = pd.concat([
+            self.synth_df,
+            pd.DataFrame({col_name: col_values})],
+            axis=1)
+
+
     def modify_real_data(
         self, df: pd.DataFrame, num_modifications: int = 5
     ) -> Tuple[pd.DataFrame, List[Tuple[int, str]]]:
