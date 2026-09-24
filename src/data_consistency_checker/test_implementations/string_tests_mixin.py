@@ -65,6 +65,109 @@ class StringTestsMixin:
     to provide necessary attributes and methods.
     """
 
+    def _check_grouped_strings_column(self, test_id, sort_col, col_name, col_values):
+        """
+        sort_col: The column used to sort the data, if any.
+        col_name: The name of the column where we check if the values are grouped
+        col_values: The values in col_name, either in the original order of the data, or sorted by sort_col if there
+            is a sort_col
+
+        Handling null values: this does not currently support many null values.
+        """
+
+        # Skip if there are any rare values
+        min_count = col_values.value_counts().min()
+        if min_count < self.freq_contamination_level:
+            return
+
+        if self.orig_df[col_name].isna().sum() > (self.num_rows * 0.9):
+            return
+
+        if self.orig_df[col_name].nunique() < 3:
+            return
+
+        # First test if a pattern holds when removing all null values
+        col_df = pd.DataFrame({col_name: col_values})
+        col_df.dropna()
+        col_df['Next'] = col_df[col_name].shift(1)
+        col_df['Same'] = col_df[col_name] == col_df['Next']
+        num_same = col_df['Same'].tolist().count(True)
+        # There will always be rows not like the next: where the list moves from one value to the next. So ideally,
+        # the number of rows that are the same as the next is the total number of rows - (number values -1). As well,
+        # the last row is always unlike the next, as the next is undefined.
+        ideal_same = self.num_valid_rows[col_name] - self.orig_df[col_name].nunique()
+        if (ideal_same - num_same) > self.freq_contamination_level:
+            return
+
+        # Test with the null values. This is necessary to maintain the actual row numbers
+        col_df = pd.DataFrame({col_name: col_values})
+        col_df['Next'] = col_df[col_name].shift(1)
+        col_df['Same'] = col_df[col_name] == col_df['Next']
+        num_same = col_df['Same'].tolist().count(True)
+        ideal_same = self.num_valid_rows[col_name] - self.orig_df[col_name].nunique()
+        if (ideal_same - num_same) > self.freq_contamination_level:
+            return
+
+        test_series = np.array([1]*self.num_rows)
+        groups_str = ""
+        group_lengths = []
+
+        # Loop through each unique value and find the indexes where it occurs.
+        # We then identify the runs of each unique value and flag any short runs.
+        for v in col_df[col_name].dropna().unique():
+            idxs = np.where(col_df[col_name] == v)[0]
+            idx_diffs = pd.Series(idxs).shift(-1).values - idxs
+            exceptions = list(np.where(idx_diffs != 1)[0])
+            group_starts = [min(idxs)]
+            group_ends = [max(idxs)]
+            for e in exceptions:
+                group_starts.append(idxs[e] + idx_diffs[e])
+                group_ends.insert(0, idxs[e])
+
+            group_starts = sorted([x for x in (set(group_starts)) if x == x])
+            group_ends = sorted([x for x in (set(group_ends)) if x == x])
+            groups_str += f'\nValue: "{v}": rows {group_starts[0]:.0f} to {group_ends[0]:.0f}'
+            group_lengths.append(group_ends[0] - group_starts[0] + 1)
+            for i in range(1, len(group_starts)):
+                groups_str += f', {group_starts[i]:.0f} to {group_ends[i]:.0f}'
+                group_lengths.append(group_ends[i] - group_starts[i] + 1)
+
+            if num_same != ideal_same:
+                for i in range(len(group_starts)):
+                    group_len = group_ends[i] - group_starts[i] + 1
+                    if group_len < (len(idxs) * 0.5):
+                        for j in range(int(group_starts[i]), int(group_ends[i]+1)):
+                            test_series[j] = False
+
+        # All all runs are of length 1, skip this column
+        if max(group_lengths) == 1:
+            return
+
+        pattern_cols = [col_name]
+        if sort_col:
+            pattern_cols = [sort_col, col_name]
+
+            # Get the index in the original (unsorted) dataframe of the flagged rows.
+            if test_series.tolist().count(False) < self.freq_contamination_level:
+                idxs = list(np.where(test_series == False)[0])
+                test_series = [True] * self.num_rows
+                for idx in idxs:
+                    test_series[self.orig_df.sort_values(sort_col).index[idx]] = False
+
+        sort_msg = ""
+        if sort_col:
+            sort_msg = f" when sorted by {sort_col}"
+
+        self._process_analysis_binary(
+            test_id,
+            pattern_cols,
+            test_series,
+            (f'The values in "{col_name}" are consistently grouped together{sort_msg}. The overall order is: '
+             f'{groups_str}.')
+        )
+
+
+
     def _generate_blank(self):
         """
         Patterns without exceptions: None

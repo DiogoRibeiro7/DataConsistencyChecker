@@ -60,6 +60,149 @@ class NumericTestsMixin:
     to provide necessary attributes and methods.
     """
 
+    def _check_two_cols_larger(self, test_id, require_same_scale):
+        """
+        Used by __check_larger() and __check_larger_same_range()
+        """
+
+        num_pairs, col_pairs = self._get_numeric_column_pairs()
+        if num_pairs > self.max_combinations:
+            if self.verbose >= 1: 
+                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}."))
+            return
+
+        cols_same_bool_dict = self.get_cols_same_bool_dict()
+        larger_dict = self.get_larger_pairs_dict(allow_equal=False, print_status=True)
+        get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict(force=True)
+        larger_pairs_arr = []
+
+        q1_dict = {}
+        q3_dict = {}
+        for col_name in self.numeric_cols:
+            num_vals = self.numeric_vals[col_name]
+            q1_dict[col_name] = num_vals.quantile(0.25)
+            q3_dict[col_name] = num_vals.quantile(0.75)
+
+        for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
+            test_series = larger_dict[tuple([col_name_1, col_name_2])]
+            if test_series is None:
+                continue
+
+            # Skip columns that do not have some correlation
+            if abs(self.spearman_corr[col_name_1][col_name_2]) < 0.4:
+                continue
+
+            # Skip columns that are almost entirely the same
+            if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
+                continue
+
+            # Skip columns that are almost entirely 0 or Null
+            if (self.orig_df[col_name_1] == 0).tolist().count(False) < self.freq_contamination_level:
+                continue
+            if (self.orig_df[col_name_2] == 0).tolist().count(False) < self.freq_contamination_level:
+                continue
+            if self.orig_df[col_name_1].notna().sum() < self.freq_contamination_level:
+                continue
+            if self.orig_df[col_name_2].notna().sum() < self.freq_contamination_level:
+                continue
+
+            # Skip columns that are mostly a single value
+            if self.orig_df[col_name_1].value_counts(normalize=True).values[0] > 0.8:
+                continue
+            if self.orig_df[col_name_2].value_counts(normalize=True).values[0] > 0.8:
+                continue
+
+            # Skip pairs where only rare rows have no nulls
+            if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
+                continue
+
+            if test_series.tolist().count(False) > self.freq_contamination_level:
+                continue
+
+            test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+            if test_series.tolist().count(False) > self.freq_contamination_level:
+                continue
+
+            col_1_q1 = q1_dict[col_name_1]
+            col_1_q3 = q3_dict[col_name_1]
+            col_2_q1 = q1_dict[col_name_2]
+            col_2_q3 = q3_dict[col_name_2]
+            if require_same_scale:
+                if (self.column_medians[col_name_1] < col_2_q1) or (self.column_medians[col_name_1] > col_2_q3):
+                    continue
+                if (self.column_medians[col_name_2] < col_1_q1) or (self.column_medians[col_name_2] > col_1_q3):
+                    continue
+            else:
+                if (self.column_medians[col_name_1] > col_2_q1) and (self.column_medians[col_name_1] < col_2_q3):
+                    continue
+                if (self.column_medians[col_name_2] > col_1_q1) and (self.column_medians[col_name_2] < col_1_q3):
+                    continue
+
+                # Test for an order of magnitude difference on the full column. If true, this is redundant with
+                # MUCH_LARGER.
+                vals_arr_1 = self.numeric_vals_filled[col_name_1]
+                vals_arr_2 = self.numeric_vals_filled[col_name_2]
+                order_mag_larger_series = np.where(
+                    self.orig_df[col_name_2] != 0,
+                    (vals_arr_1 / vals_arr_2) > 10.0,
+                    False
+                )
+                order_mag_larger_series = order_mag_larger_series | \
+                                          self.orig_df[col_name_1].isna() | \
+                                          self.orig_df[col_name_2].isna()
+                if order_mag_larger_series.tolist().count(False) < self.freq_contamination_level:
+                    continue
+
+            if test_series.tolist().count(False) > 0:
+                self._process_analysis_binary(
+                    test_id,
+                    [col_name_1, col_name_2],
+                    test_series,
+                    f'"{col_name_1}" is consistently larger than "{col_name_2}"'
+                )
+            else:
+                larger_pairs_arr.append([col_name_1, col_name_2])
+
+        patterns_arr = []  # The set of unique columns in each pattern
+        patterns_pairs_arr = []  # The set of pair-wise relationships between columns in each pattern
+        for col_name_1, col_name_2 in larger_pairs_arr:
+            found_existing_pattern = False
+            for p_idx, p in enumerate(patterns_arr):
+                if (col_name_1 in p) or (col_name_2 in p):
+                    patterns_arr[p_idx].append(col_name_1)
+                    patterns_arr[p_idx].append(col_name_2)
+                    patterns_arr[p_idx] = list(set(patterns_arr[p_idx]))
+                    patterns_pairs_arr[p_idx].append([col_name_1, col_name_2])
+                    found_existing_pattern = True
+                    break
+            if not found_existing_pattern:
+                patterns_arr.append([col_name_1, col_name_2])
+                patterns_pairs_arr.append([[col_name_1, col_name_2]])
+
+        for pattern_idx, cols in enumerate(patterns_arr):
+
+            # Order the columns in the pattern based on their median values
+            col_medians = [self.column_medians[c] for c in cols]
+            cols = np.array(cols)[np.argsort(col_medians)]
+
+            if len(cols) == 2:
+                desc = (f'"{patterns_pairs_arr[pattern_idx][0][0]}" is consistently larger than '
+                        f'"{patterns_pairs_arr[pattern_idx][0][1]}"')
+            else:
+                desc = "There is a consistent relationship in size of values between the the columns."
+                for p in patterns_pairs_arr[pattern_idx]:
+                    desc += f'\n"{p[0]}" is consistently larger than "{p[1]}"'
+
+            self._process_analysis_binary(
+                test_id,
+                sorted(cols),
+                [True]*self.num_rows,
+                desc,
+                display_info={'patterns_pairs_arr': patterns_pairs_arr[pattern_idx]}
+            )
+
+
     def _generate_positive_values(self):
         """
         Patterns without exceptions:
