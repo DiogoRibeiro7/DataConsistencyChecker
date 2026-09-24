@@ -705,6 +705,39 @@ class ResultsMixin:
                 self._update_results_by_column(results_col, original_cols)
 
 
+    def _output_stats(self):
+        """
+        Displays an overview of the tests run and its findings.
+        """
+
+        if self.n_tests_executed == 0:
+            print("No tests executed.")
+            return
+
+        if self.verbose >= 0:
+            print()
+            print("Data consistency check complete.")
+            print(f"Analysed {self.num_rows:,} rows, {len(self.orig_df.columns)} columns")
+            print(f"Executed {self.n_tests_executed} tests.")
+            print()
+            print('Patterns without Exceptions:')
+            print(f"Found {len(self.patterns_df)} patterns without exceptions")
+            print((f"{self.patterns_df['Test ID'].nunique()} tests "
+                   f"({self.patterns_df['Test ID'].nunique() * 100.0 / self.n_tests_executed:.2f}% of tests) "
+                   f"identified at least one pattern without exceptions each. \nBy default some patterns are not listed "
+                   f"in calls to display_detailed_results()."))
+            print()
+            print('Patterns with Exceptions:')
+            print(f"Found {len(self.exceptions_summary_df)} patterns with exceptions")
+            print((f"{self.exceptions_summary_df['Test ID'].nunique()} tests "
+                   f"({self.exceptions_summary_df['Test ID'].nunique() * 100.0 / self.n_tests_executed:.2f}% of tests) "
+                   f"flagged at least one exception each."))
+            if self.test_results_df is not None:
+                print((f"Flagged {len(self.test_results_df[self.test_results_df['FINAL SCORE'] > 0]):,} row(s) with at "
+                       f"least one exception."))
+            print(f"Flagged {(self.test_results_by_column_np.sum(axis=0) > 0).sum()} column(s) with at least one exception.")
+
+
     def clear_results(
             self,
             test_id_list=None,
