@@ -2511,27 +2511,6 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
                         rules = rules.replace(replace_str, f'{c_name} is {val_name}')
         return rules
 
-    def get_results_col_name(self, test_id, col_name):
-        """
-        Generates a column name for columns in self.results_df, which represent the results of running one test on one
-        column or set of columns.
-        """
-
-        return f"TEST {test_id} -- {col_name} RESULT"
-
-    @staticmethod
-    def get_col_set_name(col_names):
-        # todo: find all cases where this should be used and switch to this
-        """
-        Given an array of column names, generate a string representation.
-        """
-
-        col_name_str = ""
-        for c in col_names:
-            col_name_str += f'"{c}" AND '
-        col_name_str = col_name_str[:-5]
-        return col_name_str
-
     def _output_stats(self):
         """
         Displays an overview of the tests run and its findings.
