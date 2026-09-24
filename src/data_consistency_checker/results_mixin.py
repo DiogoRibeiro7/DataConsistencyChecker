@@ -15,7 +15,7 @@ from .report import DataConsistencyReport
 
 
 class ResultsMixin:
-    """Mixin providing result queries, reports, summaries, state management, and row-level scoring."""
+    """Mixin providing result queries, processing, reports, summaries, state management, and scoring."""
 
     def get_execution_failures(self) -> list[dict[str, Any]]:
         """Return a defensive copy of failures from the latest quality run."""
@@ -558,6 +558,152 @@ class ResultsMixin:
             self.test_results_df,
             pd.DataFrame({col_name: col_values})],
             axis=1)
+
+    def _update_results_by_column(self, results_col, original_cols):
+        rows_with_issue = np.where(results_col)
+        score_increment = 1 / len(original_cols)
+        original_col_idxs = [np.where(self.orig_df.columns == c) for c in original_cols]
+        self.test_results_by_column_np[rows_with_issue, original_col_idxs] = \
+            self.test_results_by_column_np[rows_with_issue, original_col_idxs] + score_increment
+
+    def _process_analysis_binary(
+            self,
+            test_id,
+            original_cols,
+            test_series,
+            pattern_string,
+            exception_str="",
+            allow_patterns=True,
+            display_info=None):
+        """
+        Used by tests that produce a binary column indicating the test result.
+
+        If all values in the column match the test, we update self.patterns_df. If most, but not all rows produce a
+        positive result, we flag any exceptions. In this case, we add a results column and update
+        self.results_summary_arr.
+
+        test_series is the result of running the test. If the pattern consistently holds, this will be all True. If
+        there are exceptions, the rows where there are exceptions will have value False, and  will be flagged in the
+        results dataframe, which will be the opposite rows; the results dataframe contains True where there are
+        exceptions.
+
+        If allow_patterns is False, this will not update the patterns_arr. This is used for tests which only
+        identify exceptions and not patterns, such as LARGE_GAPS
+        """
+        test_series = np.array(test_series)
+
+        if len(original_cols) == 1:
+            col_name = original_cols[0]
+        else:
+            col_name = self.get_col_set_name(original_cols)
+
+        num_true = test_series.tolist().count(True)
+        if allow_patterns and num_true == self.num_rows:
+            self.patterns_arr.append([test_id, col_name, pattern_string, display_info])
+            self.col_to_original_cols_dict[col_name] = original_cols
+
+        if (self.num_rows - self.freq_contamination_level) <= num_true < self.num_rows:
+            if allow_patterns:
+                if test_id in ['PREV_VALUES_DT', 'DECISION_TREE_REGRESSOR', 'DECISION_TREE_CLASSIFIER',
+                               'PREDICT_NULL_DT']:
+                    summary_str = f'{pattern_string}'
+                else:
+                    summary_str = f'{pattern_string}, with exceptions{exception_str}'
+            else:
+                summary_str = f'{pattern_string}, {exception_str}'
+            summary_str = summary_str.replace(" .", ".").replace("..", ".").replace(".,", ",")
+            summary_str = summary_str.rstrip(', ')
+            summary_str = summary_str.rstrip('. ').rstrip('.') + '.'  # Ensure the string ends with a period.
+
+            # Update results_summary_arr
+            self.results_summary_arr.append([
+                test_id,
+                col_name,
+                summary_str,
+                self.num_rows - num_true,
+                display_info
+            ])
+
+            # Update results_arr
+            results_col_name = self.get_results_col_name(test_id, col_name)
+            results_col = ~test_series.astype(bool)
+            self.col_to_original_cols_dict[results_col_name] = original_cols
+            self.results_dict[results_col_name] = results_col
+            # self.__add_result_column(results_col_name, results_col)
+
+            # Update test_results_by_column_df
+            self._update_results_by_column(results_col, original_cols)
+
+    def _process_analysis_counts(
+            self,
+            test_id,
+            original_cols,
+            test_series,
+            pattern_string_1,
+            pattern_string_2,
+            allow_patterns=True,
+            display_info=None):
+        """
+        Used by tests that produce a count column indicating the test result.
+        test_series is the result of running the test. If the pattern consistently holds, this will contain a small
+        number of values, each fairly frequent. There are exceptions if there are a small number of counts, but some
+        values are much less common than the others.
+        """
+
+        def arr_to_str(arr):
+            s = ""
+            sorted_arr = sorted(arr)
+            for x_ix, x in enumerate(sorted_arr):
+                s += str(x)
+                if x_ix == len(sorted_arr)-1:
+                    break
+                elif len(sorted_arr) == 2 and x_ix == 0:
+                    s += " or "
+                elif len(sorted_arr) > 2:
+                    if x_ix == len(sorted_arr)-2:
+                        s += ", or "
+                    else:
+                        s += ", "
+            return s
+
+        test_series = pd.Series(test_series)
+
+        if len(original_cols) == 1:
+            col_name = original_cols[0]
+        else:
+            col_name = self.get_col_set_name(original_cols)
+
+        if test_series.nunique() == 1:
+            if allow_patterns:
+                self.patterns_arr.append([test_id,
+                                          col_name,
+                                          f'{pattern_string_1} {test_series[0]} {pattern_string_2}',
+                                          display_info])
+                self.col_to_original_cols_dict[col_name] = original_cols
+        elif test_series.nunique() <= 5:
+            counts_series = test_series.value_counts(normalize=False)
+            low_vals = [x for x, y in zip(counts_series.index, counts_series.values) if y < self.freq_contamination_level]
+            if len(low_vals) > 0:
+                results_col = test_series.isin(low_vals)
+
+                # Update results_summary_arr
+                high_vals = [x for x in counts_series.index if x not in low_vals]
+                self.results_summary_arr.append([
+                    test_id,
+                    col_name,
+                    f'{pattern_string_1} {arr_to_str(high_vals)} {pattern_string_2}, with exceptions.',
+                    results_col.tolist().count(True),
+                    display_info
+                ])
+
+                # Update results_arr
+                results_col_name = self.get_results_col_name(test_id, col_name)
+                self.col_to_original_cols_dict[results_col_name] = original_cols
+                self.results_dict[results_col_name] = results_col
+
+                # Update test_results_by_column_df
+                self._update_results_by_column(results_col, original_cols)
+
 
     def clear_results(
             self,
