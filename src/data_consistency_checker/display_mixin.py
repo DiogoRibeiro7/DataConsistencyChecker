@@ -117,6 +117,36 @@ class DisplayMixin:
             self.check_data_quality(execute_list=[test_id])
             self.display_detailed_results(show_short_list_only=False)
 
+    def _output_current_test(self, test_num, test_id):
+        """
+        Executed as tests run to allow monitoring progress.
+        """
+        if self.verbose <= 0:
+            return
+        if self.verbose == 1:
+            print(f"Executing test {test_num:3}: {test_id:<30}")
+            return
+
+        # Many tests have sufficiently short descriptions, and so do not specify a separate short description.
+        desc = self.test_dict[test_id].short_description
+        if desc == "":
+            desc = self.test_dict[test_id].description
+
+        # Strip out any periods from short descriptions to be consistent.
+        if desc[-1] == '.':
+            desc = desc[:-1]
+
+        if is_notebook():
+            multiline_test_desc = wrap(desc, 70)
+            print(f"Executing test {test_num:3}: {test_id}")
+            print(f"  {multiline_test_desc[0]}")
+            filler = ''.join([" "]*52)
+            for line in multiline_test_desc[1:]:
+               print(f'{filler} {line}')
+        else:
+            print(f"Executing test {test_num:3}: {test_id} \n  {desc}")
+
+
     # ------------------------------------------------------------------
     # Dataset statistics helpers
     # ------------------------------------------------------------------
