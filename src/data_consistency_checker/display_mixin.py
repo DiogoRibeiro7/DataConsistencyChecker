@@ -22,10 +22,12 @@ from .checker_utils import (
     get_num_decimal_digits,
     is_missing,
     is_notebook,
+    print_line,
     print_text,
     replace_special_with_space,
     safe_div,
     styling_flagged_rows,
+    styling_orig_row,
 )
 from .test_metadata import TestMetadata, metadata_from_definition
 
@@ -500,6 +502,115 @@ class DisplayMixin:
             display_info=display_info,
             is_patterns=False,
             f=f)
+
+    def _display_examples_not_flagged(self, test_id, cols, columns_set, is_patterns, display_info, f):
+        """
+        Called by display_detailed_results(). This prints a set of rows that were not flagged. May be called in cases
+        where some rows were flagged, or where none were.
+        """
+
+        # Do not show examples for some tests
+        if is_patterns and test_id in ['UNIQUE_VALUES']:
+            print_text("Examples are not shown for this pattern.", f)
+            return
+
+        if test_id in ['MISSING_VALUES_PER_ROW', 'ZERO_VALUES_PER_ROW',
+                       'NEGATIVE_VALUES_PER_ROW', 'GROUPED_STRINGS']:
+            print_text("Examples are not shown for this pattern.", f)
+            return
+
+        show_consecutive = test_id in ['PREV_VALUES_DT', 'COLUMN_ORDERED_ASC', 'COLUMN_ORDERED_DESC',
+                                       'COLUMN_TENDS_ASC', 'COLUMN_TENDS_DESC', 'SIMILAR_PREVIOUS', 'RUNNING_SUM',
+                                       'GROUPED_STRINGS_BY_NUMERIC']
+
+        sort_col = None
+        if test_id in ['GROUPED_STRINGS_BY_NUMERIC']:
+            sort_col = cols[0]
+
+        consecutive_str = ""
+        if show_consecutive:
+            sort_msg = ""
+            if sort_col:
+                sort_msg = f' sorted by {sort_col}'
+            consecutive_str = f" (showing a consecutive set of rows{sort_msg})"
+
+        print_line(f)
+        if is_patterns:
+            print_text(f"**Examples{consecutive_str}**:", f)
+        else:
+            print_text(f"**Examples of values NOT flagged{consecutive_str}**:", f)
+
+        vals = self._get_sample_not_flagged(
+            test_id,
+            columns_set,
+            show_consecutive=show_consecutive,
+            sort_col=sort_col,
+            is_patterns=is_patterns,
+            display_info=display_info,
+            f=f)
+        self._draw_sample_dataframe(vals, test_id, cols, display_info, is_patterns, f)
+
+    ##################################################################################################################
+    # Private helper methods to support outputting the results of the analysis in various ways
+    ##################################################################################################################
+
+    def _display_rows_with_tests(self, sorted_df, n_rows, check_score=False):
+        """
+        Called by display_most_flagged_rows() and display_least_flagged_rows()
+
+        Display a set of dataframes, one per row in the original data, up to n_rows rows, each including the original
+        row and the issues found in it, across all tests on all features.
+
+        sorted_df: dataframe
+            a sorted version of self.test_results_df
+        n_rows: int
+            The maximum number of rows from the original data to display
+        check_score: bool
+            if True, only rows with scores above zero will be displayed
+        """
+
+        flagged_idx_arr = sorted_df.index[:10]
+        for row_idx in flagged_idx_arr[:n_rows]:
+            if check_score and sorted_df.loc[row_idx]['FINAL SCORE'] == 0:
+                print(f"The remaining rows have no flagged issues: cannot display {n_rows} flagged rows.")
+                return
+
+            # Get the row as it appears in the original data
+            orig_row = self.orig_df.loc[row_idx:row_idx]
+
+            # Insert a column to indicate the IDs of the tests that have flagged this row
+            orig_row.insert(0, 'Test ID', '')
+
+            colour_cells = [False] * len(self.orig_df.columns)
+
+            # Loop through all tests, and add a row to the output for any that have flagged this row
+            for test_id in self.get_test_list():
+                test_row = [test_id] + [""] * len(self.orig_df.columns)
+
+                # There may be multiple columns / column sets which have flagged this row.
+                for column_set in self.exceptions_summary_df['Column(s)'].unique():
+                    result_col_name = self.get_results_col_name(test_id, column_set)
+                    if result_col_name not in self.test_results_df.columns:
+                        continue
+                    for column_name in self.col_to_original_cols_dict[result_col_name]:
+                        if self.test_results_df[result_col_name][row_idx]:
+                            column_idx = np.where(self.orig_df.columns == column_name)[0][0]
+                            test_row[column_idx+1] = u'\u2714'  # Checkmark symbol
+                            colour_cells[column_idx] = True
+                if test_row.count(u'\u2714'):
+                    orig_row = pd.concat([orig_row, pd.DataFrame([test_row], columns=orig_row.columns)])
+            orig_row = orig_row.reset_index()
+            orig_row = orig_row.drop(columns=['index'])
+
+            # Display the dataframe representing this row from the original data
+            print()
+            if is_notebook():
+                display(Markdown(f"**Row: {row_idx} " + u'\u2014' + f" Final Score: {sorted_df.loc[row_idx]['FINAL SCORE']}**"))
+                display(orig_row.style.apply(styling_orig_row, row_idx=0, flagged_arr=colour_cells, axis=None))
+            else:
+                print(f"Row: {row_idx} Final Score: {sorted_df.loc[row_idx]['FINAL SCORE']}")
+                print(orig_row.to_string(index=False))
+            print()
 
 
     # ------------------------------------------------------------------
