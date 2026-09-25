@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import datetime
+import math
 from typing import Any, Iterable
 
 import numpy as np
@@ -201,6 +202,103 @@ class PlotsMixin:
         display_plot(self.plot_final_scores_distribution_by_row, "Final Scores by Row of the Data")
         display_plot(self.plot_final_scores_distribution_by_feature, "Final Scores by Feature")
         display_plot(self.plot_final_scores_distribution_by_test, "Final Scores by Test")
+
+
+    def plot_columns_vs_final_scores(self):
+        """
+        Used to determine if there are any relationships between column values and the final scores of the rows. This
+        displays tables and plots presenting any relationships found.
+        """
+
+        def clear_last_plots():
+            if n_rows == 1:
+                for i in range(num_feats, 4):
+                    ax[i].set_visible(False)
+            else:
+                last_col_used = num_feats % 4
+                for i in range(last_col_used, 4):
+                    ax[n_rows-1][i].set_visible(False)
+
+        if self.exceptions_summary_df is None or len(self.exceptions_summary_df) == 0:
+            print("No exceptions found.")
+            return
+
+        df = self.orig_df.copy()
+        df['FINAL SCORE'] = self.test_results_df['FINAL SCORE']
+
+        num_feats = len(self.numeric_cols) + len(self.date_cols)
+        feats = self.numeric_cols + self.date_cols
+        if num_feats > 50:
+            print(
+                f"There are {num_feats} numeric and date features. Displaying only the 50 with the greatest correlation with the final score"
+            )
+            corr = {
+                col: abs(df[col].astype(float).corr(df['FINAL SCORE'])) for col in feats
+            }
+            feats = [k for k, _ in sorted(corr.items(), key=lambda x: x[1], reverse=True)[:50]]
+            num_feats = len(feats)
+
+        if num_feats > 0:
+            n_rows = math.ceil(num_feats / 4)
+            fig, ax = plt.subplots(nrows=n_rows, ncols=4, figsize=(14, 4 * n_rows))
+            for feat_idx, col_name in enumerate(feats):
+                if n_rows == 1:
+                    cur_ax = ax[feat_idx]
+                else:
+                    cur_ax = ax[feat_idx // 4][feat_idx % 4]
+                s = sns.scatterplot(data=df, x=df[col_name], y=df['FINAL SCORE'], ax=cur_ax)
+                s.set(xlabel=None)
+                s.set_title(col_name)
+            clear_last_plots()
+            plt.suptitle("Relationship of features to Final Score (Numeric and Date features)")
+            plt.tight_layout()
+            plt.subplots_adjust(top=0.95)
+            plt.show()
+
+        num_feats = len(self.binary_cols) + len(self.string_cols)
+        feats = self.binary_cols + self.string_cols
+        if num_feats > 50:
+            print(
+                f"There are {num_feats} numeric and date features. Displaying only the 50 with the greatest correlation with the final score"
+            )
+            corr = {}
+            for col in feats:
+                codes = pd.Categorical(df[col]).codes
+                corr[col] = abs(pd.Series(codes).corr(df['FINAL SCORE']))
+            feats = [k for k, _ in sorted(corr.items(), key=lambda x: x[1], reverse=True)[:50]]
+            num_feats = len(feats)
+
+        if num_feats > 0:
+            n_rows = math.ceil(num_feats / 4)
+            fig, ax = plt.subplots(nrows=n_rows, ncols=4, figsize=(14, 4 * n_rows))
+            for feat_idx, col_name in enumerate(feats):
+                vc = self.orig_df[col_name].value_counts()
+                if n_rows == 1:
+                    cur_ax = ax[feat_idx]
+                else:
+                    cur_ax = ax[feat_idx // 4][feat_idx % 4]
+                if len(vc) > 10:
+                    common_vals = []
+                    for v_idx in vc.index:
+                        if vc[v_idx] > (self.num_rows / 10):
+                            common_vals.append(v_idx)
+                    if len(common_vals) == 0:
+                        continue
+                    map_dict = {x: x for x in common_vals}
+                    sub_df = df.copy()
+                    sub_df[col_name] = df[col_name].map(map_dict)
+                    sub_df[col_name] = sub_df[col_name].fillna("Other")
+                    s = sns.boxplot(data=sub_df,  x=col_name, y='FINAL SCORE', ax=cur_ax)
+                else:
+                    s = sns.boxplot(data=df,  x=col_name, y='FINAL SCORE', ax=cur_ax)
+                s.set_title(col_name)
+
+            clear_last_plots()
+            plt.suptitle("Relationship of features to Final Score (String and Binary features)")
+            plt.tight_layout()
+            # See https://stackoverflow.com/questions/8248467/tight-layout-doesnt-take-into-account-figure-suptitle
+            plt.subplots_adjust(top=0.90)
+            plt.show()
 
 
     def save_image(self, f):
