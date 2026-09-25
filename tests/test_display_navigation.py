@@ -175,8 +175,20 @@ def test_display_most_flagged_rows_notebook_branch(
 ) -> None:
     checker = _checker()
     displayed: list[object] = []
+
+    class _FakeStyler:
+        """Minimal stand-in for pandas Styler without requiring jinja2."""
+
+        def apply(self, *args: object, **kwargs: object) -> "_FakeStyler":
+            return self
+
     monkeypatch.setattr(display_module, "is_notebook", lambda: True)
     monkeypatch.setattr(display_module, "display", displayed.append)
+    monkeypatch.setattr(
+        pd.DataFrame,
+        "style",
+        property(lambda self: _FakeStyler()),
+    )
 
     checker.display_most_flagged_rows(with_results=False, n_rows=2)
 
