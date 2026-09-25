@@ -7,7 +7,7 @@ from io import StringIO
 import pandas as pd
 import pytest
 
-import data_consistency_checker.checker as checker_module
+import data_consistency_checker.display_mixin as display_module
 from data_consistency_checker import DataConsistencyChecker
 
 
@@ -59,9 +59,9 @@ def test_draw_sample_dataframe_adds_expected_explanatory_column(
         df = checker.orig_df[cols].copy()
 
     captured: list[pd.DataFrame] = []
-    monkeypatch.setattr(checker_module, "is_notebook", lambda: True)
+    monkeypatch.setattr(display_module, "is_notebook", lambda: True)
     monkeypatch.setattr(
-        checker_module,
+        display_module,
         "display",
         lambda value: captured.append(value.copy()),
     )
@@ -107,9 +107,9 @@ def test_draw_sample_dataframe_handles_date_components(
         }
     )
     captured: list[pd.DataFrame] = []
-    monkeypatch.setattr(checker_module, "is_notebook", lambda: True)
+    monkeypatch.setattr(display_module, "is_notebook", lambda: True)
     monkeypatch.setattr(
-        checker_module,
+        display_module,
         "display",
         lambda value: captured.append(value.copy()),
     )
