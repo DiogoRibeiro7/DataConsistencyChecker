@@ -94,4 +94,4 @@ def test_display_rows_with_tests_renders_flagged_row(capsys, monkeypatch) -> Non
     output = capsys.readouterr().out
     assert "Row: 0 Final Score: 1" in output
     assert "TEST_A" in output
-    assert "✓" in output
+    assert "✔" in output
