@@ -7,7 +7,7 @@ from io import StringIO
 import pandas as pd
 import pytest
 
-import data_consistency_checker.checker as checker_module
+import data_consistency_checker.display_mixin as display_module
 from data_consistency_checker import DataConsistencyChecker
 
 
