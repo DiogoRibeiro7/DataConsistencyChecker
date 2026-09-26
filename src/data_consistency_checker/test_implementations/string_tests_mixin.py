@@ -3091,10 +3091,11 @@ class StringTestsMixin(CheckerState):
                         if res_1.tolist().count(True) > 0:
                             continue
 
-                        # Get the upper limit given the current subset
-                        q1 = num_vals.quantile(0.25)
-                        q2 = num_vals.quantile(0.5)
-                        q3 = num_vals.quantile(0.75)
+                        # Get the upper limit given the current subset, using the non-null values, not the values
+                        # filled with the median
+                        q1 = num_vals[sub_df[col_name_2].notna().values].quantile(0.25)
+                        q2 = num_vals[sub_df[col_name_2].notna().values].quantile(0.5)
+                        q3 = num_vals[sub_df[col_name_2].notna().values].quantile(0.75)
                         upper_limit_subset = q3 + (self.iqr_limit * (q3 - q1))
 
                         # Check this subset is small compared to the full column
@@ -3120,7 +3121,9 @@ class StringTestsMixin(CheckerState):
                         except Exception:
                             continue
 
-                        res = pd.Series([x <= upper_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
+                        # Null values are not flagged
+                        res = pd.Series([pd.isna(x) or (x <= upper_limit_subset)
+                                         for x in pd.to_datetime(sub_df[col_name_2])])
 
                     if 0 < res.tolist().count(False) <= self.freq_contamination_level:
                         index_of_large = [x for x, y in zip(sub_df.index, res) if y == False]  # noqa: E712
@@ -3319,7 +3322,6 @@ class StringTestsMixin(CheckerState):
             return
 
         # todo: when show non-flagged, show with the flagged prefixes
-        # todo: dont flag Null values
         # Calculate and cache the upper limit based on q1 and q3 of each full numeric & date column
         upper_limits_dict = self.get_columns_iqr_upper_limit()
         nunique_dict = self.get_nunique_dict()
@@ -3331,19 +3333,21 @@ class StringTestsMixin(CheckerState):
 
             col_vals = as_str(self.orig_df[col_name_1]).apply(replace_special_with_space)
 
-            # Check the column's values are usually more than 1 word
-            word_arr = col_vals.str.split()  # todo: call self.get_word_counts_dict()
+            # Check the column's non-null values are usually more than 1 word
+            word_arr = col_vals[self.orig_df[col_name_1].notna()].str.split()  # todo: call self.get_word_counts_dict()
             word_counts_arr = pd.Series([len(x) for x in word_arr])
             if word_counts_arr.quantile(0.75) <= 1:
                 continue
 
+            # Null values have no first word
             first_words = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
+            first_words = first_words.mask(self.orig_df[col_name_1].isna().values)
             if first_words.nunique() > 10:
                 continue
 
             # Skip columns where the set of unique first words is almost as large as the set of unique strings. In
             # this case, the first word is not meaningful.
-            if first_words.nunique() > (col_vals.nunique() / 2):
+            if first_words.nunique() > (col_vals[self.orig_df[col_name_1].notna()].nunique() / 2):
                 continue
             vc = first_words.value_counts()
             common_values = []
@@ -3376,9 +3380,10 @@ class StringTestsMixin(CheckerState):
                         if res_1.tolist().count(True) > 0:
                             continue
 
-                        q1 = num_vals.quantile(0.25)
-                        q2 = num_vals.quantile(0.5)
-                        q3 = num_vals.quantile(0.75)
+                        # Get the quartiles of the non-null values, not of the values filled with the median
+                        q1 = num_vals[sub_df[col_name_2].notna().values].quantile(0.25)
+                        q2 = num_vals[sub_df[col_name_2].notna().values].quantile(0.5)
+                        q3 = num_vals[sub_df[col_name_2].notna().values].quantile(0.75)
                         upper_limit_subset = q3 + (self.iqr_limit * (q3 - q1))
 
                         # Check this subset is small compared to the full column
@@ -3408,7 +3413,9 @@ class StringTestsMixin(CheckerState):
                         res_1 = [x > upper_limit for x in pd.to_datetime(sub_df[col_name_2])]
                         if res_1.count(True) > 0:
                             continue
-                        res = pd.Series([x <= upper_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
+                        # Null values are not flagged
+                        res = pd.Series([pd.isna(x) or (x <= upper_limit_subset)
+                                         for x in pd.to_datetime(sub_df[col_name_2])])
 
                     if 0 < res.tolist().count(False) <= self.freq_contamination_level:
                         flagged_prefixes.append(v)
@@ -3748,6 +3755,8 @@ class StringTestsMixin(CheckerState):
                             else:
                                 sample_indexes = sub_df.sample(n=50).index
                             num_vals = self.numeric_vals_filled[col_name_3].loc[sample_indexes]
+                            # Use the non-null values, not the values filled with the median
+                            num_vals = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index].values]
                             q2, q3 = num_vals.quantile([0.5, 0.75])
                             if (q2 > col_q2_limit) or (q3 > col_q3_limit):
                                 continue
@@ -3757,7 +3766,9 @@ class StringTestsMixin(CheckerState):
                                 num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df]
                             else:
                                 num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df.index]
-                            q1, q2, q3 = num_vals.quantile([0.25, 0.50, 0.75], interpolation='midpoint')
+                            # Get the quartiles of the non-null values, not of the values filled with the median
+                            q1, q2, q3 = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index]].quantile(
+                                [0.25, 0.50, 0.75], interpolation='midpoint')
                             if q2 is None or q2 > col_q2_limit:
                                 continue
                             if q3 is None or q3 > col_q3_limit:
@@ -3784,6 +3795,9 @@ class StringTestsMixin(CheckerState):
                             res = num_vals <= upper_limit
                         else:
                             res = sub_df[col_name_3] <= upper_limit
+
+                        # Null values are not flagged
+                        res = res | self.orig_df[col_name_3].isna().loc[res.index]
 
                         if res.tolist().count(False) > self.freq_contamination_level:
                             found_many = True
