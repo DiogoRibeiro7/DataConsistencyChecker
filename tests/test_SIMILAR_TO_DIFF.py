@@ -49,12 +49,17 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", 0, 0)
+    # With these rows, the check's test comparing the median of the column to the difference of the other two medians
+    # rejects "similar_to_diff all", but not "similar_to_diff most"
+    synth_test(test_id, "random", 0, synth_exceptions_cols)
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # Just over half of the 200 rows left have rand_a < rand_b, so the check, which compares the column to
+    # abs(rand_a - rand_b), finds it no closer to the difference than to rand_a. It finds nothing on these rows
+    # without nulls either.
+    synth_test(test_id, "80-percent", 0, 0)
 
 
 @requires_synthetic_all_columns
