@@ -43,7 +43,9 @@ def test_synthetic_random_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # Only about 87 of the 100 values of "unique_sets most" remain, so there are fewer possible combinations than
+    # rows and the check does not test the pair.
+    synth_test(test_id, "80-percent", synth_patterns_cols, 0)
 
 
 @requires_synthetic_all_columns

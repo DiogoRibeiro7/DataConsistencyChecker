@@ -90,7 +90,7 @@ def test_synthetic_no_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_one_row_nulls():
-    synth_test(test_id, "one-row", 0, 3)  # The pattern is now an exception
+    synth_test(test_id, "one-row", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones

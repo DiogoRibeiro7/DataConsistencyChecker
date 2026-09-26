@@ -198,10 +198,12 @@ class BinaryTestsMixin(CheckerState):
             # Ensure there are at least 10% of the rows with both values in both columns.
             count_min = self.num_rows * 0.1
 
-            mask_1a = (self.orig_df[col_name_1] == val_1a) | self.orig_df[col_name_1].isna()
-            mask_1b = (self.orig_df[col_name_1] == val_1b) | self.orig_df[col_name_1].isna()
-            mask_2a = (self.orig_df[col_name_2] == val_2a) | self.orig_df[col_name_2].isna()
-            mask_2b = (self.orig_df[col_name_2] == val_2b) | self.orig_df[col_name_2].isna()
+            # Rows with a missing value in either column are in none of the masks, so neither support nor violate the
+            # pattern
+            mask_1a = (self.orig_df[col_name_1] == val_1a) & self.orig_df[col_name_1].notna()
+            mask_1b = (self.orig_df[col_name_1] == val_1b) & self.orig_df[col_name_1].notna()
+            mask_2a = (self.orig_df[col_name_2] == val_2a) & self.orig_df[col_name_2].notna()
+            mask_2b = (self.orig_df[col_name_2] == val_2b) & self.orig_df[col_name_2].notna()
 
             count_1a = mask_1a.tolist().count(True)
             if count_1a < count_min:
@@ -657,7 +659,9 @@ class BinaryTestsMixin(CheckerState):
                     sums = subset_df.sum(axis=1)
                     vc = sums.value_counts(normalize=False).sort_values(ascending=False)
                     if vc.iloc[0] > (self.num_rows - self.freq_contamination_level):
-                        test_series = np.array([sums == vc.index[0]][0])
+                        # Rows with a missing value in any of the columns neither support nor violate the pattern
+                        test_series = np.array([sums == vc.index[0]][0]) | \
+                                      self.orig_df[col_names].isna().any(axis=1).values
                         self._process_analysis_binary(
                                 test_id,
                                 list(col_names),
@@ -1128,11 +1132,11 @@ class BinaryTestsMixin(CheckerState):
             if self.verbose >= 2 and bin_idx > 0 and bin_idx % 10 == 0:
                 print(f"  Examining column {bin_idx} of {len(self.binary_cols)} binary columns")
 
-            # Test the binary column contains both values a reasonable amount.
+            # Test the binary column contains both values a reasonable amount. Rows where it is Null do not count.
             val0, val1 = self.column_unique_vals[bin_col]
-            if self.orig_df[bin_col].tolist().count(val0) < (self.num_rows * 0.1):
+            if self.orig_df[bin_col].tolist().count(val0) < (self.orig_df[bin_col].notna().sum() * 0.1):
                 continue
-            if self.orig_df[bin_col].tolist().count(val1) < (self.num_rows * 0.1):
+            if self.orig_df[bin_col].tolist().count(val1) < (self.orig_df[bin_col].notna().sum() * 0.1):
                 continue
 
             # Create 2 dataframes that each cover one of the two values in the binary column. Do for the sample
@@ -1211,7 +1215,7 @@ class BinaryTestsMixin(CheckerState):
                 return False
             if sub_df_v0[num_col_2].isna().sum() > (len(sub_df_v0) * 0.75):
                 return False
-            sub_df_v1 = self.orig_df[[bin_col, num_col_1, num_col_2]][self.orig_df[bin_col] == val0]
+            sub_df_v1 = self.orig_df[[bin_col, num_col_1, num_col_2]][self.orig_df[bin_col] == val1]
             if sub_df_v1[num_col_1].isna().sum() > (len(sub_df_v1) * 0.75):
                 return False
             return not (sub_df_v1[num_col_2].isna().sum() > (len(sub_df_v1) * 0.75))
@@ -1228,6 +1232,7 @@ class BinaryTestsMixin(CheckerState):
         # Calculate and cache the sums of each pair of numeric columns
         sums_arr_dict = {}
         sorted_sums_arr_dict = {}
+        non_null_dict = {}
         for num_col_1, num_col_2 in pairs:
             # Check the two columns that have the values that are checked have a reasonable number of values besides
             # the most frequent
@@ -1242,6 +1247,7 @@ class BinaryTestsMixin(CheckerState):
             sum_arr = sum_arr.fillna(self.column_medians[num_col_1] + self.column_medians[num_col_2])
             sums_arr_dict[(num_col_1, num_col_2)] = sum_arr
             sorted_sums_arr_dict[(num_col_1, num_col_2)] = pd.Series(sorted(sum_arr))
+            non_null_dict[(num_col_1, num_col_2)] = self.orig_df[num_col_1].notna() & self.orig_df[num_col_2].notna()
 
         for bin_idx, bin_col in enumerate(self.binary_cols):
             if self.verbose >= 2 and bin_idx > 0 and bin_idx % 1 == 0:
@@ -1250,9 +1256,10 @@ class BinaryTestsMixin(CheckerState):
             val0, val1 = self.column_unique_vals[bin_col]
             num_val_0 = self.orig_df[bin_col].tolist().count(val0)
             num_val_1 = self.orig_df[bin_col].tolist().count(val1)
-            if num_val_0 < (self.num_rows * 0.1):
+            bin_non_null = self.orig_df[bin_col].notna()
+            if num_val_0 < (bin_non_null.sum() * 0.1):
                 continue
-            if num_val_1 < (self.num_rows * 0.1):
+            if num_val_1 < (bin_non_null.sum() * 0.1):
                 continue
 
             for num_col_1, num_col_2 in pairs:
@@ -1265,6 +1272,17 @@ class BinaryTestsMixin(CheckerState):
                 sum_arr = sums_arr_dict[(num_col_1, num_col_2)]
                 sorted_sum_arr = sorted_sums_arr_dict[(num_col_1, num_col_2)]
 
+                # Rows with a missing value in any of the three columns neither support nor violate the pattern, so
+                # the thresholds are found among the other rows
+                non_null = non_null_dict[(num_col_1, num_col_2)] & bin_non_null
+                num_non_null_val_0, num_non_null_val_1 = num_val_0, num_val_1
+                if not non_null.all():
+                    sorted_sum_arr = pd.Series(sorted(sum_arr[non_null]))
+                    num_non_null_val_0 = self.orig_df[bin_col][non_null].tolist().count(val0)
+                    num_non_null_val_1 = self.orig_df[bin_col][non_null].tolist().count(val1)
+                    if (num_non_null_val_0 == 0) or (num_non_null_val_1 == 0):
+                        continue
+
                 # We check if it appears the binary column has val_0 for smaller sums, or val_1 for smaller sums.
                 # If either is True, we set a flag and do not check the other.
                 val_0_for_smaller = False
@@ -1273,15 +1291,15 @@ class BinaryTestsMixin(CheckerState):
                 # Test if the binary column is consistently val_0 for the larger values in the numeric column.
                 # If bin_col is val_0 for smaller values, then the threshold will be at the point in the sorted
                 # array corresponding to the number of instances of val_0
-                val_at_frac_0 = sorted_sum_arr[num_val_0]
-                idxs_below_threshold_0 = np.where(sum_arr[:50] < val_at_frac_0)
+                val_at_frac_0 = sorted_sum_arr[num_non_null_val_0]
+                idxs_below_threshold_0 = np.where((sum_arr[:50] < val_at_frac_0) & non_null[:50])
                 sub_df_0 = self.orig_df[bin_col].loc[idxs_below_threshold_0]
                 if sub_df_0.tolist().count(val1) < self.freq_contamination_level:
                     val_0_for_smaller = True
 
                 if not val_0_for_smaller:
-                    val_at_frac_1 = sorted_sum_arr[num_val_1]
-                    idxs_below_threshold_1 = np.where(sum_arr[:50] < val_at_frac_1)
+                    val_at_frac_1 = sorted_sum_arr[num_non_null_val_1]
+                    idxs_below_threshold_1 = np.where((sum_arr[:50] < val_at_frac_1) & non_null[:50])
                     sub_df_1 = self.orig_df[bin_col].loc[idxs_below_threshold_1]
                     if sub_df_1.tolist().count(val0) < self.freq_contamination_level:
                         val_1_for_smaller = True

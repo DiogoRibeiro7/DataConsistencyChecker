@@ -43,7 +43,9 @@ def test_synthetic_random_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # "small_gap all_2" and "small_gap most" have the same distribution, and which is the later column is decided
+    # by their medians. On the rows left these differ by half a day and flip, so the other direction is tested.
+    synth_test(test_id, "80-percent", synth_patterns_cols, ['"small_gap all_1" AND "small_gap most"'])
 
 
 @requires_synthetic_all_columns
