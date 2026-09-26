@@ -103,12 +103,73 @@ def test_synthetic_nulls_can_be_added_to_boolean_columns(add_nones: str) -> None
     assert set(column.dropna()) <= {True, False}
 
 
+@pytest.mark.parametrize("add_nones", ["none", "random"])
 @pytest.mark.parametrize("test_id", ALL_TEST_IDS)
-def test_check_runs_on_synthetic_data_with_missing_values(test_id: str) -> None:
+def test_check_runs_on_its_synthetic_data(test_id: str, add_nones: str) -> None:
     checker = DataConsistencyChecker(verbose=-1)
-    synth = checker.generate_synth_data(execute_list=[test_id], add_nones="random")
+    synth = checker.generate_synth_data(execute_list=[test_id], add_nones=add_nones)
     checker.init_data(synth)
 
     checker.check_data_quality(execute_list=[test_id], raise_on_error=True)
 
     assert checker.get_execution_failures() == []
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Branches that only run on particular data. Each contains code changed for pandas 3.
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def _findings(df: pd.DataFrame, test_id: str) -> list[str]:
+    checker = DataConsistencyChecker(verbose=-1)
+    checker.init_data(df)
+    checker.check_data_quality(execute_list=[test_id], raise_on_error=True)
+    found = pd.concat([checker.patterns_df, checker.exceptions_summary_df])
+    return sorted(found.loc[found["Test ID"] == test_id, "Column(s)"])
+
+
+@pytest.mark.parametrize("overlap", [False, True], ids=["separated", "overlapping"])
+def test_binary_matches_values_when_the_first_value_goes_with_larger_numbers(overlap: bool) -> None:
+    num = np.random.default_rng(0).permutation(200).astype(float)
+    label = np.where(num >= 100, 0, 1)
+    if overlap:
+        label[num == 5] = 0  # the groups now overlap, and only their percentiles are separated
+
+    assert _findings(pd.DataFrame({"num": num, "label": label}), "BINARY_MATCHES_VALUES") == ['"num" AND "label"']
+
+
+def test_binary_same_checks_a_larger_sample_of_large_datasets() -> None:
+    labels = np.random.default_rng(0).integers(0, 2, 10_050)
+
+    assert _findings(pd.DataFrame({"a": labels, "b": labels}), "BINARY_SAME") == ['"a" AND "b"']
+
+
+def test_position_non_alphanumeric_counts_positions_from_the_end() -> None:
+    values = [f"{'x' * (3 + i % 6)}-{i % 90 + 10}" for i in range(200)]
+
+    assert _findings(pd.DataFrame({"code": values}), "POSITION_NON-ALPHANUMERIC") == ["code"]
+
+
+@pytest.mark.parametrize("smaller_sums_value", [
+    0,
+    pytest.param(1, marks=pytest.mark.xfail(
+        strict=True, raises=AssertionError,
+        reason="Known defect: when the second value goes with the smaller sums, the check tests the opposite direction",
+    )),
+])
+def test_binary_matches_sum_finds_which_value_goes_with_smaller_sums(smaller_sums_value: int) -> None:
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({"a": rng.integers(0, 100, 200).astype(float), "b": rng.integers(0, 100, 200).astype(float)})
+    df["label"] = np.where(df["a"] + df["b"] < 101, smaller_sums_value, 1 - smaller_sums_value)
+
+    assert _findings(df, "BINARY_MATCHES_SUM") == ['"a" AND "b" AND "label"']
+
+
+def test_init_data_converts_categorical_text_to_strings() -> None:
+    values = pd.Categorical([["a", "b", None][i % 3] for i in range(30)])
+    checker = DataConsistencyChecker(verbose=-1)
+
+    checker.init_data(pd.DataFrame({"cat": values, "num": np.arange(30.0)}))
+
+    assert checker.orig_df["cat"].dtype == object
+    assert checker.orig_df["cat"].tolist()[:3] == ["a", "b", "nan"]

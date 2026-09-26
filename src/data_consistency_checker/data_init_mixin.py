@@ -358,7 +358,7 @@ class DataInitMixin(CheckerState):
                 try:
                     self.orig_df[col_name] = self.orig_df[col_name].astype(float)
                 except Exception:
-                    self.orig_df[col_name] = as_str(self.orig_df[col_name]).astype(float)
+                    self.orig_df[col_name] = self.orig_df[col_name].astype(str).astype(float)
 
         # For binary columns, find and cache the set of unique values per column
         for col_name in self.binary_cols:

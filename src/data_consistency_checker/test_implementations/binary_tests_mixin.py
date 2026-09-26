@@ -981,7 +981,7 @@ class BinaryTestsMixin(CheckerState):
             # Test first on a sample of the rows where the bin_col has value 0
             if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
                     sample_sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_0 = as_str(sample_sub_df_0[col_name_2]) == as_str(sample_sub_df_0[col_name_3])
+                test_series_0 = sample_sub_df_0[col_name_2].astype(str) == sample_sub_df_0[col_name_3].astype(str)
             else:
                 test_series_0 = sample_sub_df_0[col_name_2] == sample_sub_df_0[col_name_3]
             test_series_0 = test_series_0 | (sample_sub_df_0[col_name_2].isna() & sample_sub_df_0[col_name_3].isna())
@@ -994,7 +994,7 @@ class BinaryTestsMixin(CheckerState):
             # Test on a sample of the rows where bin_col has value 1
             if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
                     sample_sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_1 = as_str(sample_sub_df_1[col_name_2]) == as_str(sample_sub_df_1[col_name_3])
+                test_series_1 = sample_sub_df_1[col_name_2].astype(str) == sample_sub_df_1[col_name_3].astype(str)
             else:
                 test_series_1 = sample_sub_df_1[col_name_2] == sample_sub_df_1[col_name_3]
             test_series_1 = test_series_1 | (sample_sub_df_1[col_name_2].isna() & sample_sub_df_1[col_name_3].isna())
@@ -1019,8 +1019,8 @@ class BinaryTestsMixin(CheckerState):
 
             # Todo: this handles when the dtype is 'category', but it may be faster to treat as category
             if sub_df_0[col_name_2].dtype.name == 'category' or sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_0 = as_str(sub_df_0[col_name_2]) == as_str(sub_df_0[col_name_3])
-                test_series_1 = as_str(sub_df_1[col_name_2]) == as_str(sub_df_1[col_name_3])
+                test_series_0 = sub_df_0[col_name_2].astype(str) == sub_df_0[col_name_3].astype(str)
+                test_series_1 = sub_df_1[col_name_2].astype(str) == sub_df_1[col_name_3].astype(str)
             else:
                 test_series_0 = sub_df_0[col_name_2] == sub_df_0[col_name_3]
                 test_series_1 = sub_df_1[col_name_2] == sub_df_1[col_name_3]
