@@ -40,7 +40,9 @@ class DisplayMixin(CheckerState):
     # Public helper methods about the tool itself
     # ------------------------------------------------------------------
     def get_test_list(self) -> list[str]:
-        """Return the list of implemented test IDs."""
+        """
+        Return the IDs of all implemented checks, in the order they are executed.
+        """
         return [test_id for test_id, definition in self.test_dict.items() if definition.implemented]
 
     def get_test_descriptions(self) -> dict:
@@ -52,7 +54,12 @@ class DisplayMixin(CheckerState):
         }
 
     def get_test_catalog(self) -> list[TestMetadata]:
-        """Return typed metadata for all implemented consistency checks."""
+        """
+        Return typed metadata for every implemented check.
+
+        Returns:
+            One `TestMetadata` per check, with its ID, descriptions and flags (short list, fast, code/ID).
+        """
         return [
             metadata_from_definition(test_id, definition)
             for test_id, definition in self.test_dict.items()
@@ -88,11 +95,22 @@ class DisplayMixin(CheckerState):
                     print(f"{filler} {line}")
 
     def get_patterns_shortlist(self) -> list[str]:
-        """Return IDs of tests included in the short list."""
+        """
+        Return the IDs of the checks whose patterns (without exceptions) are shown by default.
+
+        Patterns found by the other checks are common in most datasets, so they are only listed when
+        `show_short_list_only=False` is passed to `get_patterns_list()` or `display_detailed_results()`.
+        Exceptions are always reported, whatever the check.
+        """
         return [test_id for test_id, definition in self.test_dict.items() if definition.shortlist]
 
     def get_tests_for_codes(self) -> list[str]:
-        """Return IDs of tests related to code/ID style values."""
+        """
+        Return the IDs of the checks specific to code or ID values.
+
+        These checks treat individual characters as meaningful (for example the prefix of `X7333`). Skip them with
+        `check_data_quality(include_code_tests=False)` when no column holds codes or IDs.
+        """
         return [test_id for test_id, definition in self.test_dict.items() if definition.code]
 
     def demo_test(self, test_id: str, include_nulls: bool = False) -> None:
@@ -164,12 +182,11 @@ class DisplayMixin(CheckerState):
 
     def display_next(self):
         """
-        This may be used where there are many results, and we wish to view detailed descriptions of all or most of
-        these. This API calls display_detailed_results() for one test at a time, for each test that identified at least
-        one pattern (with or without exceptions) during the last call to check_data_quality(). This allows, when working
-        with notebooks, for output to be spread over multiple cells, which can make viewing it simpler. Note though,
-        where many tests flag patterns, in most cases only a subset of these would be useful to examine in detail,
-        though this varies for different projects.
+        Display the detailed results of the next check that found something.
+
+        Each call shows the findings of one check, in execution order, by calling `display_detailed_results()` for it.
+        This spreads long output over several notebook cells. It prints "No further test results" once every check with
+        findings has been shown.
         """
 
         if self.current_display_test >= len(self.found_tests):
@@ -190,19 +207,17 @@ class DisplayMixin(CheckerState):
         self.display_detailed_results(test_id_list=[test_id], max_shown=25)
         self.current_display_test += 1
 
-    def display_least_flagged_rows(self, with_results=True, n_rows=10):
+    def display_least_flagged_rows(self, with_results: bool = True, n_rows: int = 10) -> None:
         """
-        This displays the n_rows rows from the original data with the lowest scores. These are the rows with the least
-        flagged issues. This may be called to provide context for the flagged rows. In rare cases, some returned rows
-        may have non-zero scores, if all or most rows in the dataset are flagged at least once.
+        Display the rows with the lowest outlier scores.
 
-        with_results: bool
-            If with_results is False, this displays a single dataframe showing the appropriate subset of the original
-            data. If with_results is True, this displays a dataframe per original row, up to n_rows. For each, the
-            original data is shown, along with all flagged issues, across all tests on all features.
+        These are the most typical rows, and give context for the flagged ones. If most rows are flagged at least once,
+        some of the rows shown may have non-zero scores.
 
-        n_rows: int
-            The maximum number of original rows to present.
+        Args:
+            with_results: If True, show one table per row with the original values and any checks that flagged it.
+                If False, show the rows in a single table with their scores.
+            n_rows: Maximum number of rows to show. At most 10 rows are shown when `with_results` is True.
         """
 
         sorted_df = self.test_results_df.sort_values('FINAL SCORE', ascending=True)
@@ -216,16 +231,17 @@ class DisplayMixin(CheckerState):
             else:
                 print(df)
 
-    def display_most_flagged_rows(self, with_results=True, n_rows=10):
+    def display_most_flagged_rows(self, with_results: bool = True, n_rows: int = 10) -> None:
         """
-        This is similar to display_least_flagged_rows, but displays the rows with the most identified issues.
+        Display the rows with the highest outlier scores.
 
-        with_results: bool
-            If True, the flagged rows will be display in separate tables, with additional rows indicating which tests
-            flagged which columns. If False, all displayed rows will be displayed in a single table; the flagged
-            columns will be highlighted, but there will not be an indication of which tests flagged them.
-        n_rows: int
-            The maximum number of original rows to present.
+        Only rows flagged at least once are shown.
+
+        Args:
+            with_results: If True, show one table per row with the original values and, below them, which checks
+                flagged which columns. If False, show the rows in a single table, highlighting flagged cells in
+                notebooks.
+            n_rows: Maximum number of rows to show. At most 10 rows are shown when `with_results` is True.
         """
 
         if self.test_results_df is None or len(self.test_results_df) == 0:
@@ -249,79 +265,48 @@ class DisplayMixin(CheckerState):
 
     def display_detailed_results(
             self,
-            test_id_list=None,
-            col_name_list=None,
-            issue_id_list=None,
-            pattern_id_list=None,
-            row_id_list=None,
-            show_patterns=True,
-            show_exceptions=True,
-            show_short_list_only=True,
-            include_examples=True,
-            plot_results=True,
-            max_shown=-1,
-            save_to_disk=False,
-            output_folder=None,
-            ):
+            test_id_list: list[str] | None = None,
+            col_name_list: Collection[str] | None = None,
+            issue_id_list: list[int] | None = None,
+            pattern_id_list: list[int] | None = None,
+            row_id_list: list[int] | None = None,
+            show_patterns: bool = True,
+            show_exceptions: bool = True,
+            show_short_list_only: bool = True,
+            include_examples: bool = True,
+            plot_results: bool = True,
+            max_shown: float = -1,
+            save_to_disk: bool = False,
+            output_folder: str | None = None,
+            ) -> None:
         """
-        Loops through each test specified, and each feature specified, and presents a detailed description of each. If
-        filters are not specified, the set of identified patterns, with and without exceptions, can be very long in
-        some cases, and in these cases, the method will not be able to display them. In this case, additional filters
-        should be specified.
+        Display each pattern and exception found, in detail.
 
-        test_id_list: Array of test IDs
-            If specified, only these will be displayed. If None, all tests for which there is information to be display
-            will be displayed.
+        For each finding this shows the check and columns involved, a description, the number of exceptions,
+        example rows that were and were not flagged and, where available, plots. Without any filter, if more
+        findings exist than `max_shown`, a message explains how to narrow the results instead.
 
-        col_name_list: Array of column names, matching the column names in the passed dataframe.
-            If specified, only these will be displayed, though the display will include any patterns or exceptions that
-            include these columns, regardless of the other columns. If None, all columns for which there is information
-            to display will be displayed.
-
-        issue_id_list: Array of Issue IDs
-            If specified, only these exceptions will be displayed. If set, patterns will not be shown.
-
-        pattern_id_list: Array of Pattern IDs
-            If specified, only these patterns will be displayed. If set, exceptions will not be shown.
-
-        row_id_list: Array of ints, representing row numbers in the original dataset
-            If specified, only patterns or exceptions found for these rows will be displayed.
-
-        show_patterns: bool
-            If set True, patterns without exceptions will be displayed. If set False, these will not be displayed.
-
-        show_exceptions: bool
-            If set True, patterns with exceptions will be displayed. If set False, these will not be displayed.
-
-        show_short_list_only: bool.
-            If False, all identified patterns matching the other parameters will be returned. If True, only the tests
-            that are most relevant (least noisy) will be displayed as patterns. This does not affect the exceptions
-            displayed.
-
-        include_examples: bool
-            If True, for any patterns found, examples of a random set of rows (other than cases where row order is
-            relevant, in which case a consecutive set of rows will be used), with the relevant set of columns, will
-            be display. As well, for any patterns found with exceptions, both a random set of rows that are not flagged
-            and that are flagged will be displayed, also with only the relevant columns. May be set False to save
-            time and space displaying the results.
-
-        plot_results: bool
-            If True, for any tests where plots are possible, one or more plots will be shown displaying the patterns.
-            If exceptions are found, they will typically be shown in red. May be  set False to save
-            time and space displaying the results.
-
-        max_shown: int
-            The maximum total number of patterns and exceptions shown. If no filters are set, the function will return
-            if more patterns and/or exceptions are available. If filters are set, and the number is larger, the first
-            max_shown will be set. If set to -1, a default will be used, which considers if plots and examples are
-            to be displayed. The default is 200 without plots or examples, 100 with either, and 50 with both.
-
-        save_to_disk: bool
-            If set True, output will be written to a file on disk
-
-        output_folder: str
-            Used only if save_to_disk is True. Indicates the file path to use for the output. If not specified, the
-            current folder will be used.
+        Args:
+            test_id_list: Only show findings of these checks. By default all checks with findings are shown.
+            col_name_list: Only show findings that involve at least one of these columns.
+            issue_id_list: Only show these exceptions (the `Issue ID` column of `get_exceptions_list()`).
+                Patterns are then not shown.
+            pattern_id_list: Only show these patterns (the `Pattern ID` column of `get_patterns_list()`).
+                Exceptions are then not shown.
+            row_id_list: Only show exceptions that flag at least one of these 0-based row numbers. Patterns are then
+                not shown.
+            show_patterns: Show patterns found without exceptions.
+            show_exceptions: Show patterns found with exceptions.
+            show_short_list_only: Only show patterns without exceptions for checks in the short list
+                (`get_patterns_shortlist()`). Exceptions are always shown.
+            include_examples: Show example rows for each finding.
+            plot_results: Show plots for the checks that have them.
+            max_shown: Maximum number of findings to show. With -1, the limit is 200 (50,000 when saving to disk),
+                halved when examples are included and halved again when plots are included.
+            save_to_disk: Write the output to `Data_consistency.html` (with any plots as PNG files beside it)
+                instead of displaying it.
+            output_folder: Folder for the HTML report when `save_to_disk` is True. Defaults to `Output` in the
+                current working directory.
         """
 
         if (self.orig_df is None) or (len(self.orig_df) == 0):

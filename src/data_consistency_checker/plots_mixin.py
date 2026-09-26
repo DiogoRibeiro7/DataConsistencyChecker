@@ -26,16 +26,15 @@ class PlotsMixin(CheckerState):
     """Mixin providing plotting utilities for :class:`DataConsistencyChecker`."""
 
 
-    def check_data_quality_by_feature_pairs(self, max_features_shown=30):
+    def check_data_quality_by_feature_pairs(self, max_features_shown: int = 30) -> None:
         """
-        An alternative to check_data_quality(). This runs similar (though fewer) tests on pairs of features and, for
-        each test, presents a matrix indicating for what fraction of the rows a given relationship between the features
-        holds true.
+        Show how often simple relationships hold between each pair of numeric columns.
 
-        max_features_shown: int
-            Where there are many features, it can be infeasible to show a heatmap of all features. However, it may be
-            useful to render a heatmap for the first features. max_features_shown specifies how many features, at most,
-            will be included in the heatmaps rendered.
+        An alternative view to `check_data_quality()`: for each of a few relationships, it displays a heatmap of
+        the fraction of rows for which the relationship holds, for every pair of numeric columns.
+
+        Args:
+            max_features_shown: Maximum number of numeric columns included in each heatmap.
         """
 
         def handle_results(matrix):
@@ -173,7 +172,10 @@ class PlotsMixin(CheckerState):
 
     def quick_report(self):
         """
-        A convenience method, which calls several other APIs, to give an overview of the results in a single API.
+        Display an overview of the results in one call.
+
+        Shows the patterns list, the patterns by check and column, the exceptions list and summaries, and plots of
+        the outlier-score distributions by row, column and check.
         """
 
         def display_api_results(df, title):

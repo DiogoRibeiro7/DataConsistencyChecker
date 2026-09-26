@@ -1,494 +1,114 @@
 # DataConsistencyChecker
 
 [![CI](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/python.yml)
+[![Docs](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/docs.yml/badge.svg?branch=main)](https://diogoribeiro7.github.io/DataConsistencyChecker/)
 [![codecov](https://codecov.io/gh/DiogoRibeiro7/DataConsistencyChecker/branch/main/graph/badge.svg)](https://codecov.io/gh/DiogoRibeiro7/DataConsistencyChecker)
 ![Python](https://img.shields.io/badge/python-3.10--3.14-blue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A Python tool for automated exploratory data analysis (EDA) and interpretable outlier detection. It performs **164 distinct tests** on tabular datasets, identifying patterns in the data and any exceptions to these patterns. The tool works seamlessly with categorical, numeric, and datetime data without requiring encoding or binning.
+**Interpretable data-quality checks, pattern discovery and outlier detection for tabular data.**
 
-## Key Features
+DataConsistencyChecker runs 158 simple, explainable checks over a pandas DataFrame. Each check looks for a
+pattern in a column, a pair of columns or a larger set of columns (values always positive, one column the
+product of two others, two dates always a week apart, and so on) and reports the rows that break it. Rows flagged
+by many checks are the most unusual rows in the dataset, and every flag comes with an explanation.
 
-- **164 Comprehensive Tests**: Examines single columns, pairs of columns, and larger column sets
-- **Interpretable Results**: Every test is straightforward and explainable
-- **Multiple Data Types**: Handles categorical, numeric, datetime, and string data natively
-- **Pattern Discovery**: Identifies consistent patterns and their exceptions
-- **Outlier Scoring**: Scores rows based on frequency of anomalies across tests
-- **Rich Visualizations**: Matplotlib and Seaborn integration for pattern visualization
-- **No Preprocessing Required**: Works on original, unencoded data
-- **Modular Architecture**: Organized using mixins for display, plotting, and synthetic data generation
+📖 **Documentation: <https://diogoribeiro7.github.io/DataConsistencyChecker/>**
 
-## Background
+## Features
 
-The central idea of the tool is to automate the tests that would be done by a person examining a dataset and trying to determine the patterns within the columns, between the columns, and between the rows (in cases where there is some meaning to the order of the rows). Intuitively, the tool essentially does what a person, studying a new dataset, would do, but automatically. This does not remove the need to do manual data exploration, to run other EDA tools, and to, where the goal is identifying outliers, run other forms of outlier detection. But, the tool does cover much of the work identifying the patterns in the data and the exceptions to these, with the idea that these are two of the principle tasks to understand a dataset. The tool allows users to perform this work quicker, more exhaustively and consistently, and covering more tests than would normally be done. 
-
-The tool executes a large set of tests over a dataset. Each of the tests is run over either single columns (for example, checking for rare, unsually small or large values, etc), over pairs of columns (for example checking if one column is consistently larger than the other, contains similar characters (in the case of code or ID string values), etc.), or over larger sets of columns (for example, checking if one column tends to be the sum, or mean, of another set of columns). As an example, one test examines the number of decimal digits typically found in each numeric column. If a column consistently contains, say, four decimal digits, with no exceptions, this will be reported as a strong pattern without exceptions; if the data in this column nearly always has four decimal digits, with a small number of expections (for example having eight decimal digits), this will be reported as a strong pattern with exceptions. In this example, this suggests the identified rows may have been collected or processed in a different manner than the other rows. And, while this may not be interesting in itself, where rows are flagged multiple times for this or other issues, users may become progressively more confident that the repeatedly-flagged rows are, in fact, in some sense different. 
-
-While all of the individual tests are straight-forward (and therefore interpretable) there are real advantages to running them within a single package, notably the ability to identify rows that are significantly different from the majority, even where this is only evident from multipe subtle deviations. Running a large set of tests fascilitates this, as it tends to pick up well where some instances are atypical, even where this is in a sense not normally tested. Further, running many tests allows for an inuitive scoring method, as each row is scored simply based on the number of times it has been flagged. Any rows with high scores were, then, flagged many times for different exceptions and are therefore quite reasonably likely to be true outliers. 
-
-Another signicant advantage of running multiple tests in a single package is the ability to ammortize processing work over many tests. Much of the computation necessary for the tests is shared among two or more tests and consequently running many tests on the same dataset can result in increased performance, in terms of time per test. 
-
-### EDA
-
-DataConsistencyChecker may be used for exploratory data analsys simply by running the tool and examining the patterns and exceptions to the patterns that are found. For EDA purposes, the patterns found may be equally of interest, regardless of whether exceptions to the patterns were found or not, but often the fact that exceptions exist or do not is itself relevant to understanding the patterns in the data, and therefore the data itself. 
-
-Exploratory data analysis may be run for a variety of purposes, but generally most relate to one of two high-level purposes: ensuring the data is of sufficient quality to build a model (or can be made to be of sufficient quality after removing any necessary rows or columns, or replacing any necessary individual values), and gaining insights into the data in order to help build appropriate models. This tool may be of assistence for both these purposes.  
-
-The tool performs many tests not typical of most EDA tools, which tend to look at data distributions, correlations, missing values, and some other concerns.  While many tests in this package have some overlap with other EDA tools, the majority do not, and DataConsistencyChecker can compliment outher EDA tools well.  
-
-### Outlier Detection
-
-The majority of outlier detectors work either on strictly numeric data, or on strictly categorical data, with numeric outlier detectors seeking to identify unusual rows as points in high-dimensional space far from the majority of other rows, and with categorical outlier detectors seeking to identify unusual combinations of values. Outlier detectors that assume numeric data require encoding categorical columns, and detectors that assume categorical data require binning the numeric columns. These can work well, but some signal is lost in both cases. DataConsistencyChecker handles categorical, numeric, and date/time data equally, without requiring encoding or binning data, specifiying distance metrics, or other pre-processing required by many detectors. DataConsistencyChecker's tests each run on the original, unprocessed data, taking advantage of this to find often more subtle anomalies in the data. 
-
-A major drawback of most outlier detectors is they can be very much blackboxes. The detectors are very useful, but can be uninterpretable, especially with high-dimensional datasets: it can be difficult to confirm the rows are more unusual than the majority of rows or to even determine why they were flagged as outliers. DataConsistencyChecker's tests are each interpretable, and the final scoring system is completely transparent. 
-
-Running the tool, it's common for rows that are unusual to be flagged multiple times. This allows users to evaluate the outlierness of any given row based on the number of times it was flagged for issues, relative to the other rows in the dataset. For example, if a row contains some values that are unusually large, as well as some strings with unusual characters, strings of unusual lengths, time values at unusual times of day, and rare values in categorical columns, the row will then be flagged multiple times, giving it a relatively high outlier score. 
-
-As this tool is limited to interpretable outlier detection methods, it does not test for the multi-dimensional outliers detected by other algorithms such as Isolation Forest, Local Outlier Factor, Angle-based Outlier Detection, Cluster-based outlier detection, etc. These outlier detection algorithms should generally also be executed to have a full understanding of the outliers present in the data. 
-
-The unusual data found may be due to data collection errors, mixing different types of data together, or other issues that may be considered errors, or that may be informative. Some may point to forms of feature engineering, which may be useful for downstream tasks. 
-
-
-## Requirements
-
-- Python 3.10–3.14
-- Poetry for dependency management
-
-### Technology Stack
-
-| Component | Libraries |
-|-----------|-----------|
-| **Data Processing** | pandas, numpy |
-| **Machine Learning** | scikit-learn |
-| **Visualization** | matplotlib, seaborn |
-| **Statistics** | scipy |
-| **Date Handling** | dateutil |
-| **Testing** | pytest |
+- **Interpretable** — every finding names the check, the columns and the rows, in plain language.
+- **Broad** — single columns, pairs of columns, larger column sets and row order.
+- **Mixed data** — numeric, categorical, string and date/time columns, with no encoding or binning.
+- **Transparent scores** — a row's outlier score is the number of exceptions that flag it.
+- **For EDA and outlier detection** — patterns without exceptions describe the data; exceptions point to
+  unusual rows.
+- **Automation-friendly** — immutable configuration, JSON-safe reports, a CLI and structured failure
+  diagnostics.
 
 ## Installation
 
-The project uses [Poetry](https://python-poetry.org/) for dependency management.
-
-### Standard Installation (with internet access)
+Python 3.10–3.14. The package is not on PyPI; install it from GitHub:
 
 ```bash
+pip install "git+https://github.com/DiogoRibeiro7/DataConsistencyChecker.git"
+```
+
+or from a clone, with [Poetry](https://python-poetry.org/):
+
+```bash
+git clone https://github.com/DiogoRibeiro7/DataConsistencyChecker.git
+cd DataConsistencyChecker
 poetry install
 ```
 
-### Offline Installation
-
-If the environment has no internet access, pre-download the required wheels listed in `requirements.txt` and install them with:
-
-```bash
-pip install --no-index --find-links /path/to/wheels -r requirements.txt
-```
-
-### Usage
-
-Once installed, use the package import:
+## Quickstart
 
 ```python
 from data_consistency_checker import DataConsistencyChecker
-```
-The historical import remains available for compatibility:
 
-```python
-from check_data_consistency import DataConsistencyChecker
-```
+dc = DataConsistencyChecker()
+dc.init_data(df)                        # any pandas DataFrame
+dc.check_data_quality()                 # run every check
 
-
-### Test Catalog
-
-Use the typed catalog API to inspect the implemented checks without depending on internal tuple positions:
-
-```python
-catalog = dc.get_test_catalog()
-for test in catalog:
-    print(test.test_id, test.description, test.fast)
+dc.summarize_patterns_and_exceptions()  # what was found, per check
+dc.get_exceptions_list()                # the patterns with exceptions
+dc.display_detailed_results()           # each finding, with examples and plots
+dc.display_most_flagged_rows()          # the most unusual rows, and why
 ```
 
-Each entry is an immutable `TestMetadata` object containing the test ID, descriptions, shortlist flag, implementation status, fast-test flag, and code/ID semantics. Callable implementation details remain private.
-
-The CLI exposes the same catalog:
-
-```bash
-data-consistency-checker list-tests --details
-data-consistency-checker list-tests --details --json
-```
-
-## One-Shot Analysis API
-
-For reproducible pipelines, configure and run an analysis in one call:
+One call, returning a JSON-safe report:
 
 ```python
 from data_consistency_checker import DataConsistencyConfig, analyze
 
-config = DataConsistencyConfig(
-    execute_tests=("MISSING_VALUES", "VERY_LARGE"),
-    known_date_cols=("event_date",),
-    max_combinations=50_000,
-    verbose=-1,
-)
-
-report = analyze(df, config)
+report = analyze(df, DataConsistencyConfig(verbose=-1))
 payload = report.to_dict()
 ```
 
-`DataConsistencyConfig` is immutable. It captures constructor settings, date-column overrides, test filters, contamination thresholds, parallel execution, and fail-fast behavior in one reproducible object. Stateful operations such as appending to an existing analysis or resuming from a test index remain available through the lower-level `DataConsistencyChecker` API.
-
-### Reusable Configuration Files
-
-`DataConsistencyConfig` can be serialized and reconstructed with `to_dict()` and `from_dict()`, or loaded directly from JSON/TOML:
-
-```toml
-[data_consistency_checker]
-execute_tests = ["MISSING_VALUES", "VERY_LARGE"]
-known_date_cols = ["event_date"]
-max_combinations = 50000
-verbose = -1
-```
-
-```bash
-data-consistency-checker check data.csv \
-  --config checker.toml \
-  --output report.json
-```
-
-JSON files use the same field names at the top level. CLI flags explicitly supplied by the user override values from the config file; unspecified CLI options leave the file configuration unchanged. This makes the same checked-in configuration reusable from Python, local shell commands, and CI.
-
-## Command-Line Interface
-
-After installation, datasets can be checked without writing Python code:
+From the command line (CSV, TSV, JSON or JSONL):
 
 ```bash
 data-consistency-checker check data.csv --output report.json
+data-consistency-checker list-tests --details
 ```
 
-Run only selected checks:
+See the [quickstart](https://diogoribeiro7.github.io/DataConsistencyChecker/getting-started/quickstart/) for a
+complete worked example.
+
+## How it works
+
+Each check reports, for each column or set of columns it examines, one of three outcomes: a **pattern without
+exceptions** (the property holds in every row), a **pattern with exceptions** (it holds in almost every row, and
+the few rows that break it are flagged), or nothing. The *contamination level*, 0.5% of the rows by default,
+sets how many rows may break a pattern for it to still count.
+
+![A row flagged by three checks](docs/assets/images/outlier-row.jpg)
+
+Findings can be reviewed as lists and summaries, displayed in detail with example rows and plots, exported as
+HTML, pruned with `clear_results()`, and turned into per-row outlier scores. The
+[user guide](https://diogoribeiro7.github.io/DataConsistencyChecker/guide/how-it-works/) explains each step, and
+the [checks catalog](https://diogoribeiro7.github.io/DataConsistencyChecker/checks/) describes every check.
+
+## Examples
+
+The [`Demo Notebooks`](Demo%20Notebooks/) folder has worked examples on real datasets (California Housing,
+Breast Cancer, Hypothyroid, OpenML datasets) and notebooks on specific features; see the
+[examples page](https://diogoribeiro7.github.io/DataConsistencyChecker/examples/) for a guide.
+
+## Development
 
 ```bash
-data-consistency-checker check data.csv \
-  --tests MISSING_VALUES VERY_LARGE RARE_VALUES \
-  --output report.json
+poetry install
+poetry run ruff check src
+poetry run pytest
+poetry install --with docs && poetry run mkdocs serve   # documentation preview
 ```
 
-List the implemented test IDs:
+CI runs Ruff, mypy, the tests on Python 3.10–3.14 with coverage, a package build and a strict documentation
+build; the documentation is published to GitHub Pages from `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+the full workflow, including how to add a check.
 
-```bash
-data-consistency-checker list-tests
-```
+## License
 
-The package can also be invoked with Python:
-
-```bash
-python -m data_consistency_checker check data.csv --fast-only
-```
-
-The CLI currently accepts CSV, TSV, JSON, and JSONL input. Use `--date-column` repeatedly to mark known date columns, `--exclude-tests` to omit checks, `--max-combinations` to cap combinatorial work, and `--raise-on-error` for fail-fast execution. When `--output` is supplied, the JSON file contains the same structured `DataConsistencyReport` available through `get_report()`.
-
-## Getting Started
-```python
-import pandas as pd
-import sklearn.datasets as datasets
-from data_consistency_checker import DataConsistencyChecker
-
-data = datasets.fetch_california_housing()
-df = pd.DataFrame(data.data, columns=data.feature_names)
-
-dc = DataConsistencyChecker()
-dc.init_data(df)
-dc.check_data_quality()
-dc.display_detailed_results()
-```
-
-It is necessary to first instantiate a DataConsistencyChecker object, call init_data() with the data to be cheked as a pandas dataframe, and call check_data_quality(). After this is complete, there are a number of additional APIs available to examine the results and assess the findings, including APIs to summarize the patterns and exceptions by row, column, and test, to describe the most-flagged rows, and get the total score per row. In this example, display_detailed_results() is called, which displays each pattern and each exception found in detail, including examples of values for the relevant columns flagged and not flagged, and plots where possible. 
-
-## Example with More Output
-```python
-import pandas as pd
-from data_consistency_checker import DataConsistencyChecker
-
-dc = DataConsistencyChecker()
-dc.init_data(df)
-dc.check_data_quality()
-dc.summarize_patterns_and_exceptions()
-dc.display_detailed_results(test_id_list=['LARGE_GIVEN_DATE'])
-```
-
-Where many patterns, with or without exceptions, are found, it may be impractical to simply call display_detailed_results() to view detailed descriptions of each pattern found. In these cases, it is possible to call an API such as summarize_patterns_and_exceptions() (there are several such APIs to list or summarize the findings) first to get an overview of what was found. In some cases, this overview may be all that is necessary, without looking at the findings in detail. However, where users wish to drill down further, the display_detailed_results() API may be called specifying a set of tests, columns, row ids, pattern ids, or exceptions ids, which allows you to focus on those findings interesting for your data and goals. In this example, we assume LARGE_GIVEN_DATE was one of the tests identified by summarize_patterns_and_exceptions(), and is of interest to the user. 
-
-## 2nd Example with More Output
-```python
-import pandas as pd
-from data_consistency_checker import DataConsistencyChecker
-
-dc = DataConsistencyChecker()
-dc.init_data(df)
-dc.check_data_quality()
-dc.summarize_patterns_and_exceptions()
-dc.display_next()
-```
-The display_next() API will output the results (or a sample of the results if there are many) for a single test. If this is called repeatedly, it will, on each execution, display the results for the next test for which there are results, ordering the tests in the same order in which they are executed. Where it is desirable to save the results in a notebook, a new cell may be used for the next call to display_next(). Where the results may be over-written (and this is preferred where there are many results to avoid memory issues), display_next() may be called repeatedly in the same cell, presenting the results for the next test each time. 
-
-
-## 3rd Example with More Output
-```python
-import pandas as pd
-from data_consistency_checker import DataConsistencyChecker
-
-dc = DataConsistencyChecker()
-dc.init_data(df)
-dc.check_data_quality()
-dc.display_detailed_results(save_to_disk=True)
-```
-Saving to disk will create an HTML file called Data_Consistency.html with the full results. The folder may be specified for this. This can contain a large volume of output as it does not need to be rendered within a notebook.
-
-## Test Categories
-
-DataConsistencyChecker organizes its 164 tests into several categories:
-
-### Single Column Tests (15+)
-- Missing values, rare values, unique values
-- Decimal digit consistency
-- Numeric properties (positive/negative, unusual magnitudes)
-- Column ordering (ascending/descending, monotonic)
-- Character patterns in strings
-- Date/time patterns (early dates, unusual months, consistent gaps)
-
-### Pair of Columns Tests (60+)
-- **Value Relationships**: SAME_VALUES, SAME_OR_CONSTANT, UNIQUE_PAIR
-- **Missing Patterns**: MATCHED_MISSING, OPPOSITE_MISSING
-- **Numeric Relationships**: SUM, DIFFERENCE, PRODUCT, RATIO, ROUNDED
-- **Correlations**: CORRELATED_NUMERIC, CORRELATED_DATES
-- **String Relationships**: B_CONTAINS_A, SAME_FIRST_WORD, similar prefixes/suffixes
-- **Ordering**: One column consistently larger/smaller than another
-
-### Multi-Column Tests (40+)
-- **Binary Operations**: BINARY_AND, BINARY_OR, BINARY_XOR
-- **Aggregations**: SUM_OF_COLUMNS, MEAN_OF_COLUMNS, MAX_OF_COLUMNS, MIN_OF_COLUMNS
-- **Machine Learning**: DECISION_TREE_CLASSIFIER, LINEAR_REGRESSION (predictability tests)
-- **Pattern Combinations**: Complex relationships across multiple features
-
-### Specialized Tests
-- Code/ID value analysis (structured strings, product codes)
-- Character analysis (common words, special characters, patterns)
-- Temporal patterns and anomalies
-- Feature engineering opportunities
-
-## Key APIs
-
-### Initialization & Execution
-```python
-dc = DataConsistencyChecker(
-    iqr_limit=3.5,           # IQR threshold for outliers
-    idr_limit=1.0,           # Interdecile range threshold
-    max_combinations=100_000, # Max column combinations to test
-    verbose=1                 # Verbosity level
-)
-dc.init_data(df, known_date_cols=None)
-dc.check_data_quality(
-    execute_list=None,        # Run specific tests
-    exclude_list=None,        # Skip specific tests
-    fast_only=False,          # Run only fast single-column tests
-    run_parallel=False,       # Enable parallel execution
-    raise_on_error=False      # Retain failed-test diagnostics and continue
-)
-```
-
-### Result Analysis
-```python
-dc.get_patterns_list()                    # List all identified patterns
-dc.get_exceptions_list()                  # List all exceptions to patterns
-dc.summarize_patterns_and_exceptions()    # Overview of findings
-dc.display_detailed_results()             # Detailed display with plots
-dc.get_outlier_scores()                   # Raw row-by-row flag counts
-dc.get_outlier_scores(normalized=True)     # Scores normalized to [0, 1]
-dc.get_outlier_score_summary()             # Raw + normalized scores as a DataFrame
-dc.display_most_flagged_rows()            # Show most anomalous rows
-dc.quick_report()                         # Convenience method for summary
-dc.get_execution_failures()               # Structured DataExcept failures from the latest run
-dc.get_report()                           # Serializable snapshot of the full analysis
-```
-
-### Structured Report API
-
-For pipelines, services, experiment tracking, or persisted analysis results, use `get_report()` instead of reading internal DataFrames directly:
-
-```python
-report = dc.get_report()
-payload = report.to_dict()
-```
-
-`DataConsistencyReport` contains dataset dimensions, executed test IDs, discovered patterns, exceptions, raw and normalized row scores, and structured execution failures. `to_dict()` returns strict JSON-safe primitives, including normalization of NumPy scalars, dates, missing values, and non-finite floating-point values.
-
-The report is a snapshot. Mutating the returned dictionary does not mutate the checker state.
-
-### Structured Test Execution Failures
-
-DataConsistencyChecker distinguishes data exceptions discovered by its tests from failures of the test implementations themselves. When an individual consistency test raises unexpectedly, the default behavior is to continue the audit and retain a structured DataExcept envelope:
-
-```python
-dc.check_data_quality()
-
-for failure in dc.get_execution_failures():
-    print(failure["test_id"])
-    print(failure["error"]["type"])
-    print(failure["error"].get("cause"))
-```
-
-Each retained failure is represented as an `OutlierDetectionError` and preserves the original exception as its cause. This makes execution failures machine-readable without requiring callers to parse terminal output. For batch or CI workflows where any failed consistency test should stop execution immediately, use:
-
-```python
-dc.check_data_quality(raise_on_error=True)
-```
-
-In fail-fast mode the structured `OutlierDetectionError` is raised with the original exception chained as `__cause__`.
-
-### Outlier Score Semantics
-
-The historical outlier score is a transparent raw count: each exception-bearing pattern that flags a row contributes one point. This remains the default behavior of `get_outlier_scores()`.
-
-For comparisons across runs that produce different numbers of exception-result columns, use `get_outlier_scores(normalized=True)`. The normalized score is
-
-\[
-\text{normalized score}_i =
-\frac{\text{raw score}_i}{\text{number of active exception-result columns}}.
-\]
-
-It is therefore bounded between 0 and 1. A value of 0.5 means that the row was flagged by half of the active exception-bearing pattern checks in that run. It is **not** a probability, calibrated anomaly probability, p-value, or statistical significance measure.
-
-`get_outlier_score_summary()` returns both forms in a DataFrame with columns `FINAL SCORE` and `NORMALIZED SCORE`.
-
-### Utility Methods
-```python
-dc.generate_synth_data()                  # Create synthetic test datasets
-dc.demo_test(test_id)                     # Demonstrate a specific test
-dc.clear_results() / dc.restore_results() # Manual result management
-```
-
-## Example Notebooks
-
-**APIs Demo**
-
-The [APIs Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_APIs.ipynb) notebook provides examples of many of the APIs provided with the tool, though many of more common APIs are covered by the California Housing and Breast Cancer demo notebooks, and are not covered here. This notebook goes through an example with the Boston Housing dataset. Note, in some cases the background coloring in the displayed notebooks will not render in github.
-
-Each of the notebooks provides examples of some of the plots available. 
-
-Example display of a row identified as an outler:
-
-![example](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/images/img1.jpg)
-
-<br>
-
-**Hypothyroid Demo**
-
-The [Hypothyroid Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) notebook is a simple example, examining a dataset, getting a list of the patterns and exceptions found, and getting more detail on a subset of these that appear most interesting.
-
-<br>
-
-**California Housing Demo**
-
-The [California Housing Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) notebook goes through a more typical example examining a dataset. This focusses on the quick_report() API, which is a convenience method wrapping several other APIs, to give an overview of the findings. After this, display_detailed_results() is called to provide more information on specific issues flagged.  
-
-<br>
-
-**Breast Cancer Demo**
-
-The [Breast Cancer Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Real_Breast_Cancer.ipynb) notebook goes though another typical example of examinging a dataset, calling somewhat different APIs than the [California Housing Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) example. 
-
-<br>
-
-**Multiple Exectutions Demo**
-
-The [Multiple Exectutions Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) notebook demonstrates examples of working with the tool in a couple different ways: 1) where a set of tests are run, then another set of tests are run, replacing the first results, and another case where the additional tests append to the set of results found, gradually buiding up a complete set, potentially for further anaysis, or for a final report. 
-
-<br>
-
-**OpenML Demo**
-
-The [OpenML](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_OpenML_Datasets.ipynb) notebook runs DataConsistencyChecker on several datasets from OpenML, and displays a small number of findings for each. In most cases, other patterns were also identified, which may or may not be interesting. In general, when using DataConsistencyChecker, there may be a step involved with examining the patterns discovered to identify the relevant ones, but this is typically quite quick and worthwhile to identify the interesting patterns. APIs are provided to assist with processessing patterns where many are discovered, with examples in the other notebooks.
-
-This notebook, for each dataset, runs the checker for a small number of tests, then displays some subset of the results found, often filtering the results to show only a single issue, or the issues related to a single feature. Many more patterns are found in each of these, but the purpose of the notebook is to provide examples of some of the patterns that can be found relatively often. 
-
-The tests are able to find instances where columns are correlated, where columns have identical values, where one column is equal, or approximately equal to the sum, product, ratio, or difference in two other coumns, where one column may be predicted from other columns using a linear regression or small decision tree, where columns are ordered with monotonically increasing values, or with cyclical patterns of values. 
-
-An example where two columns were found to be correlated with an exception:
-
-
-![example](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/images/img2.jpg)
-
-An example where one column was found to be the sum of two other columns with two exceptions:
-
-
-![example](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/images/img3.jpg)
-
-
-**Test_Demo API Demo**
-
-The [Test_Demo API Demo](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Test_Method.ipynb) notebook demonstrates the test_demo() API, which provides examples of a specified test ID using the provided synthetic data. 
-
-## Full API
-For a description of the APIs, see: [Full API Documentation](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/api.md)
-
-## Project Structure
-
-The repository uses a standard `src/` package layout:
-
-```
-DataConsistencyChecker/
-├── src/
-│   ├── data_consistency_checker/
-│   │   ├── __init__.py             # Public API
-│   │   ├── checker.py              # Core checker and orchestration
-│   │   ├── checker_utils.py        # Shared utilities
-│   │   ├── test_registry.py        # Test metadata constants
-│   │   ├── display_mixin.py        # Result presentation
-│   │   ├── plots_mixin.py          # Visualization helpers
-│   │   ├── synth_data_mixin.py     # Synthetic-data helpers
-│   │   ├── results_mixin.py        # Result queries, summaries, and scoring
-│   │   ├── analysis_cache_mixin.py # Cached statistics and column-combination helpers
-│   │   ├── test_implementations/   # Category-specific test logic
-│   │   └── tests_definitions/      # Metadata for the 164 checks
-│   └── check_data_consistency/     # Legacy import compatibility
-├── tests/                          # Regression and integration tests
-├── docs/                           # API and conceptual documentation
-├── Demo Notebooks/                 # Worked examples
-├── .github/workflows/              # Continuous integration
-├── pyproject.toml                  # Package and tool configuration
-└── poetry.lock                     # Reproducible dependency lock
-```
-
-### Modular Architecture
-
-The public package is `data_consistency_checker`. `DataConsistencyChecker` owns dataset initialization, execution orchestration, scoring, result aggregation, and the public API. Category-specific checks are implemented through mixins, result access and scoring live in `ResultsMixin`, reusable cached statistics and column-set helpers live in `AnalysisCacheMixin`, and test metadata is kept separately from implementation code.
-
-The historical `check_data_consistency` import is retained as a compatibility package, but new code should import from `data_consistency_checker`.
-
-## Performance
-For notes on reducing the execution times of the analysis, refer to:
-[Performance Notes](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/performance.md)
-
-## Development & Testing
-
-### Running Tests
-
-The project includes comprehensive unit tests with 161 test files covering all 164 tests. After installing dependencies, you can run the automated test suite with:
-
-```bash
-poetry run pytest -q
-```
-
-For contributors and detailed information about the testing framework, see: [Notes on unit tests](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/unit_tests.md)
-
-### CI/CD
-
-The project uses GitHub Actions for continuous integration:
-- Automated testing across Python 3.10–3.14
-- Poetry lock-file validation before installation
-- Ruff linting and formatting checks
-- Mypy type checking
-- Pytest coverage runs on pull requests and pushes to `main`
-
-## Additional Documentation
-Notes on additional topics, including date columns, clearing issues, contamination levels, the sort order of the data, and the use of synthetic may be found at: [Additional Documentation](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/docs/additional_documentation.md)
-
+[MIT](LICENSE)
