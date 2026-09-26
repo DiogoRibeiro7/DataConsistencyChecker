@@ -4,7 +4,7 @@ site_url: https://diogoribeiro7.github.io/DataConsistencyChecker/
 repo_url: https://github.com/DiogoRibeiro7/DataConsistencyChecker
 repo_name: DiogoRibeiro7/DataConsistencyChecker
 edit_uri: edit/main/docs/
-copyright: Copyright &copy; 2026 Diogo Ribeiro &mdash; MIT License
+copyright: Copyright &copy; 2023&ndash;2024 Brett Kennedy, 2026 Diogo Ribeiro &mdash; MIT License
 
 theme:
   name: material
