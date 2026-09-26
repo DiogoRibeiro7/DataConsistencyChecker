@@ -200,7 +200,10 @@ def test_clear_all_exceptions_clears_exception_state() -> None:
 
     assert checker.results_summary_arr == []
     assert checker.exceptions_summary_df.empty
-    assert checker.test_results_df.empty
+    # Every row is kept, without any exception result column, and with a score of zero
+    assert len(checker.test_results_df) == 2
+    assert not any(" -- " in column for column in checker.test_results_df.columns)
+    assert checker.test_results_df["FINAL SCORE"].tolist() == [0, 0]
     assert checker.results_dict == {}
     assert len(checker.patterns_arr) == 2
 

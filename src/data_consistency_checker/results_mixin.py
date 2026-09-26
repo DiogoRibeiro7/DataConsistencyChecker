@@ -838,7 +838,7 @@ class ResultsMixin(CheckerState):
             # patterns_arr
             cols_list_arr = [self.col_to_original_cols_dict[x[1]] for x in self.patterns_arr]
             self.patterns_arr = [x for x, y in
-                                 zip(self.patterns_arr, cols_list_arr) if not set(x).intersection(set(col_name_list))]
+                                 zip(self.patterns_arr, cols_list_arr) if not set(y).intersection(set(col_name_list))]
 
             # patterns_df
             self.patterns_df = self.patterns_df[self.patterns_df['Column(s)'].apply(check_col_includes_list)]
@@ -870,8 +870,7 @@ class ResultsMixin(CheckerState):
 
         if pattern_id_list is not None:
             # patterns_arr
-            self.patterns_df.reset_index(drop=True)
-            row_nums = self.patterns_df[self.patterns_df['Pattern ID'].isin(pattern_id_list)].index
+            row_nums = np.where(self.patterns_df['Pattern ID'].isin(pattern_id_list))[0]
             for row_num in sorted(row_nums, reverse=True):
                 del self.patterns_arr[row_num]
 
@@ -886,8 +885,7 @@ class ResultsMixin(CheckerState):
             #   issue_id_list applies only to exceptions
 
             # results_summary_arr
-            self.exceptions_summary_df.reset_index(drop=True)
-            row_nums = self.exceptions_summary_df[self.exceptions_summary_df['Issue ID'].isin(issue_id_list)].index
+            row_nums = np.where(self.exceptions_summary_df['Issue ID'].isin(issue_id_list))[0]
             for row_num in sorted(row_nums, reverse=True):
                 del self.results_summary_arr[row_num]
 
@@ -897,7 +895,7 @@ class ResultsMixin(CheckerState):
             sub_df = self.exceptions_summary_df[self.exceptions_summary_df['Issue ID'].isin(issue_id_list)]
             for i in sub_df.index:
                 row = sub_df.loc[i]
-                results_col_names.append(self.get_results_col_name(row[0], row[1]))
+                results_col_names.append(self.get_results_col_name(row['Test ID'], row['Column(s)']))
             self.exceptions_summary_df = self.exceptions_summary_df[~self.exceptions_summary_df['Issue ID'].isin(issue_id_list)]
 
             # test_results_df
@@ -928,11 +926,26 @@ class ResultsMixin(CheckerState):
             # exceptions_summary_df
             self.exceptions_summary_df = self.exceptions_summary_df[0:0]
 
-            # test_results_df
-            self.test_results_df = self.test_results_df[0:0]
+            # test_results_df: keep the rows, drop the per-exception result columns
+            self.test_results_df = self.test_results_df.drop(
+                columns=[c for c in self.test_results_df.columns if " -- " in c])
 
             # results_dict
             self.results_dict = {}
+
+        self._recalculate_derived_results()
+
+    def _recalculate_derived_results(self) -> None:
+        """Recompute the per-cell and per-row scores from the remaining exception result columns."""
+        if self.test_results_df is None:
+            return
+        if self.orig_df is not None:
+            self.test_results_by_column_np = np.zeros((self.num_rows, len(self.orig_df.columns)), dtype=float)
+            for col_name in self.test_results_df.columns:
+                if " -- " in col_name:
+                    self._update_results_by_column(self.test_results_df[col_name].to_numpy(),
+                                                   self.col_to_original_cols_dict[col_name])
+        self._calculate_final_scores()
 
     def restore_results(self):
         """
