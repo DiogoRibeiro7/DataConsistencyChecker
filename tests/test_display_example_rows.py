@@ -53,10 +53,7 @@ def test_draw_sample_dataframe_adds_expected_explanatory_column(
         }
     )
 
-    if test_id == "RARE_VALUES":
-        df = pd.DataFrame({"a": ["x", "y"]})
-    else:
-        df = checker.orig_df[cols].copy()
+    df = pd.DataFrame({"a": ["x", "y"]}) if test_id == "RARE_VALUES" else checker.orig_df[cols].copy()
 
     captured: list[pd.DataFrame] = []
     monkeypatch.setattr(display_module, "is_notebook", lambda: True)
@@ -142,7 +139,7 @@ def test_draw_rows_around_flagged_row_uses_neighborhood(
     monkeypatch.setattr(
         checker,
         "_draw_sample_dataframe",
-        lambda df, *args, **kwargs: captured.append(df.copy()),
+        lambda df, *_args, **_kwargs: captured.append(df.copy()),
     )
 
     flagged = checker.orig_df.loc[[10], ["a", "b"]]

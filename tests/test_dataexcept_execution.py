@@ -9,7 +9,6 @@ from dataexcept import OutlierDetectionError
 from check_data_consistency import DataConsistencyChecker
 from data_consistency_checker.test_registry import TestDefinition
 
-
 TEST_ID = "DATAEXCEPT_FAILURE_TEST"
 
 

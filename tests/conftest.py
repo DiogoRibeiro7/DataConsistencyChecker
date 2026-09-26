@@ -6,7 +6,6 @@ import pytest
 
 from data_consistency_checker import DataConsistencyChecker
 
-
 _IMPLEMENTED_TEST_IDS = frozenset(DataConsistencyChecker(verbose=-1).test_dict)
 
 

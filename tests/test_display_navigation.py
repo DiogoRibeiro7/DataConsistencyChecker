@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 import data_consistency_checker.display_mixin as display_module
-
 from data_consistency_checker import DataConsistencyChecker
 from data_consistency_checker.test_registry import TestDefinition
 
@@ -56,7 +55,7 @@ def test_display_next_advances_to_next_test(
     monkeypatch.setattr(
         checker,
         "display_detailed_results",
-        lambda test_id_list, max_shown: calls.append(test_id_list),
+        lambda test_id_list, max_shown: calls.append(test_id_list),  # noqa: ARG005 - mirrors the keyword call
     )
 
     checker.display_next()
@@ -98,7 +97,7 @@ def test_display_next_notebook_branch(
     monkeypatch.setattr(
         checker,
         "display_detailed_results",
-        lambda test_id_list, max_shown: None,
+        lambda test_id_list, max_shown: None,  # noqa: ARG005 - mirrors the keyword call
     )
 
     checker.display_next()
@@ -179,7 +178,7 @@ def test_display_most_flagged_rows_notebook_branch(
     class _FakeStyler:
         """Minimal stand-in for pandas Styler without requiring jinja2."""
 
-        def apply(self, *args: object, **kwargs: object) -> "_FakeStyler":
+        def apply(self, *_args: object, **_kwargs: object) -> _FakeStyler:
             return self
 
     monkeypatch.setattr(display_module, "is_notebook", lambda: True)
@@ -187,7 +186,7 @@ def test_display_most_flagged_rows_notebook_branch(
     monkeypatch.setattr(
         pd.DataFrame,
         "style",
-        property(lambda self: _FakeStyler()),
+        property(lambda _self: _FakeStyler()),
     )
 
     checker.display_most_flagged_rows(with_results=False, n_rows=2)
