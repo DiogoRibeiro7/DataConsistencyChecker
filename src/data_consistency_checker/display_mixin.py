@@ -352,107 +352,109 @@ class DisplayMixin:
         if save_to_disk:
             f = self._open_detailed_results_file(output_folder)
 
-        self._describe_display_filters(test_id_list, col_name_list, show_short_list_only, f)
+        try:
+            self._describe_display_filters(test_id_list, col_name_list, show_short_list_only, f)
 
-        if test_id_list is None:
-            test_id_list = self.get_test_list()
-        if col_name_list is None:
-            col_name_list = self.orig_df.columns
+            if test_id_list is None:
+                test_id_list = self.get_test_list()
+            if col_name_list is None:
+                col_name_list = self.orig_df.columns
 
-        row_id_list_df = None
-        if row_id_list:
-            # Check the row_id_list is valid
-            if (np.array(row_id_list) > self.num_rows).any():
-                print_line(f)
-                print_text("Row id specified was beyond the length of the dataframe. Use the 0-based row numbers.", f)
-                return
+            row_id_list_df = None
+            if row_id_list:
+                # Check the row_id_list is valid
+                if (np.array(row_id_list) > self.num_rows).any():
+                    print_line(f)
+                    print_text("Row id specified was beyond the length of the dataframe. Use the 0-based row numbers.", f)
+                    return
 
-            # Create a dataframe representing only the specified rows
-            row_id_list_df = self.test_results_df.loc[row_id_list]
+                # Create a dataframe representing only the specified rows
+                row_id_list_df = self.test_results_df.loc[row_id_list]
 
-        # Each test's results are introduced by a header, unless results for only one test can be shown
-        show_test_headers = not (len(test_id_list) == 1 or
-                                 (self.execute_list is not None and len(self.execute_list) == 1))
-        count_shown = 0
+            # Each test's results are introduced by a header, unless results for only one test can be shown
+            show_test_headers = not (len(test_id_list) == 1 or
+                                     (self.execute_list is not None and len(self.execute_list) == 1))
+            count_shown = 0
 
-        max_shown_msg = (f"**Showing the first {int(max_shown)} findings. To see additional patterns or exceptions, "
-                         "specify more specific tests, columns, issue numbers, or row numbers, or increase max_shown**")
+            max_shown_msg = (f"**Showing the first {int(max_shown)} findings. To see additional patterns or exceptions, "
+                             "specify more specific tests, columns, issue numbers, or row numbers, or increase max_shown**")
 
-        for test_id in test_id_list:
-            if self.execute_list and test_id not in self.execute_list:
-                continue
-            if self.exclude_list and test_id in self.exclude_list:
-                continue
+            for test_id in test_id_list:
+                if self.execute_list and test_id not in self.execute_list:
+                    continue
+                if self.exclude_list and test_id in self.exclude_list:
+                    continue
 
-            printed_test_header = False
+                printed_test_header = False
 
-            sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
-            sub_results_summary_test = self.exceptions_summary_df[self.exceptions_summary_df['Test ID'] == test_id]
+                sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
+                sub_results_summary_test = self.exceptions_summary_df[self.exceptions_summary_df['Test ID'] == test_id]
 
-            # Display patterns that have no exception
-            if show_patterns and ((not show_short_list_only) or test_id in self.get_patterns_shortlist()):
-                for columns_set in sub_patterns_test['Column(s)'].values:
-                    if count_shown >= max_shown:
-                        print_line(f)
-                        print_text(max_shown_msg, f)
-                        return
+                # Display patterns that have no exception
+                if show_patterns and ((not show_short_list_only) or test_id in self.get_patterns_shortlist()):
+                    for columns_set in sub_patterns_test['Column(s)'].values:
+                        if count_shown >= max_shown:
+                            print_line(f)
+                            print_text(max_shown_msg, f)
+                            return
 
-                    sub_patterns = self.patterns_df[(self.patterns_df['Test ID'] == test_id) &
-                                                    (self.patterns_df['Column(s)'] == columns_set)]
-                    pattern_columns_arr = self.col_to_original_cols_dict[columns_set]
-                    if len(set(col_name_list).intersection(set(pattern_columns_arr))) == 0:
-                        continue
+                        sub_patterns = self.patterns_df[(self.patterns_df['Test ID'] == test_id) &
+                                                        (self.patterns_df['Column(s)'] == columns_set)]
+                        pattern_columns_arr = self.col_to_original_cols_dict[columns_set]
+                        if len(set(col_name_list).intersection(set(pattern_columns_arr))) == 0:
+                            continue
 
-                    # If pattern_id_list is specified, check the current pattern is in the list
-                    pattern_id = sub_patterns['Pattern ID'].values[0]
-                    if pattern_id_list and (pattern_id not in pattern_id_list):
-                        continue
+                        # If pattern_id_list is specified, check the current pattern is in the list
+                        pattern_id = sub_patterns['Pattern ID'].values[0]
+                        if pattern_id_list and (pattern_id not in pattern_id_list):
+                            continue
 
-                    count_shown += 1
-                    self._print_finding_header(test_id, columns_set, show_test_headers and not printed_test_header, f)
-                    printed_test_header = True
-                    self._display_pattern_details(
-                        test_id, columns_set, sub_patterns.iloc[0], include_examples, plot_results, f)
+                        count_shown += 1
+                        self._print_finding_header(test_id, columns_set, show_test_headers and not printed_test_header, f)
+                        printed_test_header = True
+                        self._display_pattern_details(
+                            test_id, columns_set, sub_patterns.iloc[0], include_examples, plot_results, f)
 
-            # Display patterns with exceptions
-            if show_exceptions:
-                for columns_set in sub_results_summary_test['Column(s)'].values:
-                    if count_shown >= max_shown:
-                        print_line(f)
-                        print_text(max_shown_msg, f)
-                        return
+                # Display patterns with exceptions
+                if show_exceptions:
+                    for columns_set in sub_results_summary_test['Column(s)'].values:
+                        if count_shown >= max_shown:
+                            print_line(f)
+                            print_text(max_shown_msg, f)
+                            return
 
-                    if row_id_list and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
-                        continue
+                        if row_id_list and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
+                            continue
 
-                    # If columns_set_arr is specified, only report issues with some overlap of columns with
-                    # columns_set_arr. The columns_set in the issues dataframe may be a single string. If so, convert
-                    # to an array.
-                    issue_columns_arr = self.col_to_original_cols_dict[self.get_results_col_name(test_id, columns_set)]
-                    if len(set(col_name_list).intersection(set(issue_columns_arr))) == 0:
-                        continue
+                        # If columns_set_arr is specified, only report issues with some overlap of columns with
+                        # columns_set_arr. The columns_set in the issues dataframe may be a single string. If so, convert
+                        # to an array.
+                        issue_columns_arr = self.col_to_original_cols_dict[self.get_results_col_name(test_id, columns_set)]
+                        if len(set(col_name_list).intersection(set(issue_columns_arr))) == 0:
+                            continue
 
-                    # sub_summary should be one row, representing the current test ID and set of columns
-                    sub_summary = self.exceptions_summary_df[
-                        (self.exceptions_summary_df['Test ID'] == test_id) &
-                        (self.exceptions_summary_df['Column(s)'] == columns_set)]
-                    assert len(sub_summary) == 1
-                    if len(sub_summary) == 0:
-                        continue
+                        # sub_summary should be one row, representing the current test ID and set of columns
+                        sub_summary = self.exceptions_summary_df[
+                            (self.exceptions_summary_df['Test ID'] == test_id) &
+                            (self.exceptions_summary_df['Column(s)'] == columns_set)]
+                        assert len(sub_summary) == 1
+                        if len(sub_summary) == 0:
+                            continue
 
-                    # If issue_id_list is specified, check the current issue is in the list
-                    issue_id = sub_summary['Issue ID'].values[0]
-                    if issue_id_list and (issue_id not in issue_id_list):
-                        continue
+                        # If issue_id_list is specified, check the current issue is in the list
+                        issue_id = sub_summary['Issue ID'].values[0]
+                        if issue_id_list and (issue_id not in issue_id_list):
+                            continue
 
-                    count_shown += 1
-                    self._print_finding_header(test_id, columns_set, show_test_headers and not printed_test_header, f)
-                    printed_test_header = True
-                    self._display_exception_details(
-                        test_id, columns_set, issue_id, sub_summary.iloc[0], include_examples, plot_results, f)
-
-        if save_to_disk:
-            self._close_detailed_results_file(f)
+                        count_shown += 1
+                        self._print_finding_header(test_id, columns_set, show_test_headers and not printed_test_header, f)
+                        printed_test_header = True
+                        self._display_exception_details(
+                            test_id, columns_set, issue_id, sub_summary.iloc[0], include_examples, plot_results, f)
+        finally:
+            # Complete and close the HTML report however the display ends, including early returns
+            if f:
+                self._close_detailed_results_file(f)
 
     @staticmethod
     def _default_max_shown(save_to_disk, include_examples, plot_results):
@@ -577,7 +579,7 @@ class DisplayMixin:
         print_line(f)
         if not is_notebook():
             if f:
-                f.write(hyphens + "<br" + os.linesep)
+                f.write(hyphens + "<br>" + os.linesep)
             else:
                 print_line(f)
                 print(hyphens)
@@ -641,7 +643,7 @@ class DisplayMixin:
         if test_id in ['GROUPED_STRINGS', 'GROUPED_STRINGS_BY_NUMERIC']:
             # These display special output, so the formatting must be preserved.
             print_text("**Description**:", f)
-            print_text(summary['Description of Pattern'])
+            print_text(summary['Description of Pattern'], f)
         elif test_id in ['PREV_VALUES_DT', 'DECISION_TREE_REGRESSOR', 'DECISION_TREE_CLASSIFIER',
                          'PREDICT_NULL_DT']:
             # These display a decision tree, so the formatting must be preserved.
@@ -1197,7 +1199,7 @@ class DisplayMixin:
 
         if len(cols) == 3 and cols[2] in self.binary_cols:
             v0, v1 = self.orig_df[cols[2]].dropna().unique()
-            va = self.orig_df[cols[0]].dropna().value_counts().values[0]
+            va = self.orig_df[cols[0]].dropna().value_counts().index[0]  # The most common value
             df_v0 = self.orig_df[self.orig_df[cols[2]] == v0]
             df_v1 = self.orig_df[self.orig_df[cols[2]] == v1]
             df_v0a = df_v0[df_v0[cols[0]] == va].head(n_examples // 4)

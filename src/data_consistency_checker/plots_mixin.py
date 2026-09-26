@@ -1187,10 +1187,11 @@ class PlotsMixin:
                 for c in cols:
                     label += str(counts_df.loc[i, c]) + " / "
                 labels.append(label)
-            s = sns.barplot(orient='h', y=labels, x=counts)
+            _, ax = plt.subplots()
+            s = sns.barplot(orient='h', y=labels, x=counts, ax=ax)
             s.set_title("Counts of combinations of values in columns")
-            for p_idx, p in enumerate(s.patches):
-                s.annotate(f'{counts[p_idx]:.1f}', (p.get_width()+0.25, (p.get_y() + (p.get_height() / 2))+0.1))
+            for count, p in zip(counts, s.patches):
+                s.annotate(f'{count:.1f}', (p.get_width()+0.25, (p.get_y() + (p.get_height() / 2))+0.1))
             self.show_image(f)
 
         elif test_id in ['DECISION_TREE_REGRESSOR', 'LINEAR_REGRESSION'] or (test_id in ['PREV_VALUES_DT'] and cols[-1] in self.numeric_cols):

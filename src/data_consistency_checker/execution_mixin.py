@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -14,8 +14,6 @@ try:
     from termcolor import colored
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
-
-from .checker_utils import call_test
 
 
 class ExecutionMixin:
@@ -90,7 +88,7 @@ class ExecutionMixin:
                 for tests that frequently find results. Lower values reduce false positives
             rare_contamination_level: Max fraction (or count) of rows violating a pattern
                 for tests that rarely find results. Higher values reduce false negatives
-            run_parallel: If True, run tests in parallel for faster execution
+            run_parallel: Not supported; if True, a RuntimeWarning is issued and the tests run sequentially
             raise_on_error: If True, stop on the first failed test and raise a
                 structured OutlierDetectionError. If False, retain failures and
                 continue running the remaining tests.
@@ -128,7 +126,7 @@ class ExecutionMixin:
 
         # Store the contamination_level in terms of number of rows. It may have been passed either in this form or as a
         # fraction.
-        if freq_contamination_level > 1 and type(freq_contamination_level) is int:
+        if freq_contamination_level >= 1 and type(freq_contamination_level) is int:
             if freq_contamination_level > len(self.orig_df):
                 print(f"Error. contamination rate set to {freq_contamination_level}, more than the number of rows in "
                        f"the dataframe passed. The contamination_level rate should be substantially smaller.")
@@ -193,44 +191,33 @@ class ExecutionMixin:
         self.single_test_summary_df = None
 
         if run_parallel:
-            process_arr = []
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                for test_id in self.execution_test_list:
-                    self._output_current_test(test_idx_dict[test_id], test_id)
-                    future = executor.submit(call_test, self, test_id)
-                    process_arr.append((test_id, future))
-                    self.n_tests_executed += 1
-                for test_id, future in process_arr:
-                    try:
-                        future.result()
-                    except Exception as error:
-                        structured = self._record_execution_failure(
-                            test_id,
-                            error,
-                            raise_on_error=raise_on_error,
-                        )
-                        if self.verbose >= 0:
-                            print(f"Error executing {test_id}: {structured}")
-        else:
-            for test_id in self.execution_test_list:
-                self._output_current_test(test_idx_dict[test_id], test_id)
-                try:
-                    t1 = time.time()
-                    self.test_dict[test_id].test_func(test_id=test_id)
-                    t2 = time.time()
-                    self.execution_times[test_id] = t2 - t1
-                except Exception as error:
-                    structured = self._record_execution_failure(
-                        test_id,
-                        error,
-                        raise_on_error=raise_on_error,
-                    )
-                    message = f"Error executing {test_id}: {structured}"
-                    if colored:
-                        print(colored(message, "red"))
-                    else:
-                        print(message)
-                self.n_tests_executed += 1
+            # Tests record their results on the checker itself, so tests run in worker processes could not report
+            # results back. Previously this silently produced no results.
+            warnings.warn(
+                "run_parallel is not supported: running the tests sequentially instead.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        for test_id in self.execution_test_list:
+            self._output_current_test(test_idx_dict[test_id], test_id)
+            try:
+                t1 = time.time()
+                self.test_dict[test_id].test_func(test_id=test_id)
+                t2 = time.time()
+                self.execution_times[test_id] = t2 - t1
+            except Exception as error:
+                structured = self._record_execution_failure(
+                    test_id,
+                    error,
+                    raise_on_error=raise_on_error,
+                )
+                message = f"Error executing {test_id}: {structured}"
+                if colored:
+                    print(colored(message, "red"))
+                else:
+                    print(message)
+            self.n_tests_executed += 1
 
         # Populate the test_results_df dataframe with all results found
         self.test_results_df = pd.DataFrame(self.results_dict)

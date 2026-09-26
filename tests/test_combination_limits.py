@@ -27,6 +27,7 @@ def test_combination_checks_report_skipping_when_max_combinations_is_exceeded(ca
     checker.check_data_quality()
 
     skips = [line for line in capsys.readouterr().out.splitlines() if "Skipping" in line]
+    assert checker.get_execution_failures() == []
     assert len(skips) >= 50
     for kind in ("numeric", "string", "binary"):
         assert any(f"pairs of {kind} columns" in line for line in skips), kind

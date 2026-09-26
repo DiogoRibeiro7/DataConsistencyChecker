@@ -8,10 +8,7 @@ import pytest
 from data_consistency_checker import DataConsistencyChecker
 
 PLOTTED_CHECKS = [
-    pytest.param(
-        "BINARY_RARE_COMBINATION",
-        marks=pytest.mark.xfail(strict=True, reason="bar labels assume the axes hold only this chart"),
-    ),
+    "BINARY_RARE_COMBINATION",
     "CORRELATED_GIVEN_VALUE",
     "LARGE_GIVEN_DATE",
     "LARGE_GIVEN_PAIR",
@@ -30,7 +27,7 @@ IMPLEMENTED = set(DataConsistencyChecker(verbose=-1).get_test_list())
 
 @pytest.mark.parametrize(
     "test_id",
-    [t for t in PLOTTED_CHECKS if (t.values[0] if hasattr(t, "values") else t) in IMPLEMENTED],
+    [t for t in PLOTTED_CHECKS if t in IMPLEMENTED],
 )
 def test_findings_are_displayed_with_plots(test_id, monkeypatch) -> None:
     shown: list[int] = []

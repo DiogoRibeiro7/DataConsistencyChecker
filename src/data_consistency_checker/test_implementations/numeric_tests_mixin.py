@@ -580,11 +580,11 @@ class NumericTestsMixin:
             if self.orig_df[col_name].nunique(dropna=True) < 3:
                 continue
             if col_name in self.numeric_cols:
-                spearan_corr = abs(self.numeric_vals[col_name].corr(pd.Series(row_numbers), method='spearman'))
+                spearman_corr = abs(self.numeric_vals[col_name].corr(pd.Series(row_numbers), method='spearman'))
             else:
                 col_vals = [x.timestamp() for x, y in zip(pd.to_datetime(self.orig_df[col_name]), self.orig_df[col_name].isna()) if not y]
-                spearman_corr = abs(pd.Series(col_vals).corr(pd.Series(list(range(len(col_vals)))), method='spearman'))  # noqa: F841 - known bug: spearan_corr is checked below
-            if spearan_corr >= 0.95:
+                spearman_corr = abs(pd.Series(col_vals).corr(pd.Series(list(range(len(col_vals)))), method='spearman'))
+            if spearman_corr >= 0.95:
                 col_percentiles = self.orig_df[col_name].rank(pct=True)
 
                 # Test for negative correlation
@@ -892,8 +892,9 @@ class NumericTestsMixin:
                 bins.append(min_val + (i * bin_width))
             bins.append(np.inf)
             bin_labels = [int(x) for x in range(len(bins)-1)]
-            binned_values = pd.cut(self.numeric_vals[col_name], bins, labels=bin_labels).dropna()
-            bin_counts = binned_values.value_counts()
+            # Keep one bin per row (NaN for missing values) so the results stay aligned with the rows
+            binned_values = pd.cut(self.numeric_vals[col_name], bins, labels=bin_labels)
+            bin_counts = binned_values.dropna().value_counts()
 
             rare_bins = []
 
@@ -931,7 +932,7 @@ class NumericTestsMixin:
                 "The column consistently contains values that have several similar values in the column",
                 (f" -- any values with fewer than an average of {math.floor(self.freq_contamination_level)} neighbors "
                  f"within their and the neighboring bins (width {bin_width:.4f})"),
-                display_info={'Number in Range': [combined_bins_counts[x] for x in binned_values]}
+                display_info={'Number in Range': [np.nan if pd.isna(x) else combined_bins_counts[x] for x in binned_values]}
             )
 
         for col_name in self.date_cols:
@@ -986,7 +987,7 @@ class NumericTestsMixin:
                 "The column consistently contains values that have several similar values in the column",
                 (f" -- any values with fewer than an average of {math.floor(self.freq_contamination_level)} neighbors "
                  f"within their and the neighboring bins (width {bin_width.days} days)"),
-                display_info={'Number in Range': [combined_bins_counts[x] for x in binned_values]})
+                display_info={'Number in Range': [np.nan if pd.isna(x) else combined_bins_counts[x] for x in binned_values]})
 
 
     def _generate_very_small(self):
@@ -2832,7 +2833,7 @@ class NumericTestsMixin:
         self.synth_df['matched zero miss all'] = self.synth_df['matched zero miss all'].replace(0, np.nan)
         self._add_synthetic_column('matched zero miss most', self.synth_df['matched zero miss rand_a'])
         self.synth_df['matched zero miss most'] = self.synth_df['matched zero miss most'].replace(0, np.nan)
-        if self.synth_df.loc[999, 'matched zero miss most'] == np.nan:  # noqa: PLW0177 - known bug: always False
+        if pd.isna(self.synth_df.loc[999, 'matched zero miss most']):
             self.synth_df.loc[999, 'matched zero miss most'] = 1
         else:
             self.synth_df.loc[999, 'matched zero miss most'] = np.nan
@@ -4639,7 +4640,7 @@ class NumericTestsMixin:
             self._add_synthetic_column(f'small_vs_corr_cols_{i+8}',
                                         [random.random() for _ in range(self.num_synth_rows)])
 
-    def __get_column_clusters(self):
+    def _get_column_clusters(self):
         def get_next_corr_pair(corr_matrix, correlated_sets_arr):
             for i in corr_matrix.index:
                 for j in corr_matrix.index:
