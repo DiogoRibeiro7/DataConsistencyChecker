@@ -12,6 +12,8 @@ from .test_registry import TestDefinition
 class TestMetadata:
     """Public metadata describing one consistency check."""
 
+    __test__ = False  # Not a pytest test class, despite the name
+
     test_id: str
     short_description: str
     description: str

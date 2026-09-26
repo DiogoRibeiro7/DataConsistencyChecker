@@ -39,6 +39,14 @@ digits = string.digits
 alphanumeric = letters + digits
 
 
+def _shared_fraction(x, y) -> float:
+    """Fraction of the distinct items in x or y that appear in both. Two empty collections are identical."""
+    union = set(x).union(set(y))
+    if not union:
+        return 1.0
+    return len(set(x).intersection(set(y))) / len(union)
+
+
 class StringTestsMixin:
     """
     Mixin class containing string tests methods.
@@ -2259,10 +2267,11 @@ class StringTestsMixin:
     def _check_same_first_chars(self, test_id):
         def check_column(col_name):
             first_chars_series = self.orig_df[col_name].astype(str).str.slice(0, 1)  # Get the first letter of each value
-            counts_series = first_chars_series.value_counts(normalize=True)  # Get the counts for each first letter
+            counts_series = first_chars_series.value_counts(normalize=True)  # Get the fraction for each first letter
             if len(counts_series) < 10:
                 return False
-            return not (counts_series.iloc[0] > 50.0)
+            # Skip columns where a single first letter covers more than half the values
+            return not (counts_series.iloc[0] > 0.5)
 
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
@@ -2277,8 +2286,8 @@ class StringTestsMixin:
                 continue
 
             # Determine how many characters we can potentially check for matches between the columns
-            avg_len_1 = pd.Series([len(x.split()) for x in self.orig_df[col_name_1].astype(str) if (not is_missing(x))]).mean()
-            avg_len_2 = pd.Series([len(x.split()) for x in self.orig_df[col_name_2].astype(str) if (not is_missing(x))]).mean()
+            avg_len_1 = pd.Series([len(x) for x in self.orig_df[col_name_1].astype(str) if (not is_missing(x))]).mean()
+            avg_len_2 = pd.Series([len(x) for x in self.orig_df[col_name_2].astype(str) if (not is_missing(x))]).mean()
             max_check = min(avg_len_1, avg_len_2)
 
             # Determine the length of longest substrings in the values in both columns that match, such that there
@@ -2288,7 +2297,7 @@ class StringTestsMixin:
             for num_chars_checking in range(1, int(max_check) + 1):
                 first_chars_series_1 = self.orig_df[col_name_1].fillna("").astype(str).str.slice(0, num_chars_checking)
                 first_chars_series_2 = self.orig_df[col_name_2].fillna("").astype(str).str.slice(0, num_chars_checking)
-                num_matching = len([x == y for x, y in zip(first_chars_series_1, first_chars_series_2)])
+                num_matching = sum(x == y for x, y in zip(first_chars_series_1, first_chars_series_2))
                 if num_matching < (self.num_rows - self.freq_contamination_level):
                     break
                 max_number_matching = num_chars_checking
@@ -2520,7 +2529,7 @@ class StringTestsMixin:
             alpha_col_2 = [[c for c in x if c and c.isalpha()] for x in alpha_col_2]
             if [len(x) > 0 for x in alpha_col_2].count(False) > 1:
                 continue
-            test_series = [len(set(x).intersection(set(y))) / len(set(x).union(set(y))) > 0.80 if len(y) > 0 else False
+            test_series = [_shared_fraction(x, y) > 0.80 if len(y) > 0 else False
                        for x, y in zip(alpha_col_1, alpha_col_2)]
             if test_series.count(False) > 1:
                 continue
@@ -2530,7 +2539,7 @@ class StringTestsMixin:
             alpha_col_1 = [[c for c in x if c and c.isalpha()] for x in alpha_col_1]
             alpha_col_2 = self.orig_df[col_name_2].apply(lambda x: "" if is_missing(x) else x)
             alpha_col_2 = [[c for c in x if c and c.isalpha()] for x in alpha_col_2]
-            test_series = [len(set(x).intersection(set(y))) / len(set(x).union(set(y))) > 0.80
+            test_series = [_shared_fraction(x, y) > 0.80
                            for x, y in zip(alpha_col_1, alpha_col_2)]
             test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
@@ -3651,6 +3660,11 @@ class StringTestsMixin:
 
         # Determine if there are too many combinations to execute
         num_pairs, pairs = self._get_string_column_pairs_unique()  # todo: we should check the binary columns as well
+        if pairs is None:
+            if self.verbose >= 1:
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                      f"max_combinations is currently set to {self.max_combinations:,}.")
+            return
         total_combinations = num_pairs * avg_num_common_vals * avg_num_common_vals * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
@@ -3838,6 +3852,11 @@ class StringTestsMixin:
 
         # Determine if there are too many combinations to execute
         num_pairs, pairs = self._get_string_column_pairs_unique()  # todo: we should check the binary columns as well
+        if pairs is None:
+            if self.verbose >= 1:
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                      f"max_combinations is currently set to {self.max_combinations:,}.")
+            return
         total_combinations = num_pairs * avg_num_common_vals * avg_num_common_vals * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:

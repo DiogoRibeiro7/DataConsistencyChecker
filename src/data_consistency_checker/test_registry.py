@@ -11,6 +11,8 @@ from typing import Any
 class TestDefinition:
     """Internal executable definition for one consistency check."""
 
+    __test__ = False  # Not a pytest test class, despite the name
+
     short_description: str
     description: str
     test_func: Callable[..., Any]

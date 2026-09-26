@@ -430,7 +430,7 @@ class AnalysisCacheMixin:
         """
 
         if self.word_counts_dict:
-            return self.get_word_counts_dict
+            return self.word_counts_dict
         self.word_counts_dict = {}
         for col_name in self.string_cols:
             col_vals = self.orig_df[col_name].fillna("").astype(str).apply(replace_special_with_space)

@@ -247,11 +247,6 @@ def is_uppercase(x: str | None) -> bool:
     return (65 <= ord(x) <= 90) or (193 <= ord(x) <= 221)
 
 
-def call_test(dc: Any, test_id: str) -> None:  # noqa: ARG001
-    """Placeholder for test invocation logging."""
-    print(test_id)
-
-
 def clean_x_tick_labels(fig: Figure, n_axis: int, ax: Axes) -> None:
     """Adjust x-axis tick labels for readability."""
     plt.draw()

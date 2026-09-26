@@ -799,7 +799,7 @@ class ResultsMixin:
                    "may be called any number of times.")
             return
 
-        if (self.exceptions_summary_df is None) or (self.test_results_df is None) or (self.exceptions_summary_df is None):
+        if (self.patterns_df is None) or (self.test_results_df is None) or (self.exceptions_summary_df is None):
             print("There are no results to clear. Cannot execute function.")
             return
 
