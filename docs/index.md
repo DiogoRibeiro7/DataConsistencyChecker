@@ -51,3 +51,11 @@ checks go well beyond distributions and correlations, so they complement other E
 reliably unusual. Unlike most detectors, you can see exactly why each row was flagged. The checks are
 deliberately simple, so they do not replace multivariate detectors such as Isolation Forest or Local Outlier
 Factor; they complement them.
+
+## Acknowledgements
+
+DataConsistencyChecker is based on the original
+[DataConsistencyChecker](https://github.com/Brett-Kennedy/DataConsistencyChecker) by
+[Brett Kennedy](https://github.com/Brett-Kennedy), which introduced the approach and the checks. This project
+continues that work as an installable package, with tests and documentation. To cite it, use the repository's
+[`CITATION.cff`](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/CITATION.cff).
