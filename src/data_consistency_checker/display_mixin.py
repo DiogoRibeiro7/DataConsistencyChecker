@@ -10,6 +10,7 @@ from __future__ import annotations
 import numbers
 
 import os
+from itertools import product
 from textwrap import wrap
 from typing import Optional
 
@@ -1062,74 +1063,42 @@ class DisplayMixin:
             assert False, "Should not happen"
             return self.orig_df[col_name].sample(n=n_examples, random_state=0)
 
-        df = None
+        df = self._get_balanced_sample(test_id, cols, n_examples, display_info)
+
+        # If we do not yet have a df (the test was not specified above, or no rows matched the conditions), we
+        # create a df simply trying to reduce the number of Null values and showing unique values in the last column.
+        if not show_consecutive and ((df is None) or df.empty):
+            cols = list(cols)  # Ensure cols is not in tuple format
+            df = self._get_generic_sample(test_id, cols, n_examples)
+
+        if show_consecutive:
+            assert df is None
+            df = self._get_consecutive_sample(cols, n_examples, sort_col)
+        else:
+            # If we do not return a consecutive set of rows, df is likely of size n_examples. We ensure it is of size
+            # n_examples, then sort it randomly.
+            df = self._pad_sample(df, cols, n_examples)
+            df = df.sample(n=min(len(df), n_examples), random_state=0)
+
+        # Remove rows that were flagged. If is_patterns is True, no rows were flagged, and we skip this check.
+        if not is_patterns:
+            sub_df = self.test_results_df.loc[df.index]
+            mask = sub_df[results_col_name] == 0
+            df = df[mask]
+
+        return df
+
+    def _get_balanced_sample(self, test_id, cols, n_examples, display_info):
+        """
+        Called by _get_sample_not_flagged(). For tests where it is informative, returns rows balanced between the
+        different cases relevant to the test (for example, rows where a value is zero and where it is non-zero).
+        Returns None for other tests.
+        """
         if test_id in ['BINARY_SAME', 'BINARY_OPPOSITE', 'BINARY_IMPLIES', 'BINARY_AND', 'BINARY_OR',
                        'BINARY_XOR', 'BINARY_NUM_SAME', 'BINARY_TWO_OTHERS_MATCH', 'BINARY_MATCHES_SUM']:
-            if len(cols) == 2 and cols[0] in self.binary_cols and cols[1] in self.binary_cols:
-                v0_0, v0_1 = self.column_unique_vals[cols[0]]
-                v1_0, v1_1 = self.column_unique_vals[cols[1]]
-                df_v00 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_0) &
-                    (self.orig_df[cols[1]] == v1_0)].head(n_examples // 4)
-                df_v01 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_0) &
-                    (self.orig_df[cols[1]] == v1_1)].head(n_examples // 4)
-                df_v10 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_1) &
-                    (self.orig_df[cols[1]] == v1_0)].head(n_examples // 4)
-                df_v11 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_1) &
-                    (self.orig_df[cols[1]] == v1_1)].head(n_examples // 4)
-                df = pd.concat([df_v00, df_v01, df_v10, df_v11])[cols]
-            elif len(cols) == 3 and cols[0] in self.binary_cols and \
-                    cols[1] in self.binary_cols and cols[2] in self.binary_cols:
-                v0_0, v0_1 = self.orig_df[cols[0]].dropna().unique()
-                v1_0, v1_1 = self.orig_df[cols[1]].dropna().unique()
-                v2_0, v2_1 = self.orig_df[cols[2]].dropna().unique()
-                df_v000 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_0) &
-                    (self.orig_df[cols[1]] == v1_0) &
-                    (self.orig_df[cols[2]] == v2_0)].head(n_examples // 4)
-                df_v001 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_0) &
-                    (self.orig_df[cols[1]] == v1_0) &
-                    (self.orig_df[cols[2]] == v2_1)].head(n_examples // 4)
-                df_v010 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_0) &
-                    (self.orig_df[cols[1]] == v1_1) &
-                    (self.orig_df[cols[2]] == v2_0)].head(n_examples // 4)
-                df_v011 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_0) &
-                    (self.orig_df[cols[1]] == v1_1) &
-                    (self.orig_df[cols[2]] == v2_1)].head(n_examples // 4)
-                df_v100 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_1) &
-                    (self.orig_df[cols[1]] == v1_0) &
-                    (self.orig_df[cols[2]] == v2_0)].head(n_examples // 4)
-                df_v101 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_1) &
-                    (self.orig_df[cols[1]] == v1_0) &
-                    (self.orig_df[cols[2]] == v2_1)].head(n_examples // 4)
-                df_v110 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_1) &
-                    (self.orig_df[cols[1]] == v1_1) &
-                    (self.orig_df[cols[2]] == v2_0)].head(n_examples // 4)
-                df_v111 = self.orig_df[
-                    (self.orig_df[cols[0]] == v0_1) &
-                    (self.orig_df[cols[1]] == v1_1) &
-                    (self.orig_df[cols[2]] == v2_1)].head(n_examples // 4)
-                df = pd.concat([df_v000, df_v001, df_v010, df_v011, df_v100, df_v101, df_v110, df_v111])[cols]
-            elif len(cols) == 3 and cols[2] in self.binary_cols:
-                v0, v1 = self.orig_df[cols[2]].dropna().unique()
-                va = self.orig_df[cols[0]].dropna().value_counts().values[0]
-                df_v0 = self.orig_df[self.orig_df[cols[2]] == v0] #.head(n_examples // 2)
-                df_v1 = self.orig_df[self.orig_df[cols[2]] == v1] #.head(n_examples // 2)
-                df_v0a = df_v0[df_v0[cols[0]] == va].head(n_examples // 4)
-                df_v0b = df_v0[df_v0[cols[0]] != va].head((n_examples // 2) - len(df_v0a))
-                df_v1a = df_v1[df_v1[cols[0]] == va].head(n_examples // 4)
-                df_v1b = df_v1[df_v1[cols[0]] != va].head((n_examples // 2) - len(df_v1a))
-                df = pd.concat([df_v0a, df_v0b, df_v1a, df_v1b])[cols]
-        elif test_id in ['MATCHED_ZERO', 'MATCHED_ZERO_MISSING', 'MATCHED_SET_ZERO_NON_ZERO']:
+            return self._get_binary_balanced_sample(cols, n_examples)
+
+        if test_id in ['MATCHED_ZERO', 'MATCHED_ZERO_MISSING', 'MATCHED_SET_ZERO_NON_ZERO']:
             # Show where col1 is zero and non-zero
             col_name_1 = cols[0]
             col_name_2 = cols[1]
@@ -1138,8 +1107,9 @@ class DisplayMixin:
                 df_v_zero = pd.concat([df_v_zero, self.orig_df[cols][(self.orig_df[col_name_1] == 0) & (self.orig_df[col_name_1].isna())].head((n_examples // 2) - len(df_v_zero))])
             df_v_non_zero = self.orig_df[cols][(self.orig_df[col_name_1] != 0) &
                                                (self.orig_df[col_name_1].notna())].head(n_examples - len(df_v_zero))
-            df = pd.concat([df_v_zero, df_v_non_zero])
-        elif test_id in ['SAME_OR_CONSTANT']:
+            return pd.concat([df_v_zero, df_v_non_zero])
+
+        if test_id in ['SAME_OR_CONSTANT']:
             # Show where col1 == col2 and where doesn't (in both cases where col1 is not null)
             col_name_1, col_name_2 = cols
             df_same = self.orig_df[cols][
@@ -1148,40 +1118,46 @@ class DisplayMixin:
             df_not_same = self.orig_df[cols][
                 (self.orig_df[col_name_1] != self.orig_df[col_name_2]) & self.orig_df[col_name_1].notna()
                 ].head(n_examples // 2)
-            df = pd.concat([df_same, df_not_same])
-        elif test_id in ['POSITIVE']:
+            return pd.concat([df_same, df_not_same])
+
+        if test_id in ['POSITIVE']:
             # Show where col == 0 and where is > 0
             col_name_1 = cols[0]
             df_v_zero = self.orig_df[cols][(self.numeric_vals_filled[col_name_1] == 0)].head(n_examples // 2)
             df_v_pos = self.orig_df[cols][(self.numeric_vals_filled[col_name_1] > 0)].head(n_examples - len(df_v_zero))
-            df = pd.concat([df_v_zero, df_v_pos])
-        elif test_id in ['NEGATIVE']:
+            return pd.concat([df_v_zero, df_v_pos])
+
+        if test_id in ['NEGATIVE']:
             # Show where col == 0 and where is < 0
             col_name_1 = cols[0]
             df_v_zero = self.orig_df[cols][(self.numeric_vals_filled[col_name_1] == 0)].head(n_examples // 2)
             df_v_neg = self.orig_df[cols][(self.numeric_vals_filled[col_name_1] < 0)].head(n_examples - len(df_v_zero))
-            df = pd.concat([df_v_zero, df_v_neg])
-        elif test_id in ['MATCHED_SET_POS_NEG']:
+            return pd.concat([df_v_zero, df_v_neg])
+
+        if test_id in ['MATCHED_SET_POS_NEG']:
             # Show where col1 is positive and negative
             col_name_1 = cols[0]
             df_v_pos = self.orig_df[cols][(self.orig_df[col_name_1] > 0)].head(n_examples // 2)
             df_v_neg = self.orig_df[cols][(self.orig_df[col_name_1] < 0)].head(n_examples - len(df_v_pos))
-            df = pd.concat([df_v_pos, df_v_neg])
-        elif test_id in ['EVEN_MULTIPLE', 'MATCHED_MISSING', 'OPPOSITE_MISSING']:
+            return pd.concat([df_v_pos, df_v_neg])
+
+        if test_id in ['EVEN_MULTIPLE', 'MATCHED_MISSING', 'OPPOSITE_MISSING']:
             # Show where col 1 is null and non-null
             col_name_1, col_name_2 = cols[0], cols[1]
             df_v_null = self.orig_df[cols][(self.orig_df[col_name_1].apply(is_missing))].head(n_examples // 2)
             num_non_null = n_examples - len(df_v_null)
             df_v_non_null = self.orig_df[cols][(~self.orig_df[col_name_1].apply(is_missing))].head(num_non_null)
-            df = pd.concat([df_v_null, df_v_non_null])
-        elif test_id in ['PREDICT_NULL_DT']:
+            return pd.concat([df_v_null, df_v_non_null])
+
+        if test_id in ['PREDICT_NULL_DT']:
             # Show where target column is null and non-null
             target_col = cols[-1]
             df_v_null = self.orig_df[cols][(self.orig_df[target_col].apply(is_missing))].head(n_examples // 2)
             num_non_null = n_examples - len(df_v_null)
             df_v_non_null = self.orig_df[cols][(~self.orig_df[target_col].apply(is_missing))].head(num_non_null)
-            df = pd.concat([df_v_null, df_v_non_null])
-        elif test_id in ['C_IS_A_OR_B']:
+            return pd.concat([df_v_null, df_v_non_null])
+
+        if test_id in ['C_IS_A_OR_B']:
             # Show examples where C matches both A and B, where the same column is col1 (where it is and is not null),
             # and where the same column is col2 (where it is and is not null).
             df_both = self.orig_df[np.array(display_info['Same Column']) == 'BOTH'].head(n_examples // 3)
@@ -1195,80 +1171,124 @@ class DisplayMixin:
             df_v2_not_null = self.orig_df[(np.array(display_info['Same Column']) == cols[1]) &
                                           (self.orig_df[cols[2]].notna())].head((n_examples // 2) -
                                                                                 len(df_v2_null) - (len(df_both) // 2))
-            df = pd.concat([df_both, df_v1_null, df_v1_not_null, df_v2_null, df_v2_not_null])[cols]
-        elif test_id in ['TWO_PAIRS']:
+            return pd.concat([df_both, df_v1_null, df_v1_not_null, df_v2_null, df_v2_not_null])[cols]
+
+        if test_id in ['TWO_PAIRS']:
             # Show where the first pair match and where they do not
             df_match = self.orig_df[np.array(display_info['match_1_2_arr']) == True].head(n_examples // 2)
             df_not_match = self.orig_df[np.array(display_info['match_1_2_arr']) == False].head(n_examples - len(df_match))
-            df = pd.concat([df_match, df_not_match])[cols]
+            return pd.concat([df_match, df_not_match])[cols]
 
-        # If we do not yet have a df (the test was not specified above, or no rows matched the conditions), we
-        # create a df simply trying to reduce the number of Null values and showing unique values in the last column.
-        if not show_consecutive and ((df is None) or df.empty):
-            # Test that test_results_df does not have duplicate values in the index
-            assert (self.test_results_df is None) or \
-                   (len(self.test_results_df.index) == len(set(self.test_results_df.index)))
-            cols = list(cols)  # Ensure cols is not in tuple format
-            df = self.orig_df[cols]
+        return None
 
-            # Collect rows with non-null values, other than for columns that are almost all null
-            for col in cols:
-                sub_df = self.orig_df.loc[df.index]
-                mask = sub_df[col].notna()
-                if mask.tolist().count(True) >= 5:
-                    df = df[mask]
+    def _get_binary_balanced_sample(self, cols, n_examples):
+        """
+        Called by _get_balanced_sample() for tests on binary columns. Returns rows covering each combination of the
+        binary values or, where only the last column is binary, rows balanced between its two values. Returns None
+        if the columns are not of these forms.
+        """
+        if len(cols) == 2 and cols[0] in self.binary_cols and cols[1] in self.binary_cols:
+            v0_0, v0_1 = self.column_unique_vals[cols[0]]
+            v1_0, v1_1 = self.column_unique_vals[cols[1]]
+            return self._rows_per_value_combination(cols, [(v0_0, v0_1), (v1_0, v1_1)], n_examples // 4)
 
-            # If there are too few rows, collect additional rows.
-            if len(df) < n_examples:
-                df = pd.concat([df, self.orig_df[cols].sample(n_examples - len(df))])
-                df = df[~df.index.duplicated(keep='first')]
+        if len(cols) == 3 and cols[0] in self.binary_cols and \
+                cols[1] in self.binary_cols and cols[2] in self.binary_cols:
+            v0_0, v0_1 = self.orig_df[cols[0]].dropna().unique()
+            v1_0, v1_1 = self.orig_df[cols[1]].dropna().unique()
+            v2_0, v2_1 = self.orig_df[cols[2]].dropna().unique()
+            return self._rows_per_value_combination(
+                cols, [(v0_0, v0_1), (v1_0, v1_1), (v2_0, v2_1)], n_examples // 4)
 
-            # Try to get a good set of unique values
-            if test_id in ['UNIQUE_VALUES']:
-                df = df.sample(n=n_examples)
+        if len(cols) == 3 and cols[2] in self.binary_cols:
+            v0, v1 = self.orig_df[cols[2]].dropna().unique()
+            va = self.orig_df[cols[0]].dropna().value_counts().values[0]
+            df_v0 = self.orig_df[self.orig_df[cols[2]] == v0]
+            df_v1 = self.orig_df[self.orig_df[cols[2]] == v1]
+            df_v0a = df_v0[df_v0[cols[0]] == va].head(n_examples // 4)
+            df_v0b = df_v0[df_v0[cols[0]] != va].head((n_examples // 2) - len(df_v0a))
+            df_v1a = df_v1[df_v1[cols[0]] == va].head(n_examples // 4)
+            df_v1b = df_v1[df_v1[cols[0]] != va].head((n_examples // 2) - len(df_v1a))
+            return pd.concat([df_v0a, df_v0b, df_v1a, df_v1b])[cols]
+
+        return None
+
+    def _rows_per_value_combination(self, cols, values_per_col, n_per_combination):
+        """
+        Return up to n_per_combination rows of the original data for each combination of the specified values of
+        the specified columns, in the order of itertools.product(), restricted to the specified columns.
+        """
+        dfs_arr = []
+        for combination in product(*values_per_col):
+            mask = self.orig_df[cols[0]] == combination[0]
+            for col, value in zip(cols[1:], combination[1:]):
+                mask = mask & (self.orig_df[col] == value)
+            dfs_arr.append(self.orig_df[mask].head(n_per_combination))
+        return pd.concat(dfs_arr)[cols]
+
+    def _get_generic_sample(self, test_id, cols, n_examples):
+        """
+        Called by _get_sample_not_flagged() where no balanced sample is available for the test. Prefers rows with
+        non-null values, and covering the most common values of the last column.
+        """
+        # Test that test_results_df does not have duplicate values in the index
+        assert (self.test_results_df is None) or \
+               (len(self.test_results_df.index) == len(set(self.test_results_df.index)))
+        df = self.orig_df[cols]
+
+        # Collect rows with non-null values, other than for columns that are almost all null
+        for col in cols:
+            sub_df = self.orig_df.loc[df.index]
+            mask = sub_df[col].notna()
+            if mask.tolist().count(True) >= 5:
+                df = df[mask]
+
+        # If there are too few rows, collect additional rows.
+        df = self._pad_sample(df, cols, n_examples)
+
+        # Try to get a good set of unique values
+        if test_id in ['UNIQUE_VALUES']:
+            return df.sample(n=n_examples)
+
+        last_col = cols[-1]
+        vc = df[last_col].value_counts(dropna=False)
+        vals = list(vc.index[:11])  # Try to cover the 3 to 10 most common values
+        num_vals = len(vals)
+        dfs_arr = []
+        num_examples_found = 0
+        num_per_value = 1
+        if num_vals < n_examples:
+            num_per_value = n_examples // num_vals
+        for v in vals:
+            if num_examples_found >= n_examples:
+                break
+            if v == v:
+                df_v = df[cols][(df[last_col] == v)].head(num_per_value)
             else:
-                last_col = cols[-1]
-                vc = df[last_col].value_counts(dropna=False)
-                vals = list(vc.index[:11])  # Try to cover the 3 to 10 most common values
-                num_vals = len(vals)
-                dfs_arr = []
-                num_examples_found = 0
-                num_per_value = 1
-                if num_vals < n_examples:
-                    num_per_value = n_examples // num_vals
-                for v in vals:
-                    if num_examples_found >= n_examples:
-                        break
-                    if v == v:
-                        df_v = df[cols][(df[last_col] == v)].head(num_per_value)
-                    else:
-                        df_v = df[cols][(df[last_col].isna())].head(num_per_value)
-                    num_examples_found += len(df_v)
-                    dfs_arr.append(df_v)
-                df = pd.concat(dfs_arr)
+                df_v = df[cols][(df[last_col].isna())].head(num_per_value)
+            num_examples_found += len(df_v)
+            dfs_arr.append(df_v)
+        return pd.concat(dfs_arr)
 
-        if show_consecutive:
-            assert df is None
-            df = self.orig_df[cols]
-            start_point = np.random.randint(0, len(df) - n_examples)
-            if sort_col:
-                df = df.sort_values(sort_col).iloc[start_point: start_point + n_examples]
-            else:
-                df = df.iloc[start_point: start_point + n_examples]
-        else:
-            # If we do not return a consecutive set of rows, df is likely of size n_examples. We ensure it is of size
-            # n_examples, then sort it randomly.
-            if len(df) < n_examples:
-                df = pd.concat([df, self.orig_df[cols].sample(n_examples - len(df))])
-                df = df[~df.index.duplicated(keep='first')]
-            df = df.sample(n=min(len(df), n_examples), random_state=0)
+    def _get_consecutive_sample(self, cols, n_examples, sort_col):
+        """
+        Called by _get_sample_not_flagged() for tests where row order is relevant. Returns n_examples consecutive
+        rows, starting at a random row, after sorting by sort_col if specified.
+        """
+        df = self.orig_df[cols]
+        start_point = np.random.randint(0, len(df) - n_examples)
+        if sort_col:
+            return df.sort_values(sort_col).iloc[start_point: start_point + n_examples]
+        return df.iloc[start_point: start_point + n_examples]
 
-        # Remove rows that were flagged. If is_patterns is True, no rows were flagged, and we skip this check.
-        if not is_patterns:
-            sub_df = self.test_results_df.loc[df.index]
-            mask = sub_df[results_col_name] == 0
-            df = df[mask]
-
+    def _pad_sample(self, df, cols, n_examples):
+        """
+        If df has fewer than n_examples rows, add randomly-selected rows of the original data, excluding any already
+        present.
+        """
+        if len(df) < n_examples:
+            df = pd.concat([df, self.orig_df[cols].sample(n_examples - len(df))])
+            df = df[~df.index.duplicated(keep='first')]
         return df
 
     ##################################################################################################################
