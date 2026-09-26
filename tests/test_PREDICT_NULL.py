@@ -38,12 +38,14 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # Half the values of "predict_null all" and "predict_null most" are made null at random, which is not predictable
+    synth_test(test_id, "random", 0, 0)
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, [])
+    # Row 999, the exception in "predict_null most", is never made null
+    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_all_columns
