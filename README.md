@@ -109,6 +109,18 @@ CI runs Ruff, mypy, the tests on Python 3.10–3.14 with coverage, a package bui
 build; the documentation is published to GitHub Pages from `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 the full workflow, including how to add a check.
 
+## Acknowledgements
+
+DataConsistencyChecker is based on the original
+[DataConsistencyChecker](https://github.com/Brett-Kennedy/DataConsistencyChecker) by
+[Brett Kennedy](https://github.com/Brett-Kennedy), which introduced the approach and the checks. This repository
+continues that work as an installable package, with tests and documentation.
+
+## Citation
+
+If you use DataConsistencyChecker in your work, please cite it with the metadata in [CITATION.cff](CITATION.cff)
+(GitHub's "Cite this repository" button reads it). It credits the original project as well.
+
 ## License
 
 [MIT](LICENSE)
