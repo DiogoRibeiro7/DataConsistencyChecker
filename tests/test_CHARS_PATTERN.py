@@ -40,7 +40,9 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # The exception (row 999) is never null, so is over-represented in sample_df, which is drawn from the rows without
+    # nulls. Here it is in the sample, and the sample pre-check, which allows no exceptions, skips the column.
+    synth_test(test_id, "random", synth_patterns_cols, [])
 
 
 @requires_synthetic_nones

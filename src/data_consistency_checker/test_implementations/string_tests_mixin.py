@@ -1128,7 +1128,7 @@ class StringTestsMixin(CheckerState):
 
         for col_name in self.string_cols:
             # Skip columns that have only one character for all values
-            avg_num_chars = statistics.median(as_str(self.orig_df[col_name]).str.len())
+            avg_num_chars = statistics.median(as_str(self.orig_df[col_name].dropna()).str.len())
             if avg_num_chars <= 1:
                 continue
 
@@ -1141,9 +1141,9 @@ class StringTestsMixin(CheckerState):
             if as_str(self.orig_df[col_name]).str.isalnum().tolist().count(False) == 0:
                 continue
 
-            # First test on a sample
-            patterns_arr = as_str(self.sample_df[col_name]).apply(get_str_format)
-            if patterns_arr.nunique() > 1:
+            # First test on a sample, using only the non-null values
+            patterns_arr = as_str(self.sample_df[col_name].dropna()).apply(get_str_format)
+            if patterns_arr.nunique() != 1:
                 continue
 
             # Skip where the main pattern is simply 'X', meaning all alpha-numeric characters
@@ -1152,7 +1152,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             patterns_arr = as_str(self.orig_df[col_name]).apply(get_str_format)
-            vc = patterns_arr.value_counts()
+            vc = patterns_arr[self.orig_df[col_name].notna()].value_counts()
             if len(vc) > self.freq_contamination_level:
                 continue
 
@@ -1497,9 +1497,11 @@ class StringTestsMixin(CheckerState):
         for col_name in self.string_cols:
             col_vals = as_str(self.orig_df[col_name]).apply(replace_special_with_space)
             words_arr = col_vals.str.split()
-            if pd.Series([len(x) for x in words_arr]).median() < 2:
+            # Get the number of words and the words used from the non-null values only
+            non_null_words_arr = words_arr[self.orig_df[col_name].notna()]
+            if pd.Series([len(x) for x in non_null_words_arr]).median() < 2:
                 continue
-            flat_words_arr = list(np.concatenate(words_arr).flat)
+            flat_words_arr = list(np.concatenate(non_null_words_arr.values).flat)
             vc = pd.Series(flat_words_arr).value_counts(ascending=False)
             common_words_arr = []
             for v in vc.index:
@@ -1539,11 +1541,13 @@ class StringTestsMixin(CheckerState):
 
         for col_name in self.string_cols:
             words_arr = words_list_dict[col_name]
-            num_words_arr = [len(x) for x in words_arr]
+            # Get the number of words and the words used from the non-null values only
+            non_null_words_arr = words_arr[self.orig_df[col_name].notna().values]
+            num_words_arr = [len(x) for x in non_null_words_arr]
             if pd.Series(num_words_arr).quantile(0.5) <= 1:
                 continue
 
-            flat_words_arr = list(np.concatenate(words_arr).flat)
+            flat_words_arr = list(np.concatenate(non_null_words_arr).flat)
             vc = pd.Series(flat_words_arr).value_counts(ascending=True)
             rare_words_arr = []
             for v in vc.index:
@@ -1556,6 +1560,7 @@ class StringTestsMixin(CheckerState):
             if len(rare_words_arr) > self.freq_contamination_level:
                 continue
             test_series = [len(set(x).intersection(set(rare_words_arr))) == 0 for x in words_arr]
+            test_series = np.array(test_series) | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
                 [col_name],
@@ -1828,7 +1833,9 @@ class StringTestsMixin(CheckerState):
         first_words_dict = {}
         for col_name in self.string_cols:
             col_vals = as_str(self.orig_df[col_name]).apply(replace_special_with_space)
-            first_words_dict[col_name] = pd.Series([x[0] if len(x) >0 else "" for x in col_vals.str.split()])
+            # Missing values have no first word
+            first_words_dict[col_name] = pd.Series([x[0] if len(x) >0 else "" for x in col_vals.str.split()]).where(
+                self.orig_df[col_name].notna().values)
 
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
@@ -1918,8 +1925,11 @@ class StringTestsMixin(CheckerState):
         word_count_dict = {}  # todo: call self.get_word_counts_dict()
         for col_name in self.string_cols:
             col_vals = as_str(self.orig_df[col_name]).apply(replace_special_with_space)
-            first_words_dict[col_name] = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
-            word_count_dict[col_name] = pd.Series([len(x) for x in col_vals.str.split()])
+            # Missing values have no first word and no words
+            is_valid = self.orig_df[col_name].notna().values
+            first_words_dict[col_name] = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()]).where(
+                is_valid)
+            word_count_dict[col_name] = pd.Series([len(x) for x in col_vals.str.split()]).where(is_valid, 0)
 
         num_pairs, pairs = self._get_string_column_pairs()
         if num_pairs > self.max_combinations:
@@ -2267,7 +2277,8 @@ class StringTestsMixin(CheckerState):
 
     def _check_same_first_chars(self, test_id):
         def check_column(col_name):
-            first_chars_series = as_str(self.orig_df[col_name]).str.slice(0, 1)  # Get the first letter of each value
+            # Get the first letter of each non-null value
+            first_chars_series = as_str(self.orig_df[col_name].dropna()).str.slice(0, 1)
             counts_series = first_chars_series.value_counts(normalize=True)  # Get the fraction for each first letter
             if len(counts_series) < 10:
                 return False
@@ -2294,11 +2305,13 @@ class StringTestsMixin(CheckerState):
             # Determine the length of longest substrings in the values in both columns that match, such that there
             # are sufficient matches to consider this a valid pattern (less than contamination_level exceptions)
             max_number_matching = -1
-            # todo: handle where one or the other of the columns has Null values
+            # Rows where either value is Null neither support nor violate the pattern, so are counted as matching
+            either_null = self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             for num_chars_checking in range(1, int(max_check) + 1):
                 first_chars_series_1 = as_str(self.orig_df[col_name_1].fillna("")).str.slice(0, num_chars_checking)
                 first_chars_series_2 = as_str(self.orig_df[col_name_2].fillna("")).str.slice(0, num_chars_checking)
-                num_matching = sum(x == y for x, y in zip(first_chars_series_1, first_chars_series_2))
+                num_matching = sum((x == y) or z for x, y, z in zip(first_chars_series_1, first_chars_series_2,
+                                                                    either_null))
                 if num_matching < (self.num_rows - self.freq_contamination_level):
                     break
                 max_number_matching = num_chars_checking
@@ -2521,12 +2534,13 @@ class StringTestsMixin(CheckerState):
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Test on a sample.
-            alpha_col_1 = self.sample_df[col_name_1].apply(lambda x: "" if is_missing(x) else x)
+            # Test on a sample, using only rows where both values are non-null.
+            sample_df = self.sample_df[[col_name_1, col_name_2]].dropna()
+            alpha_col_1 = sample_df[col_name_1].apply(lambda x: "" if is_missing(x) else x)
             alpha_col_1 = [[c for c in x if c and c.isalpha()] for x in alpha_col_1]
             if [len(x) > 0 for x in alpha_col_1].count(False) > 1:
                 continue
-            alpha_col_2 = self.sample_df[col_name_2].apply(lambda x: "" if is_missing(x) else x)
+            alpha_col_2 = sample_df[col_name_2].apply(lambda x: "" if is_missing(x) else x)
             alpha_col_2 = [[c for c in x if c and c.isalpha()] for x in alpha_col_2]
             if [len(x) > 0 for x in alpha_col_2].count(False) > 1:
                 continue
@@ -2946,16 +2960,18 @@ class StringTestsMixin(CheckerState):
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Test first on a sample
-            vals_arr_1 = as_str(self.sample_df[col_name_1])
-            vals_arr_2 = as_str(self.sample_df[col_name_2])
+            # Test first on a sample. The correlations are calculated using only rows where both values are non-null.
+            sample_df = self.sample_df[[col_name_1, col_name_2]].dropna()
+            vals_arr_1 = as_str(sample_df[col_name_1])
+            vals_arr_2 = as_str(sample_df[col_name_2])
             spearancorr = abs(vals_arr_1.rank().corr(vals_arr_2.rank(), method='spearman'))
             if spearancorr < 0.8:  # Require a less perfect correlation on samples, which may vary.
                 continue
 
             # Test on the full columns
-            vals_arr_1 = as_str(self.orig_df[col_name_1])
-            vals_arr_2 = as_str(self.orig_df[col_name_2])
+            pair_df = self.orig_df[[col_name_1, col_name_2]].dropna()
+            vals_arr_1 = as_str(pair_df[col_name_1])
+            vals_arr_2 = as_str(pair_df[col_name_2])
 
             # The class variable, self.spearman_corr, covers only numeric columns, so we calculate the correlation here.
             spearancorr = abs(vals_arr_1.rank().corr(vals_arr_2.rank(), method='spearman'))
@@ -3583,8 +3599,10 @@ class StringTestsMixin(CheckerState):
                     continue
                 if df is None:
                     df = self.orig_df.copy()
+                    # Rows with a missing value in col_name_1 have no position in the sort order, so are placed last
                     if col_name_1 in self.numeric_cols:
-                        sort_order = self.numeric_vals_filled[col_name_1].sort_values().index
+                        sort_order = self.numeric_vals_filled[col_name_1].where(
+                            self.orig_df[col_name_1].notna().values).sort_values().index
                     else:
                         sort_order = self.orig_df[col_name_1].sort_values().index
                     df = df.loc[sort_order]
@@ -4106,8 +4124,14 @@ class StringTestsMixin(CheckerState):
                 any_subsets_uncorrelated = False
                 some_subset_correlated = False
                 test_series = [True] * self.num_rows
+                # Rows with a missing value in either numeric column neither support nor violate the pattern, so we
+                # test each subset using only its rows where both are non-null.
+                pair_non_null = (self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()).values
                 for val in conditioning_vals:
                     idxs = val_idxs_dict[val]
+                    idxs = idxs[pair_non_null[idxs]]
+                    if len(idxs) < 100:
+                        continue
                     sub_np = numeric_np[idxs]
 
                     # First test on a sample of rows
@@ -4128,6 +4152,7 @@ class StringTestsMixin(CheckerState):
                         sub_df = self.orig_df[self.orig_df[col_cond].isna()]
                     else:
                         sub_df = self.orig_df[self.orig_df[col_cond] == val]
+                    sub_df = sub_df.dropna(subset=[col_name_1, col_name_2])
                     spearancorr = sub_df[col_name_1].corr(sub_df[col_name_2], method='spearman')
                     if abs(spearancorr) < 0.95:
                         any_subsets_uncorrelated = True
@@ -4286,6 +4311,8 @@ class StringTestsMixin(CheckerState):
                 rules = self.get_decision_tree_rules_as_categories(rules, categorical_features)
 
                 test_series = (y == y_pred)
+                # Rows with a missing value in the target or a feature used neither support nor violate the pattern
+                test_series = test_series | self.orig_df[cols + [col_name]].isna().any(axis=1)
                 self._process_analysis_binary(
                     test_id,
                     cols + [col_name],
