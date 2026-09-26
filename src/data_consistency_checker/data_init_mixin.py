@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numbers
 import statistics
 import warnings
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -61,7 +60,7 @@ class DataInitMixin:
         self.execution_test_list = []
 
         self.freq_contamination_level = -1
-        self.rare_contamination_level = -1        
+        self.rare_contamination_level = -1
 
         # Synthetic data, if specified to create
         self.synth_df = None
@@ -192,9 +191,9 @@ class DataInitMixin:
         # the end of each
         if len(df.columns) > len(set(df.columns)):
             df = df.copy()
-            print(("Duplicate column names encountered. A suffix will be added to all column names to ensure they are "
+            print("Duplicate column names encountered. A suffix will be added to all column names to ensure they are "
                    f"unique. Duplicate column names: "
-                   f"{set([x for x in df.columns if df.columns.tolist().count(x) > 1])}"))
+                   f"{ {x for x in df.columns if df.columns.tolist().count(x) > 1} }")
             new_col_names = []
             for col_idx, col_name in enumerate(df.columns):
                 new_col_names.append(f"{col_name}_{col_idx}")
@@ -204,7 +203,7 @@ class DataInitMixin:
         if len(df) < 10:
             print(f"The dataframe contains too few rows to be examined in a meaningful manner. Number of rows: "
                   f"{len(df)}")
-            return None
+            return
 
         # Ensure the dataframe has a predictable index, which may be kept inline with parallel dataframes created
         # running the tests.
@@ -281,13 +280,13 @@ class DataInitMixin:
                     try:
                         self.orig_df[col_name] = pd.to_datetime(self.orig_df[col_name], format="%Y%M")
                         is_date = True
-                    except:
+                    except Exception:
                         pass
                 if avg_num_chars == 6 and not is_date:
                     try:
                         self.orig_df[col_name] = pd.to_datetime(self.orig_df[col_name], format="%M%Y")
                         is_date = True
-                    except:
+                    except Exception:
                         pass
 
                 # Check if the column is of the form yyyymm or mmyyyy, but converted to float, so containing '.0'
@@ -295,13 +294,13 @@ class DataInitMixin:
                     try:
                         self.orig_df[col_name] = pd.to_datetime(self.orig_df[col_name].astype(np.int64), format="%Y%M")
                         is_date = True
-                    except:
+                    except Exception:
                         pass
                 if avg_num_chars == 6 and not is_date:
                     try:
                         self.orig_df[col_name] = pd.to_datetime(self.orig_df[col_name].astype(np.int64), format="%M%Y")
                         is_date = True
-                    except:
+                    except Exception:
                         pass
 
                 if col_name in self.string_cols and not is_date:
@@ -350,7 +349,7 @@ class DataInitMixin:
             if self.orig_df[col_name].dtype.name == 'category':
                 try:
                     self.orig_df[col_name] = self.orig_df[col_name].astype(float)
-                except:
+                except Exception:
                     self.orig_df[col_name] = self.orig_df[col_name].astype(str).astype(float)
 
         # For binary columns, find and cache the set of unique values per column
@@ -414,7 +413,6 @@ class DataInitMixin:
             self.sample_df = self.orig_df.sample(n=min(len(self.orig_df), 50), random_state=0)
 
         if (len(self.sample_df) < 50) and (len(self.sample_df) < len(self.orig_df)):
-            num_needed = 50 - len(self.sample_df)
             self.sample_df = pd.concat([self.sample_df,
                                         self.orig_df.sample(n=min(len(self.orig_df), 50), random_state=0)])
 
@@ -430,10 +428,9 @@ class DataInitMixin:
         # Replace any NA values that cannot be treated as None or NaN
         def test_NA(x):
             try:
-                if x == x:
-                    x = x
+                bool(x == x)  # Raises for values, such as pd.NA, that cannot be compared
                 return False
-            except:
+            except Exception:
                 return True
 
         for col_name in self.orig_df.columns:

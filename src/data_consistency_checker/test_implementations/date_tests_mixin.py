@@ -6,39 +6,18 @@ Extracted from check_data_consistency.py for better code organization.
 """
 
 from __future__ import annotations
-from typing import Any
 
-import pandas as pd
-import numpy as np
-import numbers
-import sys
-import math
-import statistics
-import datetime
 import calendar
+import datetime
+import math
 import random
-import string
-import copy
-import scipy
-from dateutil.relativedelta import relativedelta
-from sklearn.linear_model import Lasso
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn import tree, metrics
-from sklearn.metrics import f1_score, r2_score
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
-from itertools import combinations
-from decimal import Decimal, ROUND_HALF_UP
+import statistics
 
-from ..checker_utils import (
-    safe_div,
-    is_number,
-    convert_to_numeric,
-    get_num_decimal_digits,
-    get_non_alphanumeric,
-    is_missing,
-    array_to_str,
-    replace_special_with_space,
-)
+import numpy as np
+import pandas as pd
+from dateutil.relativedelta import relativedelta
+
+from data_consistency_checker.checker_utils import convert_to_numeric, is_missing
 
 
 class DateTestsMixin:
@@ -87,7 +66,7 @@ class DateTestsMixin:
             q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
                 lower_limit = q1 - (self.iqr_limit * (q3 - q1))
-            except: # There is a limit for pd.Timestamp objects. They can not go beyond Timestamp.min or .max
+            except Exception: # There is a limit for pd.Timestamp objects. They can not go beyond Timestamp.min or .max
                 continue
             test_series = pd.to_datetime(self.orig_df[col_name]) > lower_limit
             test_series = test_series | self.orig_df[col_name].isna()
@@ -119,7 +98,7 @@ class DateTestsMixin:
             q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75)
             try:
                 upper_limit = q3 + (self.iqr_limit * (q3 - q1))  # Using a stricter threshold than the 2.2 normally used
-            except:
+            except Exception:
                 continue
             test_series = pd.to_datetime(self.orig_df[col_name]) < upper_limit
             test_series = test_series | self.orig_df[col_name].isna()
@@ -332,7 +311,7 @@ class DateTestsMixin:
             one exception.
         """
         rand_dates = []
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             d = np.random.randint(1, 28, 1)[0]
             m = np.random.randint(1, 12, 1)[0]
             y = np.random.randint(2010, 2023, 1)[0]
@@ -340,12 +319,12 @@ class DateTestsMixin:
 
         all_constant_dates = []
         most_constant_dates = []
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             m = np.random.randint(1, 12, 1)[0]
             y = np.random.randint(2010, 2023, 1)[0]
             all_constant_dates.append(datetime.datetime.strptime(f"01-{m}-{y} 02:35:5", "%d-%m-%Y %H:%M:%S"))
             most_constant_dates.append(datetime.datetime.strptime(f"01-{m}-{y} 02:35:5", "%d-%m-%Y %H:%M:%S"))
-        most_constant_dates[-1] = datetime.datetime.strptime(f"13-7-2021 02:35:5", "%d-%m-%Y %H:%M:%S")
+        most_constant_dates[-1] = datetime.datetime.strptime("13-7-2021 02:35:5", "%d-%m-%Y %H:%M:%S")
 
         self._add_synthetic_column('constant_dom rand', rand_dates)
         self._add_synthetic_column('constant_dom all', all_constant_dates)
@@ -380,7 +359,7 @@ class DateTestsMixin:
             with one exception.
         """
         rand_dates = []
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             d = np.random.randint(1, 28, 1)[0]
             m = np.random.randint(1, 12, 1)[0]
             y = np.random.randint(2010, 2023, 1)[0]
@@ -389,12 +368,12 @@ class DateTestsMixin:
         all_constant_dates = []
         most_constant_dates = []
         dom_arr = [(1, 31), (3, 31), (4, 30), (5, 31), (6, 30)]
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             m, d = dom_arr[np.random.randint(0, len(dom_arr), 1)[0]]
             y = np.random.randint(2010, 2023, 1)[0]
             all_constant_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} 02:35:5", "%d-%m-%Y %H:%M:%S"))
             most_constant_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} 02:35:5", "%d-%m-%Y %H:%M:%S"))
-        most_constant_dates[-1] = datetime.datetime.strptime(f"13-7-2021 02:35:5", "%d-%m-%Y %H:%M:%S")
+        most_constant_dates[-1] = datetime.datetime.strptime("13-7-2021 02:35:5", "%d-%m-%Y %H:%M:%S")
 
         self._add_synthetic_column('constant_last_dom rand', rand_dates)
         self._add_synthetic_column('constant_last_dom all', all_constant_dates)
@@ -448,10 +427,7 @@ class DateTestsMixin:
         for _ in range(self.num_synth_rows):
             y = np.random.randint(1990, 2010)
             m = np.random.randint(1, 13)
-            if m >= 10:
-                s = str(y) + str(m)
-            else:
-                s = str(y) + "0" + str(m)
+            s = str(y) + str(m) if m >= 10 else str(y) + "0" + str(m)
             rand_dates.append(s)
         self._add_synthetic_column('const_gap rand', rand_dates)
 
@@ -520,7 +496,7 @@ class DateTestsMixin:
                 iqr = q3 - q1
                 try:
                     threshold = q3 + (iqr * self.iqr_limit)
-                except:
+                except Exception:
                     continue
                 test_series = gap_array < threshold
                 test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
@@ -530,7 +506,7 @@ class DateTestsMixin:
                     test_series,
                     (f'The gap between "{col_small}" and "{col_big}" is larger than normal. We flag any gaps '
                      f'larger than {threshold} days, as the 25th percentile is {q1} days and the 75th {q3} days.'),
-                    f"",
+                    "",
                     allow_patterns=False
                 )
 
@@ -576,7 +552,7 @@ class DateTestsMixin:
                 iqr = q3 - q1
                 try:
                     threshold = q1 - (iqr * self.iqr_limit)
-                except:
+                except Exception:
                     continue
                 test_series = gap_array > threshold
                 test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
@@ -586,7 +562,7 @@ class DateTestsMixin:
                     test_series,
                     (f'The gap between "{col_small}" and "{col_big}" is smaller than normal. We flag any gaps '
                      f'smaller than {threshold} days, as the 25th percentile is {q1} days and the 75th {q3} days.'),
-                    f"",
+                    "",
                     allow_patterns=False
                 )
 
@@ -631,7 +607,7 @@ class DateTestsMixin:
                     [col_small, col_big],
                     test_series,
                     f'"{col_big}" is consistently later than "{col_small}"',
-                    f"",
+                    "",
                     allow_patterns=False
                 )
 
@@ -645,21 +621,21 @@ class DateTestsMixin:
         rand_dates = []
         all_same_dates = []
         most_same_dates = []
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             d = np.random.randint(1, 28, 1)[0]
             m = np.random.randint(1, 12, 1)[0]
             y = np.random.randint(2010, 2023, 1)[0]
             h = np.random.randint(1, 20, 1)[0]
-            min = np.random.randint(1, 50, 1)[0]
-            rand_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{min}:5", "%d-%m-%Y %H:%M:%S"))
+            minute = np.random.randint(1, 50, 1)[0]
+            rand_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{minute}:5", "%d-%m-%Y %H:%M:%S"))
 
             h = np.random.randint(1, 20, 1)[0]
-            min = np.random.randint(1, 50, 1)[0]
-            all_same_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{min}:5", "%d-%m-%Y %H:%M:%S"))
+            minute = np.random.randint(1, 50, 1)[0]
+            all_same_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{minute}:5", "%d-%m-%Y %H:%M:%S"))
 
             h = np.random.randint(1, 20, 1)[0]
-            min = np.random.randint(1, 50, 1)[0]
-            most_same_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{min}:5", "%d-%m-%Y %H:%M:%S"))
+            minute = np.random.randint(1, 50, 1)[0]
+            most_same_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{minute}:5", "%d-%m-%Y %H:%M:%S"))
         most_same_dates[-1] = datetime.datetime.strptime(f"{23}-{2}-{2024} {8}:{43}:5", "%d-%m-%Y %H:%M:%S")
 
         self._add_synthetic_column('same_date rand', rand_dates)
@@ -698,23 +674,23 @@ class DateTestsMixin:
         rand_dates = []
         all_same_months = []
         most_same_months = []
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             y = np.random.randint(2010, 2023, 1)[0]
             m = np.random.randint(1, 12, 1)[0]
             d = np.random.randint(1, 28, 1)[0]
             h = np.random.randint(1, 20, 1)[0]
-            min = np.random.randint(1, 50, 1)[0]
-            rand_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{min}:5", "%d-%m-%Y %H:%M:%S"))
+            minute = np.random.randint(1, 50, 1)[0]
+            rand_dates.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{minute}:5", "%d-%m-%Y %H:%M:%S"))
 
             d = np.random.randint(1, 28, 1)[0]
             h = np.random.randint(1, 20, 1)[0]
-            min = np.random.randint(1, 50, 1)[0]
-            all_same_months.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{min}:5", "%d-%m-%Y %H:%M:%S"))
+            minute = np.random.randint(1, 50, 1)[0]
+            all_same_months.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{minute}:5", "%d-%m-%Y %H:%M:%S"))
 
             d = np.random.randint(1, 28, 1)[0]
             h = np.random.randint(1, 20, 1)[0]
-            min = np.random.randint(1, 50, 1)[0]
-            most_same_months.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{min}:5", "%d-%m-%Y %H:%M:%S"))
+            minute = np.random.randint(1, 50, 1)[0]
+            most_same_months.append(datetime.datetime.strptime(f"{d}-{m}-{y} {h}:{minute}:5", "%d-%m-%Y %H:%M:%S"))
         most_same_months[-1] = datetime.datetime.strptime(f"{23}-{2}-{2024} {8}:{43}:5", "%d-%m-%Y %H:%M:%S")
 
         self._add_synthetic_column('same_month rand', rand_dates)
@@ -745,7 +721,7 @@ class DateTestsMixin:
     def _generate_correlated_dates(self):
         rand_dates = []
         correlated_dates = []
-        for i in range(self.num_synth_rows):
+        for _i in range(self.num_synth_rows):
             y = np.random.randint(2010, 2023, 1)[0]
             m = np.random.randint(1, 12, 1)[0]
             d = np.random.randint(1, 28, 1)[0]
@@ -756,15 +732,15 @@ class DateTestsMixin:
         self._add_synthetic_column('corr_dates rand', rand_dates)
         self._add_synthetic_column('corr_dates all', correlated_dates)
         self._add_synthetic_column('corr_dates most', correlated_dates)
-        self.synth_df.loc[999, 'corr_dates most'] = datetime.datetime.strptime(f"1-1-2009", "%d-%m-%Y")
+        self.synth_df.loc[999, 'corr_dates most'] = datetime.datetime.strptime("1-1-2009", "%d-%m-%Y")
 
 
     def _check_correlated_dates(self, test_id):
         num_pairs, date_pairs_list = self._get_date_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of date columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of date columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -839,9 +815,9 @@ class DateTestsMixin:
         self._add_synthetic_column(
             'large_given_date rand', pd.date_range(test_date1, periods=self.num_synth_rows, freq='D'))
         self._add_synthetic_column(
-            'large_given_date all',  sorted([x for x in range(self.num_synth_rows)], reverse=True))
+            'large_given_date all',  sorted(range(self.num_synth_rows), reverse=True))
         self._add_synthetic_column(
-            'large_given_date most', sorted([x for x in range(self.num_synth_rows - 1)], reverse=True) + [990])
+            'large_given_date most', sorted(range(self.num_synth_rows - 1), reverse=True) + [990])
 
 
     def _check_large_given_date(self, test_id):
@@ -916,7 +892,7 @@ class DateTestsMixin:
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
                     num_vals_all = convert_to_numeric(sub_df[num_col], med)
-                    sub_test_series = pd.Series([(x < threshold) or (x!=x) or (x==None) for x in num_vals_all])
+                    sub_test_series = pd.Series([(x < threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:
                         index_of_large = \
@@ -929,7 +905,7 @@ class DateTestsMixin:
                     [date_col, num_col],
                     test_series,
                     f'"{num_col}" is unusually large given the bin of the date column: "{date_col}"',
-                    f"",
+                    "",
                     allow_patterns=False,
                     display_info={"bin_assignments": bin_assignments, "bin_edges": bin_edges}
                 )
@@ -943,8 +919,8 @@ class DateTestsMixin:
         test_date1 = datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")
         self._add_synthetic_column('small_given_date rand',
                                     pd.date_range(test_date1, periods=self.num_synth_rows, freq='D'))
-        self._add_synthetic_column('small_given_date all', [x for x in range(self.num_synth_rows)])
-        self._add_synthetic_column('small_given_date most', [x for x in range(self.num_synth_rows - 1)] + [2])
+        self._add_synthetic_column('small_given_date all', list(range(self.num_synth_rows)))
+        self._add_synthetic_column('small_given_date most', list(range(self.num_synth_rows - 1)) + [2])
 
 
     def _check_small_given_date(self, test_id):
@@ -1018,7 +994,7 @@ class DateTestsMixin:
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
                     num_vals_all = convert_to_numeric(sub_df[num_col], med)
-                    sub_test_series = pd.Series([(x >= threshold) or (x!=x) or (x==None) for x in num_vals_all])
+                    sub_test_series = pd.Series([(x >= threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:
                         index_of_small = \
@@ -1031,7 +1007,7 @@ class DateTestsMixin:
                     [date_col, num_col],
                     test_series,
                     f'"{num_col}" is unusually small given the bin of the date column: "{date_col}"',
-                    f"",
+                    "",
                     allow_patterns=False,
                     display_info={"bin_assignments": bin_assignments, "bin_edges": bin_edges}
                 )

@@ -8,7 +8,7 @@ This module contains test definitions for numeric columns including:
 - Multi-column numeric tests and aggregations
 """
 
-from ..test_registry import TestDefinition
+from data_consistency_checker.test_registry import TestDefinition
 
 
 def _test(short_description, description, test_func, gen_func, shortlist, implemented, fast, code):

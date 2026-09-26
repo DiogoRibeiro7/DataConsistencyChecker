@@ -8,15 +8,13 @@ and statistics about the data. Splitting these out keeps the main
 from __future__ import annotations
 
 import numbers
-
 import os
 from itertools import product
 from textwrap import wrap
-from typing import Optional
 
 import numpy as np
 import pandas as pd
-from IPython.display import display, Markdown
+from IPython.display import Markdown, display
 
 from .checker_utils import (
     convert_to_numeric,
@@ -59,7 +57,7 @@ class DisplayMixin:
             if definition.implemented
         ]
 
-    def print_test_descriptions(self, long_desc: bool = False, f: Optional[object] = None) -> None:
+    def print_test_descriptions(self, long_desc: bool = False, f: object | None = None) -> None:
         """Print test descriptions.
 
         Args:
@@ -68,7 +66,7 @@ class DisplayMixin:
             f: Optional file handle. If provided, output is written to this file
                 as HTML.
         """
-        for test_id in self.test_dict.keys():
+        for test_id in self.test_dict:
             text = self.test_dict[test_id].description
             if long_desc:
                 doc_str = self.test_dict[test_id].test_func.__doc__
@@ -103,7 +101,7 @@ class DisplayMixin:
             include_nulls: Whether to generate several versions of the demo data
                 containing different amounts of ``None`` values.
         """
-        if test_id not in self.test_dict.keys():
+        if test_id not in self.test_dict:
             print(f"Error {test_id} is not a valid test")
 
         none_cases = ["none"]
@@ -229,10 +227,10 @@ class DisplayMixin:
         """
 
         if self.test_results_df is None or len(self.test_results_df) == 0:
-            return None
+            return
 
         sorted_df = self.test_results_df.sort_values('FINAL SCORE', ascending=False)
-        sorted_df.index = [x[0] if type(x) == tuple else x for x in sorted_df.index]
+        sorted_df.index = [x[0] if type(x) is tuple else x for x in sorted_df.index]
         if with_results:
             self._display_rows_with_tests(sorted_df, n_rows, check_score=True)
         else:
@@ -481,8 +479,8 @@ class DisplayMixin:
         if show_patterns and show_exceptions and \
                 ((len(self.exceptions_summary_df) + len(self.patterns_df)) > max_shown):
             print()
-            print((f"{len(self.exceptions_summary_df) + len(self.patterns_df)} patterns and exceptions were "
-                   f"identified. {msg}"))
+            print(f"{len(self.exceptions_summary_df) + len(self.patterns_df)} patterns and exceptions were "
+                   f"identified. {msg}")
             return True
         if show_patterns and (len(self.patterns_df) > max_shown):
             print()
@@ -505,7 +503,7 @@ class DisplayMixin:
             self.output_folder = output_folder
         os.makedirs(self.output_folder, exist_ok=True)
 
-        f = open(os.path.join(self.output_folder, "Data_consistency.html"), 'w')
+        f = open(os.path.join(self.output_folder, "Data_consistency.html"), 'w')  # noqa: SIM115 - closed by the caller
         f.write("<html>" + os.linesep)
         f.write("<head>" + os.linesep)
         f.write("</head>" + os.linesep)
@@ -939,10 +937,7 @@ class DisplayMixin:
             df = df2
 
         # Set the row order
-        if test_id in ['SMALL_GIVEN_DATE', 'LARGE_GIVEN_DATE']:
-            df = df.sort_values(df.columns[-1])
-        else:
-            df = df.sort_index()
+        df = df.sort_values(df.columns[-1]) if test_id in ['SMALL_GIVEN_DATE', 'LARGE_GIVEN_DATE'] else df.sort_index()
 
         pd.options.display.float_format = '{:f}'.format
         if f:
@@ -1019,7 +1014,7 @@ class DisplayMixin:
         self._draw_sample_dataframe(vals, test_id, cols, display_info, is_patterns, f)
 
     def _get_sample_not_flagged(self, test_id, col_name, n_examples=10, show_consecutive=False, sort_col=None,
-                                 is_patterns=False, display_info=None, f=None):
+                                 is_patterns=False, display_info=None, f=None):  # noqa: ARG002
         """
         Called by _display_examples_not_flagged()
 
@@ -1060,7 +1055,7 @@ class DisplayMixin:
         # If there are no values flagged for this test in this feature, there will not be a column in
         # test_results_df. In this case, return any values.
         if not is_patterns and results_col_name not in self.test_results_df.columns:
-            assert False, "Should not happen"
+            assert False, "Should not happen"  # noqa: B011
             return self.orig_df[col_name].sample(n=n_examples, random_state=0)
 
         df = self._get_balanced_sample(test_id, cols, n_examples, display_info)
@@ -1175,8 +1170,8 @@ class DisplayMixin:
 
         if test_id in ['TWO_PAIRS']:
             # Show where the first pair match and where they do not
-            df_match = self.orig_df[np.array(display_info['match_1_2_arr']) == True].head(n_examples // 2)
-            df_not_match = self.orig_df[np.array(display_info['match_1_2_arr']) == False].head(n_examples - len(df_match))
+            df_match = self.orig_df[np.array(display_info['match_1_2_arr']) == True].head(n_examples // 2)  # noqa: E712
+            df_not_match = self.orig_df[np.array(display_info['match_1_2_arr']) == False].head(n_examples - len(df_match))  # noqa: E712
             return pd.concat([df_match, df_not_match])[cols]
 
         return None
@@ -1336,9 +1331,9 @@ class DisplayMixin:
                     for column_name in self.col_to_original_cols_dict[result_col_name]:
                         if self.test_results_df[result_col_name][row_idx]:
                             column_idx = np.where(self.orig_df.columns == column_name)[0][0]
-                            test_row[column_idx+1] = u'\u2714'  # Checkmark symbol
+                            test_row[column_idx+1] = '\u2714'  # Checkmark symbol
                             colour_cells[column_idx] = True
-                if test_row.count(u'\u2714'):
+                if test_row.count('\u2714'):
                     orig_row = pd.concat([orig_row, pd.DataFrame([test_row], columns=orig_row.columns)])
             orig_row = orig_row.reset_index()
             orig_row = orig_row.drop(columns=['index'])
@@ -1346,7 +1341,7 @@ class DisplayMixin:
             # Display the dataframe representing this row from the original data
             print()
             if is_notebook():
-                display(Markdown(f"**Row: {row_idx} " + u'\u2014' + f" Final Score: {sorted_df.loc[row_idx]['FINAL SCORE']}**"))
+                display(Markdown(f"**Row: {row_idx} " + '\u2014' + f" Final Score: {sorted_df.loc[row_idx]['FINAL SCORE']}**"))
                 display(orig_row.style.apply(styling_orig_row, row_idx=0, flagged_arr=colour_cells, axis=None))
             else:
                 print(f"Row: {row_idx} Final Score: {sorted_df.loc[row_idx]['FINAL SCORE']}")

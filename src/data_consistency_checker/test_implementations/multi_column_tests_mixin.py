@@ -6,39 +6,15 @@ Extracted from check_data_consistency.py for better code organization.
 """
 
 from __future__ import annotations
-from typing import Any
 
-import pandas as pd
-import numpy as np
-import numbers
-import sys
 import math
-import statistics
-import datetime
-import calendar
+import numbers
 import random
-import string
-import copy
-import scipy
-from dateutil.relativedelta import relativedelta
-from sklearn.linear_model import Lasso
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn import tree, metrics
-from sklearn.metrics import f1_score, r2_score
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
+import statistics
 from itertools import combinations
-from decimal import Decimal, ROUND_HALF_UP
 
-from ..checker_utils import (
-    safe_div,
-    is_number,
-    convert_to_numeric,
-    get_num_decimal_digits,
-    get_non_alphanumeric,
-    is_missing,
-    array_to_str,
-    replace_special_with_space,
-)
+import numpy as np
+import pandas as pd
 
 
 class MultiColumnTestsMixin:
@@ -80,7 +56,7 @@ class MultiColumnTestsMixin:
         is Null. Similar for B and C.
         """
         def check_triple():
-            if (col_name_c == col_name_a) or (col_name_c == col_name_b):
+            if col_name_c in (col_name_a, col_name_b):
                 return
 
             # if C is A or B, we don't check as well if A is C or B, or if B is A or C. This is not to save time, but
@@ -112,7 +88,7 @@ class MultiColumnTestsMixin:
                 return
 
             # Test on a sample
-            test_series = [(z == x) or (z == y) for x, y, z in
+            test_series = [z in (x, y) for x, y, z in
                            zip(self.sample_df[col_name_a], self.sample_df[col_name_b], self.sample_df[col_name_c])]
             test_series = test_series | \
                           sample_col_pair_both_null_dict[tuple(sorted([col_name_a, col_name_c]))] | \
@@ -122,7 +98,7 @@ class MultiColumnTestsMixin:
                 return
 
             # Test of the full data
-            test_series = [(z == x) or (z == y) for x, y, z in
+            test_series = [z in (x, y) for x, y, z in
                            zip(self.orig_df[col_name_a], self.orig_df[col_name_b], self.orig_df[col_name_c])]
             test_series = test_series | \
                           col_pair_both_null_dict[tuple(sorted([col_name_a, col_name_c]))] | \
@@ -158,7 +134,7 @@ class MultiColumnTestsMixin:
 
                 null_frac_both_str = ""
                 if matching_arr.count("BOTH") > 0:
-                    null_frac_both_str = (f'({matching_on_none_arr.count("BOTH") * 100.0 / matching_arr.count("BOTH"):.3f}' 
+                    null_frac_both_str = (f'({matching_on_none_arr.count("BOTH") * 100.0 / matching_arr.count("BOTH"):.3f}'
                                           f'% of these on Null values)')
 
                 self._process_analysis_binary(
@@ -167,11 +143,11 @@ class MultiColumnTestsMixin:
                     test_series,
                     (f'Column "{col_name_c}" matches "{col_name_a}" {matching_arr.count(col_name_a)} times '
                      f'({matching_on_none_arr.count(col_name_a) * 100.0 / matching_arr.count(col_name_a):.3f}% of '
-                     f'these on Null values); ' 
+                     f'these on Null values); '
                      f'matches "{col_name_b}" {matching_arr.count(col_name_b)} times '
                      f'({matching_on_none_arr.count(col_name_b) * 100.0 / matching_arr.count(col_name_b):.3f}% of '
                      f'these on Null values); '
-                     f'matches both {matching_arr.count("BOTH")} times {null_frac_both_str}; '                     
+                     f'matches both {matching_arr.count("BOTH")} times {null_frac_both_str}; '
                      f'and matches neither {matching_arr.count("NONE")} times. '
                      f'The values in "{col_name_c}" are consistently the same as those in either "{col_name_a}" '
                      f'or "{col_name_b}"'),
@@ -192,52 +168,52 @@ class MultiColumnTestsMixin:
         num_combos = calc_num_combos(len(self.numeric_cols))
         if num_combos > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping numeric columns. There are {len(self.numeric_cols)} numeric columns, which leads to "
-                       f"{int(num_combos):,} combinations. max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping numeric columns. There are {len(self.numeric_cols)} numeric columns, which leads to "
+                       f"{int(num_combos):,} combinations. max_combinations is currently set to {self.max_combinations:,}.")
         else:
             sample_col_pair_both_null_dict = self.get_sample_col_pair_both_null_dict(force=True)
             col_pair_both_null_dict = self.get_col_pair_both_null_dict(force=True)
-            for col_idx, col_name_c in enumerate(self.numeric_cols):
+            for col_idx, col_name_c in enumerate(self.numeric_cols):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
                     print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns")
                 num_pairs, pairs_arr = self._get_numeric_column_pairs_unique()
-                for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):  # noqa: B007 - read by the nested check function
                     check_triple()
 
         # Check triples of string columns
         num_combos = calc_num_combos(len(self.string_cols))
         if num_combos > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping string columns. There are {len(self.string_cols)} string columns, which leads to "
-                       f"{int(num_combos):,} combinations. max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping string columns. There are {len(self.string_cols)} string columns, which leads to "
+                       f"{int(num_combos):,} combinations. max_combinations is currently set to {self.max_combinations:,}.")
         else:
             sample_col_pair_both_null_dict = self.get_sample_col_pair_both_null_dict(force=True)
             col_pair_both_null_dict = self.get_col_pair_both_null_dict(force=True)
-            for col_idx, col_name_c in enumerate(self.string_cols):
+            for col_idx, col_name_c in enumerate(self.string_cols):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and col_idx > -1 and col_idx % 1 == 0:
                     print(f"  Examining column {col_idx} of {len(self.string_cols)} string columns")
                 num_pairs, pairs_arr = self._get_string_column_pairs_unique()
-                for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):  # noqa: B007 - read by the nested check function
                     check_triple()
 
         # Check triples of date columns
         num_combos = calc_num_combos(len(self.date_cols))
         if num_combos > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping date columns. There are {len(self.date_cols)} numeric columns, which leads to "
-                       f"{int(num_combos):,} combinations. max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping date columns. There are {len(self.date_cols)} numeric columns, which leads to "
+                       f"{int(num_combos):,} combinations. max_combinations is currently set to {self.max_combinations:,}.")
         else:
             sample_col_pair_both_null_dict = self.get_sample_col_pair_both_null_dict(force=True)
             col_pair_both_null_dict = self.get_col_pair_both_null_dict(force=True)
-            for col_idx, col_name_c in enumerate(self.date_cols):
+            for col_idx, col_name_c in enumerate(self.date_cols):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
                     print(f"  Examining column {col_idx} of {len(self.date_cols)} date columns")
                 num_pairs, pairs_arr = self._get_date_column_pairs_unique()
-                for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):  # noqa: B007 - read by the nested check function
                     check_triple()
 
     '''
-    # ChatGPT below. Looks better, but needs testing     
+    # ChatGPT below. Looks better, but needs testing
 
     def _check_c_is_a_or_b(self, test_id):
         def check_triple(col_name_a, col_name_b, col_name_c):
@@ -304,7 +280,7 @@ class MultiColumnTestsMixin:
         def process_column_pairs(column_type, column_list):
             def calc_num_combos(num_cols):
                 return num_cols * (num_cols * (num_cols-1) / 2)
-            
+
             num_combos = calc_num_combos(len(column_list))
             if num_combos > self.max_combinations:
                 if self.verbose >= 1:
@@ -458,9 +434,9 @@ class MultiColumnTestsMixin:
                         num_combinations_tested += 1
                         if num_combinations_tested > self.max_combinations:
                             if self.verbose >= 1:
-                                print((f"  Skipping further testing pairs of pairs of columns. This test checked "
+                                print(f"  Skipping further testing pairs of pairs of columns. This test checked "
                                        f"{num_combinations_tested:,} combinations. "
-                                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                                       f"max_combinations is currently set to {self.max_combinations:,}.")
                             return
 
                         sample_series = [x == y for x, y in zip(match_1_2_sample_arr, match_3_4_sample_arr)]
@@ -545,8 +521,8 @@ class MultiColumnTestsMixin:
             skip_subsets = calc_size > self.max_combinations
             if skip_subsets:
                 if self.verbose >= 2 and not printed_subset_size_msg:
-                    print((f"    Skipping subsets of size {subset_size} and smaller. There are {calc_size:,} subsets. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"    Skipping subsets of size {subset_size} and smaller. There are {calc_size:,} subsets. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                     printed_subset_size_msg = True
                 continue
 

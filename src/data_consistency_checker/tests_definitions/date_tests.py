@@ -7,7 +7,7 @@ This module contains test definitions for date and datetime columns including:
 - Date-numeric combination tests
 """
 
-from ..test_registry import TestDefinition
+from data_consistency_checker.test_registry import TestDefinition
 
 
 def _test(short_description, description, test_func, gen_func, shortlist, implemented, fast, code):

@@ -36,10 +36,7 @@ class AnalysisCacheMixin:
         similar_cols_idxs_dict = {}
         calc_size = 0
         for col_name in full_cols_arr:
-            if include_self:
-                similar_cols = [col_name]
-            else:
-                similar_cols = []
+            similar_cols = [col_name] if include_self else []
             similar_cols_idxs = []
             for c_idx, c in enumerate(full_cols_arr):
                 if c == col_name:
@@ -52,13 +49,17 @@ class AnalysisCacheMixin:
                     if corr > 0.2:
                         # Create a tuple representing the pair of features. If the tuple is in larger_dict and True,
                         # col_name is then larger, row by row, than c.
-                        pair_tuple = tuple([col_name, c])
-                        if not cols_same_bool_dict[tuple(sorted([col_name, c]))]: # cols_same_bool_dict uses sorted column names as the key
-                            if (not check_larger_false and not check_larger_true) or \
-                                    (check_larger_false and ((pair_tuple not in larger_dict) or (larger_dict[pair_tuple] == False))) or \
-                                    (check_larger_true and (pair_tuple in larger_dict) and (larger_dict[pair_tuple] == True)):
-                                similar_cols.append(c)
-                                similar_cols_idxs.append(c_idx)
+                        pair_tuple = (col_name, c)
+                        # cols_same_bool_dict uses sorted column names as the key. Values in larger_dict may be
+                        # None, arrays or booleans, so they are compared to False / True explicitly.
+                        if not cols_same_bool_dict[tuple(sorted([col_name, c]))] and (
+                                (not check_larger_false and not check_larger_true) or
+                                (check_larger_false and ((pair_tuple not in larger_dict) or
+                                                         (larger_dict[pair_tuple] == False))) or  # noqa: E712
+                                (check_larger_true and (pair_tuple in larger_dict) and
+                                 (larger_dict[pair_tuple] == True))):  # noqa: E712
+                            similar_cols.append(c)
+                            similar_cols_idxs.append(c_idx)
             similar_cols_dict[col_name] = similar_cols
             similar_cols_idxs_dict[col_name] = similar_cols_idxs
             calc_size += int(math.pow(2, len(similar_cols)))
@@ -114,12 +115,12 @@ class AnalysisCacheMixin:
 
             if self.verbose >= 1:
                 if limit_subset_sizes:
-                    print((f"  Due to the potential number of combinations, limiting test to subsets of size "
-                           f"{max_subset_size}."))
+                    print(f"  Due to the potential number of combinations, limiting test to subsets of size "
+                           f"{max_subset_size}.")
                 else:
-                    print((f"  Skipping test. Given the number of similar columns for each positive numeric "
+                    print(f"  Skipping test. Given the number of similar columns for each positive numeric "
                            f"column, there are {calc_size_limited:,} combinations, even limiting testing to subsets "
-                           f"2 columns. max_combinations is currently set to {self.max_combinations:,}."))
+                           f"2 columns. max_combinations is currently set to {self.max_combinations:,}.")
 
         return limit_subset_sizes, max_subset_size, can_process
 
@@ -207,7 +208,7 @@ class AnalysisCacheMixin:
             q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
                 upper_limit = q3 + (self.iqr_limit * (q3 - q1))
-            except:
+            except Exception:
                 self.upper_limits_dict[col_name] = (None, None, None)
                 continue
             self. upper_limits_dict[col_name] = (upper_limit, q2, q3)
@@ -235,7 +236,7 @@ class AnalysisCacheMixin:
             q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
                 lower_limit = q1 - (self.iqr_limit * (q3 - q1))
-            except:
+            except Exception:
                 self.lower_limits_dict[col_name] = (None, None, None)
                 continue
             self.lower_limits_dict[col_name] = (lower_limit, q1, q3)
@@ -262,7 +263,7 @@ class AnalysisCacheMixin:
         if num_pairs == 0 or col_pairs is None:
             return self.larger_pairs_dict
         for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
-            key = tuple([col_name_1, col_name_2])
+            key = (col_name_1, col_name_2)
 
             if print_status and self.verbose >= 2 and cols_idx > 0 and cols_idx % 10_000 == 0:
                 print(f"  Examining pair {cols_idx:,} of {len(col_pairs):,} pairs of numeric columns.")
@@ -304,7 +305,7 @@ class AnalysisCacheMixin:
             return self.larger_pairs_with_bool_dict
         self.larger_pairs_with_bool_dict = {}
         larger_dict = self.get_larger_pairs_dict(allow_equal=False)
-        for key in larger_dict.keys():
+        for key in larger_dict:
             if larger_dict[key] is not None:
                 self.larger_pairs_with_bool_dict[key] = \
                     larger_dict[key].tolist().count(True) > self.freq_contamination_level
@@ -317,7 +318,7 @@ class AnalysisCacheMixin:
             return self.larger_or_equal_pairs_with_bool_dict
         self.larger_or_equal_pairs_with_bool_dict = {}
         larger_or_equal_dict = self.get_larger_pairs_dict(allow_equal=True)
-        for key in larger_or_equal_dict.keys():
+        for key in larger_or_equal_dict:
             if larger_or_equal_dict[key] is not None:
                 self.larger_or_equal_pairs_with_bool_dict[key] = \
                     larger_or_equal_dict[key].tolist().count(True) > self.freq_contamination_level
@@ -480,22 +481,22 @@ class AnalysisCacheMixin:
         # Check pairs of numeric columns
         num_pairs, pairs_arr = self._get_numeric_column_pairs_unique(force=force)
         if pairs_arr is not None:
-            for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
                 check_match(col_name_a, col_name_b)
 
         # Check pairs of string columns
         num_pairs, pairs_arr = self._get_string_column_pairs_unique(force=force)
-        for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
             check_match(col_name_a, col_name_b)
 
         # Check pairs of binary columns
         num_pairs, pairs_arr = self._get_binary_column_pairs_unique(force=force)
-        for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
             check_match(col_name_a, col_name_b)
 
         # Check pairs of date columns
         num_pairs, pairs_arr = self._get_date_column_pairs_unique(force=force)
-        for pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
             check_match(col_name_a, col_name_b)
 
         return self.cols_same_bool_dict
@@ -545,7 +546,7 @@ class AnalysisCacheMixin:
 
     def get_col_pairs_either_null_bool_dict(self, force=False):
         """
-        Similar to get_col_pair_both_null_dict(), but checks if either are null, not if both are, and contains a single 
+        Similar to get_col_pair_both_null_dict(), but checks if either are null, not if both are, and contains a single
         boolean value for each pair of columns indicating True if there are at least 90% of the rows having either null.
 
         Set force=True if the results will not be used to loop through tests, only to create a dictionary for reference.
@@ -720,7 +721,7 @@ class AnalysisCacheMixin:
                 if col_name_1 == col_name_2:
                     continue
                 for col_name_3 in self.numeric_cols:
-                    if (col_name_3 == col_name_1) or (col_name_3 == col_name_2):
+                    if col_name_3 in (col_name_1, col_name_2):
                         continue
                     triples_arr.append((col_name_1, col_name_2, col_name_3))
         return num_triples, triples_arr

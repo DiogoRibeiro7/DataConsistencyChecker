@@ -106,6 +106,7 @@ ignore = [
     "PLW2901", # Redefined loop variable
     "W191",  # Tab indentation (this codebase uses tabs, keeping for now)
     "E101",  # Mixed spaces and tabs (keeping for now)
+    "SIM102", # Nested ifs often mirror the documented detection steps
 ]
 
 # Allow fix for all enabled rules (when `--fix` is provided).

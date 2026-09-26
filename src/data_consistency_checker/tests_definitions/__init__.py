@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from ..test_registry import TestDefinition
+from data_consistency_checker.test_registry import TestDefinition
+
 from .base_tests import get_base_tests
 from .binary_tests import get_binary_tests
 from .date_tests import get_date_tests

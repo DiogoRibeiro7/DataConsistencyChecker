@@ -6,51 +6,37 @@ Extracted from check_data_consistency.py for better code organization.
 """
 
 from __future__ import annotations
-from typing import Any
 
-import pandas as pd
-import numpy as np
-import numbers
-import sys
-import math
-import statistics
 import datetime
-import calendar
+import math
 import random
+import statistics
 import string
-import copy
-import scipy
-from dateutil.relativedelta import relativedelta
-from sklearn.linear_model import Lasso
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn import tree, metrics
-from sklearn.metrics import f1_score, r2_score
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
-from itertools import combinations
-from decimal import Decimal, ROUND_HALF_UP
 
+import numpy as np
+import pandas as pd
 import pandas.api.types as pandas_types
+from dateutil.relativedelta import relativedelta
+from sklearn import metrics, tree
+from sklearn.tree import DecisionTreeClassifier
 
 try:
     from termcolor import colored
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
 
+from data_consistency_checker.checker_utils import (
+    array_to_str,
+    convert_to_numeric,
+    get_non_alphanumeric,
+    is_missing,
+    is_uppercase,
+    replace_special_with_space,
+)
+
 letters = string.ascii_letters
 digits = string.digits
 alphanumeric = letters + digits
-
-from ..checker_utils import (
-    safe_div,
-    is_number,
-    convert_to_numeric,
-    get_num_decimal_digits,
-    get_non_alphanumeric,
-    is_missing,
-    array_to_str,
-    replace_special_with_space,
-    is_uppercase,
-)
 
 
 class StringTestsMixin:
@@ -149,7 +135,7 @@ class StringTestsMixin:
 
             # Get the index in the original (unsorted) dataframe of the flagged rows.
             if test_series.tolist().count(False) < self.freq_contamination_level:
-                idxs = list(np.where(test_series == False)[0])
+                idxs = list(np.where(test_series == False)[0])  # noqa: E712
                 test_series = [True] * self.num_rows
                 for idx in idxs:
                     test_series[self.orig_df.sort_values(sort_col).index[idx]] = False
@@ -572,7 +558,7 @@ class StringTestsMixin:
         def get_non_alphanumeric(x):
             if x.isalnum():
                 return []
-            return [c for c in x if (not str(c).isalnum()) and (not c == ' ')]
+            return [c for c in x if (not str(c).isalnum()) and (c != ' ')]
 
         for col_name in self.string_cols:
             # Skip columns which contain only alphanumeric characters
@@ -590,7 +576,7 @@ class StringTestsMixin:
                 continue
 
             # Get the unique set of special characters
-            special_chars_list = list(set([item for sublist in special_chars_list for item in sublist]))
+            special_chars_list = list({item for sublist in special_chars_list for item in sublist})
 
             # Examine each special character and determine if it is in most values
             common_special_chars_list = []
@@ -668,7 +654,7 @@ class StringTestsMixin:
             sample_unique_chars_list = self.sample_df[col_name].dropna().astype(str).apply(get_unique_chars)
 
             # Get the unique set of special characters
-            sample_unique_chars_list = list(set([item for sublist in sample_unique_chars_list for item in sublist]))
+            sample_unique_chars_list = list({item for sublist in sample_unique_chars_list for item in sublist})
 
             # Examine each special character and determine if it is in most values
             common_chars_list = []
@@ -692,7 +678,7 @@ class StringTestsMixin:
             unique_chars_list = self.orig_df[col_name].dropna().astype(str).apply(get_unique_chars)
 
             # Get the unique set of special characters
-            unique_chars_list = list(set([item for sublist in unique_chars_list for item in sublist]))
+            unique_chars_list = list({item for sublist in unique_chars_list for item in sublist})
 
             # Examine each special character and determine if it is in most values
             common_chars_list = []
@@ -1044,7 +1030,7 @@ class StringTestsMixin:
                 continue
 
             # Get the unique set of special characters
-            special_chars_list = list(set([item for sublist in special_chars_list for item in sublist]))
+            special_chars_list = list({item for sublist in special_chars_list for item in sublist})
             if ' ' in special_chars_list:
                 special_chars_list.remove(' ')
 
@@ -1129,8 +1115,7 @@ class StringTestsMixin:
                         new_str += 'X'
                 else:
                     new_str += c
-            new_str = new_str[1:]  # Strip the space added at the start
-            return new_str
+            return new_str[1:]  # Strip the space added at the start
 
         for col_name in self.string_cols:
             # Skip columns that have only one character for all values
@@ -1294,7 +1279,7 @@ class StringTestsMixin:
 
             if (0 < len(common_chars) < 10) and (len(rare_chars) < 20):
                 test_series = [True] * self.num_rows
-                for rare_char in rare_chars.keys():
+                for rare_char in rare_chars:
                     test_series = test_series & ~self.orig_df[col_name].astype(str).str.contains(rare_char)
                 test_series = test_series | self.orig_df[col_name].isna()
 
@@ -1314,7 +1299,7 @@ class StringTestsMixin:
         Patterns with exception: 'first_word most' consistently begins with the word 'abc', with one exception.
         """
         self._add_synthetic_column('first_word rand',
-            [''.join(np.random.choice(['a', 'b' ' '], 10)) for _ in range(self.num_synth_rows)])
+            [''.join(np.random.choice(['a', 'b '], 10)) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('first_word all',
             ["abc-" + np.random.choice(list(string.ascii_letters)) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('first_word most',
@@ -1364,7 +1349,7 @@ class StringTestsMixin:
         Patterns with exception:
         """
         self._add_synthetic_column('last_word rand',
-                                    [''.join(np.random.choice(['a', 'b' ' '], 10)) for _ in range(self.num_synth_rows)])
+                                    [''.join(np.random.choice(['a', 'b '], 10)) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('last_word all',
                                     [np.random.choice(list(string.ascii_letters)) + "-abc" for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('last_word most', self.synth_df['last_word all'])
@@ -1415,7 +1400,6 @@ class StringTestsMixin:
                 for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('num_words most', self.synth_df['num_words all'])
         self.synth_df.loc[999, 'num_words most'] = 'a b c a b c a b c a b c a b c a b c a b c a b c a b c a b c '
-        pass
 
 
     def _check_num_words(self, test_id):
@@ -1465,7 +1449,7 @@ class StringTestsMixin:
         for col_name in self.string_cols:
             col_vals = self.orig_df[col_name].astype(str).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
-            if not any([len(x) for x in word_arr]):
+            if not any(len(x) for x in word_arr):
                 continue
             word_lens_arr = [[len(w) for w in x] for x in word_arr]
             flat_word_lens_arr = pd.Series(np.concatenate(word_lens_arr).flat)
@@ -1610,7 +1594,6 @@ class StringTestsMixin:
         Patterns without exceptions:
         Patterns with exception:
         """
-        pass
 
 
     def _check_a_implies_b(self, test_id):
@@ -1646,8 +1629,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_binary_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pair of binary columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pair of binary columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for col_name_1, col_name_2 in pairs:
@@ -1724,8 +1707,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         # The minimum number of times a first character must appear within it's column to check pairs including it
@@ -1841,11 +1824,11 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             # Skip columns if the first words are as unique as teh values in the column. In this case, the first words
             # have no real meaning on their own.
             if first_words_dict[col_name_1].nunique() >= (self.orig_df[col_name_1].nunique() / 2):
@@ -1932,8 +1915,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
@@ -2080,13 +2063,13 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             if (col_std_dev_len_dict[col_name_1] < 2.0) or (col_std_dev_len_dict[col_name_2] < 2.0):
                 continue
 
@@ -2139,13 +2122,13 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             word_counts_medians_1 = word_counts_medians[col_name_1]
             word_counts_medians_2 = word_counts_medians[col_name_2]
             if word_counts_medians_1 < 3 or word_counts_medians_2 < 3:
@@ -2209,13 +2192,13 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             word_counts_medians_1 = word_counts_medians[col_name_1]
             word_counts_medians_2 = word_counts_medians[col_name_2]
 
@@ -2279,18 +2262,16 @@ class StringTestsMixin:
             counts_series = first_chars_series.value_counts(normalize=True)  # Get the counts for each first letter
             if len(counts_series) < 10:
                 return False
-            if counts_series[0] > 50.0:
-                return False
-            return True
+            return not (counts_series.iloc[0] > 50.0)
 
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             # Check if either column always starts with the same characters anyway.
             if not check_column(col_name_1) or not check_column(col_name_2):
                 continue
@@ -2355,8 +2336,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         # Get the first word in each string
@@ -2446,8 +2427,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         nunique_dict = self.get_nunique_dict()
@@ -2519,13 +2500,13 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             # Skip if the two columns are largely the same
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
@@ -2579,8 +2560,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -2598,7 +2579,7 @@ class StringTestsMixin:
             digits_col = [''.join(x) for x in digits_col]
             digit_str_dict[col_name] = digits_col
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             # Skip if the two columns are largely the same
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
@@ -2649,8 +2630,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -2723,8 +2704,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -2791,8 +2772,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
@@ -2850,8 +2831,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         is_missing_dict = self.get_is_missing_dict()
@@ -2922,8 +2903,8 @@ class StringTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         n_unique_dict = self.get_nunique_dict()
@@ -3033,10 +3014,10 @@ class StringTestsMixin:
         total_combinations = (len(self.string_cols) + len(self.binary_cols)) * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
+                print(f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
                        f"numeric and date columns, multiplied by {(len(self.string_cols) + len(self.binary_cols)):,} "
                        f"string and binary columns, results in {total_combinations:,} combinations. max_combinations "
-                       f"is currently set to {self.max_combinations:,}."))
+                       f"is currently set to {self.max_combinations:,}.")
             return
 
         # Calculate and cache the upper limit based on q1 and q3 of each full numeric & date column
@@ -3044,8 +3025,8 @@ class StringTestsMixin:
 
         for col_idx, col_name_1 in enumerate(self.string_cols + self.binary_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
-                print((f"  Examining column {col_idx} of {len(self.string_cols) + len(self.binary_cols)} string and "
-                       f"binary columns"))
+                print(f"  Examining column {col_idx} of {len(self.string_cols) + len(self.binary_cols)} string and "
+                       f"binary columns")
 
             # Get the common values in col_name_1. Below, we find large values in col_name_2 for each common value
             # in col_name_1
@@ -3110,13 +3091,13 @@ class StringTestsMixin:
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
                             upper_limit_subset = q3 + (self.iqr_limit * (q3 - q1))
-                        except:
+                        except Exception:
                             continue
 
                         res = pd.Series([x <= upper_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
 
                     if 0 < res.tolist().count(False) <= self.freq_contamination_level:
-                        index_of_large = [x for x, y in zip(sub_df.index, res) if y == False]
+                        index_of_large = [x for x, y in zip(sub_df.index, res) if y == False]  # noqa: E712
                         for i in index_of_large:
                             test_series[i] = False
 
@@ -3164,10 +3145,10 @@ class StringTestsMixin:
         total_combinations = (len(self.string_cols) + len(self.binary_cols)) * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
+                print(f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
                        f"numeric and date columns, multiplied by {(len(self.string_cols) + len(self.binary_cols)):,} "
                        f"string and binary columns, results in {total_combinations:,} combinations. max_combinations "
-                       f"is currently set to {self.max_combinations:,}."))
+                       f"is currently set to {self.max_combinations:,}.")
             return
 
         # Calculate and cache the lower limit based on q1 and q3 of each full numeric & date column
@@ -3175,8 +3156,8 @@ class StringTestsMixin:
 
         for col_idx, col_name_1 in enumerate(self.string_cols + self.binary_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
-                print((f"  Examining column {col_idx} of {len(self.string_cols) + len(self.binary_cols)} string and "
-                       f"binary columns"))
+                print(f"  Examining column {col_idx} of {len(self.string_cols) + len(self.binary_cols)} string and "
+                       f"binary columns")
 
             # Get the common values in col_name_1. Below, we find small values in col_name_2 for each common value
             # in col_name_1
@@ -3243,7 +3224,7 @@ class StringTestsMixin:
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
                             lower_limit_subset = q1 - (self.iqr_limit * (q3 - q1))
-                        except:
+                        except Exception:
                             continue
 
                         res = pd.Series([x >= lower_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
@@ -3283,18 +3264,18 @@ class StringTestsMixin:
 
         # Date columns
         dates_arr = []
-        for i in range(100):
+        for _i in range(100):
             y = np.random.randint(1990, 2025, 1)[0]
             dates_arr.append(datetime.datetime.strptime(f"01-7-{y}", "%d-%m-%Y"))
-        for i in range(100):
+        for _i in range(100):
             y = np.random.randint(1980, 1989, 1)[0]
             dates_arr.append(datetime.datetime.strptime(f"01-7-{y}", "%d-%m-%Y"))
-        for i in range(self.num_synth_rows - 200):
+        for _i in range(self.num_synth_rows - 200):
             y = np.random.randint(1970, 1979, 1)[0]
             dates_arr.append(datetime.datetime.strptime(f"01-7-{y}", "%d-%m-%Y"))
         self._add_synthetic_column('large_given_prefix date_all', dates_arr)
         self._add_synthetic_column('large_given_prefix date_most', self.synth_df['large_given_prefix date_all'])
-        self.synth_df.loc[999, 'large_given_prefix date_most'] = datetime.datetime.strptime(f"01-7-1986", "%d-%m-%Y")
+        self.synth_df.loc[999, 'large_given_prefix date_most'] = datetime.datetime.strptime("01-7-1986", "%d-%m-%Y")
 
 
     def _check_large_given_prefix(self, test_id):
@@ -3302,10 +3283,10 @@ class StringTestsMixin:
         total_combinations = len(self.string_cols) * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
+                print(f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
                        f"numeric and date columns, multiplied by {len(self.string_cols):,} "
                        f"string columns, results in {total_combinations:,} combinations. max_combinations "
-                       f"is currently set to {self.max_combinations:,}."))
+                       f"is currently set to {self.max_combinations:,}.")
             return
 
         # todo: when show non-flagged, show with the flagged prefixes
@@ -3392,7 +3373,7 @@ class StringTestsMixin:
                         try:
                             # Use a coeffiecient of 1.5 for dates, which tend to vary much less than numeric values.
                             upper_limit_subset = q3 + (1.5 * (q3 - q1))
-                        except:
+                        except Exception:
                             continue
 
                         res_1 = [x > upper_limit for x in pd.to_datetime(sub_df[col_name_2])]
@@ -3443,10 +3424,10 @@ class StringTestsMixin:
         total_combinations = len(self.string_cols) * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
+                print(f"  Skipping test {test_id}. There are {(len(self.numeric_cols) + len(self.date_cols)):,} "
                        f"numeric and date columns, multiplied by {len(self.string_cols):,} "
                        f"string columns, results in {total_combinations:,} combinations. max_combinations "
-                       f"is currently set to {self.max_combinations:,}."))
+                       f"is currently set to {self.max_combinations:,}.")
             return
 
         # Calculate and cache the lower limit based on q1 and q3 of each full numeric & date column
@@ -3455,8 +3436,8 @@ class StringTestsMixin:
 
         for col_idx, col_name_1 in enumerate(self.string_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
-                print((f"  Examining column {col_idx} of {len(self.string_cols) + len(self.binary_cols)} string and "
-                       f"binary columns"))
+                print(f"  Examining column {col_idx} of {len(self.string_cols) + len(self.binary_cols)} string and "
+                       f"binary columns")
 
             col_vals = self.orig_df[col_name_1].astype(str).apply(replace_special_with_space)
 
@@ -3525,7 +3506,7 @@ class StringTestsMixin:
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
                             lower_limit_subset = q1 - (self.iqr_limit * (q3 - q1))
-                        except:
+                        except Exception:
                             continue
 
                         res = pd.Series([x >= lower_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
@@ -3579,8 +3560,8 @@ class StringTestsMixin:
         # Loop through the columns that we sort on.
         for col_idx, col_name_1 in enumerate(self.numeric_cols + self.date_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
-                print((f"  Examining column {col_idx} of {len(self.numeric_cols) + len(self.date_cols)} numeric and "
-                       f"date columns"))
+                print(f"  Examining column {col_idx} of {len(self.numeric_cols) + len(self.date_cols)} numeric and "
+                       f"date columns")
 
             if self.orig_df[col_name_1].nunique() < (self.num_valid_rows[col_name_1] - self.freq_contamination_level):
                 continue
@@ -3673,8 +3654,8 @@ class StringTestsMixin:
         total_combinations = num_pairs * avg_num_common_vals * avg_num_common_vals * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {int(total_combinations):,} combinations given the number"
-                       f"of columns and unique values. max_combinations is currently set to {self.max_combinations:,}"))
+                print(f"  Skipping test {test_id}. There are {int(total_combinations):,} combinations given the number"
+                       f"of columns and unique values. max_combinations is currently set to {self.max_combinations:,}")
             return
 
         # Save the subset dataframe for each pair of values
@@ -3758,7 +3739,7 @@ class StringTestsMixin:
 
                         try:
                             upper_limit = q3 + (self.iqr_limit * 2.0 * (q3 - q1))
-                        except:  # Date values can exceed limits
+                        except Exception:  # Date values can exceed limits
                             continue
 
                         if col_name_3 in self.numeric_cols:
@@ -3860,8 +3841,8 @@ class StringTestsMixin:
         total_combinations = num_pairs * avg_num_common_vals * avg_num_common_vals * (len(self.numeric_cols) + len(self.date_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {int(total_combinations):,} combinations given the number"
-                       f"of columns and unique values. max_combinations is currently set to {self.max_combinations:,}"))
+                print(f"  Skipping test {test_id}. There are {int(total_combinations):,} combinations given the number"
+                       f"of columns and unique values. max_combinations is currently set to {self.max_combinations:,}")
             return
 
         # Save the subset for each pair of values
@@ -3933,7 +3914,7 @@ class StringTestsMixin:
 
                         try:
                             lower_limit = q1 - (self.iqr_limit * 2.0 * (q3 - q1))
-                        except:  # Date values can exceed limits
+                        except Exception:  # Date values can exceed limits
                             continue
 
                         if col_name_3 in self.numeric_cols:
@@ -4009,10 +3990,9 @@ class StringTestsMixin:
             bm = b - np.mean(b, axis=0)
             if all(am == 0.0) or all(bm == 0.0):
                 return 0.0
-            cor = am.T @ bm / (np.sqrt(
+            return am.T @ bm / (np.sqrt(
                 np.sum(am**2, axis=0)).T * np.sqrt(
                 np.sum(bm**2, axis=0)))
-            return cor
 
         if len(self.numeric_cols) < 2:
             return
@@ -4046,18 +4026,18 @@ class StringTestsMixin:
         total_combinations = num_pairs * (len(self.string_cols) + len(self.binary_cols))
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {(len(self.string_cols) + len(self.binary_cols)):,} "
+                print(f"  Skipping test {test_id}. There are {(len(self.string_cols) + len(self.binary_cols)):,} "
                        f"string and binary columns, multiplied by {num_pairs:,} pairs of numeric columns, results in "
                        f"{total_combinations:,} combinations. max_combinations is currently set to "
-                       f"{self.max_combinations:,}"))
+                       f"{self.max_combinations:,}")
             return
 
         # The string and binary columns are the columns we condition on to determine if the 2 numeric or date columns
         # are correlated when holding the values in the string/binary column constant.
         for col_idx, col_cond in enumerate(self.string_cols + self.binary_cols):
             if self.verbose >= 2:
-                print((f"  Examining column {col_idx} of {len(self.string_cols + self.binary_cols)} string and binary "
-                       f"columns"))
+                print(f"  Examining column {col_idx} of {len(self.string_cols + self.binary_cols)} string and binary "
+                       f"columns")
             vals = self.orig_df[col_cond].unique()
             if len(vals) > 10:
                 continue
@@ -4066,7 +4046,7 @@ class StringTestsMixin:
             conditioning_vals = []
             val_idxs_dict = {}
             for val in vals:
-                if (val == None) or (val != val):
+                if (val is None) or (val != val):
                     idxs = np.where(self.orig_df[col_cond].isna())[0]
                 else:
                     idxs = np.where(self.orig_df[col_cond] == val)[0]
@@ -4124,7 +4104,7 @@ class StringTestsMixin:
                         break
 
                     # pairwise_correlation() is fast, but does not distinguish positive from negative correlation
-                    if (val == None) or (val != val):
+                    if (val is None) or (val != val):
                         sub_df = self.orig_df[self.orig_df[col_cond].isna()]
                     else:
                         sub_df = self.orig_df[self.orig_df[col_cond] == val]
@@ -4210,8 +4190,8 @@ class StringTestsMixin:
 
         for col_idx, col_name in enumerate(self.string_cols + self.binary_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 100 == 0:
-                print((f"  Examining column {col_idx:,} of {(len(self.string_cols) + len(self.binary_cols)):,} "
-                      f"string and binary columns."))
+                print(f"  Examining column {col_idx:,} of {(len(self.string_cols) + len(self.binary_cols)):,} "
+                      f"string and binary columns.")
 
             # Skip columns where one value dominates and a trivial decision tree could predict well
             vc = self.orig_df[col_name].value_counts(normalize=True)
@@ -4280,7 +4260,7 @@ class StringTestsMixin:
 
                 # Some columns may be included multiple times. Put the columns used into a consistent, list without
                 # duplicates
-                cols = sorted(list(set(cols)))
+                cols = sorted(set(cols))
 
                 # Clean the split points for categorical features to use the values, not 0.5
                 rules = self.get_decision_tree_rules_as_categories(rules, categorical_features)

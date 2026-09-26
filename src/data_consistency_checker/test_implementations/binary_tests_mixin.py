@@ -6,39 +6,19 @@ Extracted from check_data_consistency.py for better code organization.
 """
 
 from __future__ import annotations
-from typing import Any
 
-import pandas as pd
-import numpy as np
-import numbers
-import sys
-import math
-import statistics
 import datetime
-import calendar
+import math
 import random
-import string
-import copy
-import scipy
-from dateutil.relativedelta import relativedelta
-from sklearn.linear_model import Lasso
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn import tree, metrics
-from sklearn.metrics import f1_score, r2_score
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
+import statistics
 from itertools import combinations
-from decimal import Decimal, ROUND_HALF_UP
 
-from ..checker_utils import (
-    safe_div,
-    is_number,
-    convert_to_numeric,
-    get_num_decimal_digits,
-    get_non_alphanumeric,
-    is_missing,
-    array_to_str,
-    replace_special_with_space,
-)
+import numpy as np
+import pandas as pd
+from dateutil.relativedelta import relativedelta
+from sklearn.metrics import f1_score
+
+from data_consistency_checker.checker_utils import is_missing
 
 
 class BinaryTestsMixin:
@@ -78,8 +58,8 @@ class BinaryTestsMixin:
         num_pairs, pairs = self._get_binary_column_pairs_unique(same_vocabulary=True)
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of binary columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of binary columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
@@ -121,7 +101,7 @@ class BinaryTestsMixin:
                 test_id,
                 [col_name_1, col_name_2],
                 test_series,
-                f"The columns consistently have the same value",
+                "The columns consistently have the same value",
                 "")
 
 
@@ -140,8 +120,8 @@ class BinaryTestsMixin:
         num_pairs, column_pairs = self._get_binary_column_pairs_unique(same_vocabulary=True)
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of binary columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of binary columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(column_pairs):
@@ -170,7 +150,7 @@ class BinaryTestsMixin:
                 test_id,
                 [col_name_1, col_name_2],
                 test_series,
-                f"The columns consistently have the opposite value", "")
+                "The columns consistently have the opposite value", "")
 
 
     def _generate_binary_implies(self):
@@ -194,8 +174,8 @@ class BinaryTestsMixin:
         num_pairs, column_pairs = self._get_binary_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of binary columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of binary columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(column_pairs):
@@ -452,7 +432,7 @@ class BinaryTestsMixin:
                     continue
                 set_other_cols.append(col_name_other)
             if len(set_other_cols) < 2:
-                return
+                return None
 
             # Consider subsets of size 5 at maximum.
             for subset_size in range(min(5, len(set_other_cols)), 1, -1):
@@ -490,6 +470,7 @@ class BinaryTestsMixin:
                             ""
                         )
                         return True
+            return None
 
         for col_idx, col_name in enumerate(self.binary_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
@@ -524,9 +505,9 @@ class BinaryTestsMixin:
         total_combinations = num_bin_cols * (num_bin_cols * (num_bin_cols - 1)) / 2
         if total_combinations > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test {test_id}. There are {num_bin_cols:,} binary columns, resulting in "
+                print(f"  Skipping test {test_id}. There are {num_bin_cols:,} binary columns, resulting in "
                        f"{int(total_combinations):,} combinations. max_combinations is currently set to "
-                       f"{self.max_combinations:,}"))
+                       f"{self.max_combinations:,}")
             return
 
         reported_dict = {}
@@ -547,7 +528,7 @@ class BinaryTestsMixin:
                 if columns_tuple in reported_dict:  # todo: maybe faster to remove
                     continue
 
-                if col_name_1 == col_name_2 or col_name_1 == col_name_3:
+                if col_name_1 in (col_name_2, col_name_3):
                     continue
 
                 col_vals_2 = self.column_unique_vals[col_name_2]
@@ -646,8 +627,8 @@ class BinaryTestsMixin:
                 skip_subsets = calc_size > self.max_combinations
                 if skip_subsets:
                     if self.verbose >= 2 and not printed_subset_size_msg:
-                        print((f"    Skipping subsets of size {subset_size}. There are {calc_size:,} subsets. "
-                               f"max_combinations is currently set to {self.max_combinations:,}."))
+                        print(f"    Skipping subsets of size {subset_size}. There are {calc_size:,} subsets. "
+                               f"max_combinations is currently set to {self.max_combinations:,}.")
                         printed_subset_size_msg = True
                     continue
 
@@ -759,8 +740,8 @@ class BinaryTestsMixin:
             skip_subsets = calc_size > self.max_combinations
             if skip_subsets:
                 if self.verbose >= 2 and not printed_subset_size_msg:
-                    print((f"  Skipping subsets of size {subset_size} and larger. There are {calc_size:,} subsets. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"  Skipping subsets of size {subset_size} and larger. There are {calc_size:,} subsets. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                     printed_subset_size_msg = True
                 continue
 
@@ -845,8 +826,8 @@ class BinaryTestsMixin:
         num_pairs = len(self.binary_cols) * len(self.numeric_cols)
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of binary and numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of binary and numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for bin_idx, bin_col in enumerate(self.binary_cols):
@@ -886,7 +867,7 @@ class BinaryTestsMixin:
                 if set_0_min > set_1_max:
                     # Test if the binary column is consistently vol_0 for the larger values in the numeric column
                     threshold = statistics.mean([set_0_min, set_1_max])
-                    test_series = [True if (x == val0 and y > threshold) or (x == val1 and y <= threshold) else False
+                    test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
                     test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
@@ -901,7 +882,7 @@ class BinaryTestsMixin:
                 elif set_1_min > set_0_max:
                     # Test if the binary column is consistently vol_0 for the larger values in the numeric column
                     threshold = statistics.mean([set_1_min, set_0_max])
-                    test_series = [True if (x == val1 and y > threshold) or (x == val0 and y <= threshold) else False
+                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
                     test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
@@ -916,7 +897,7 @@ class BinaryTestsMixin:
                 elif set_0_01_percentile > set_1_99_percentile:
                     # Test if the binary column is consistently vol_0 for the larger values in the numeric column
                     threshold = statistics.mean([set_0_01_percentile, set_1_99_percentile])
-                    test_series = [True if (x == val0 and y > threshold) or (x == val1 and y <= threshold) else False
+                    test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
                     test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
@@ -931,7 +912,7 @@ class BinaryTestsMixin:
                 elif set_1_01_percentile > set_0_99_percentile:
                     # Test if the binary column is consistently vol_1 for the larger values in the numeric column
                     threshold = statistics.mean([set_1_01_percentile, set_0_99_percentile])
-                    test_series = [True if (x == val1 and y > threshold) or (x == val0 and y <= threshold) else False
+                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
                     test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
@@ -982,7 +963,7 @@ class BinaryTestsMixin:
             nonlocal sub_df_0, sub_df_1
 
             # When checking pairs of binary columns, one may be the same as the bin_col
-            if bin_col == col_name_2 or bin_col == col_name_3:
+            if bin_col in (col_name_2, col_name_3):
                 return
 
             # Skip where the columns are almost the same
@@ -1104,8 +1085,8 @@ class BinaryTestsMixin:
         else:
             if (num_pairs * len(self.binary_cols)) > self.max_combinations:
                 if self.verbose >= 1:
-                    print((f"  Skipping testing numeric columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary and numeric columns. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"  Skipping testing numeric columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary and numeric columns. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                 skip_numeric = True
 
         skip_string = False
@@ -1115,8 +1096,8 @@ class BinaryTestsMixin:
         else:
             if (num_pairs * len(self.binary_cols)) > self.max_combinations:
                 if self.verbose >= 1:
-                    print((f"  Skipping testing string columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary and string columns. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"  Skipping testing string columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary and string columns. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                 skip_string = True
 
         skip_date = False
@@ -1126,8 +1107,8 @@ class BinaryTestsMixin:
         else:
             if (num_pairs * len(self.binary_cols)) > self.max_combinations:
                 if self.verbose >= 1:
-                    print((f"  Skipping testing date columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary and date columns. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"  Skipping testing date columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary and date columns. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                 skip_date = True
 
         skip_binary = False
@@ -1137,8 +1118,8 @@ class BinaryTestsMixin:
         else:
             if (num_pairs * len(self.binary_cols)) > self.max_combinations:
                 if self.verbose >= 1:
-                    print((f"  Skipping testing binary columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary columns. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"  Skipping testing binary columns. There are {num_pairs * len(self.binary_cols):,} combinations of binary columns. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                 skip_binary = True
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -1193,13 +1174,11 @@ class BinaryTestsMixin:
         # self._add_synthetic_column('bin_str_match rand_b', np.random.choice(['a', 'aa', 'b', 'bb'], self.num_synth_rows))
         # self._add_synthetic_column('bin_str_match all', self.synth_df['bin_str_match rand_a'] == self.synth_df['bin_str_match rand_b'])
         # self._add_synthetic_column('bin_str_match most', self.synth_df['bin_str_match all'])
-        pass
 
 
     def _check_binary_two_str_match(self, test_id):
         """
         """
-        pass
 
     ##################################################################################################################
     # Data consistency sets of multiple columns, where one is binary and the others are numeric
@@ -1234,9 +1213,7 @@ class BinaryTestsMixin:
             sub_df_v1 = self.orig_df[[bin_col, num_col_1, num_col_2]][self.orig_df[bin_col] == val0]
             if sub_df_v1[num_col_1].isna().sum() > (len(sub_df_v1) * 0.75):
                 return False
-            if sub_df_v1[num_col_2].isna().sum() > (len(sub_df_v1) * 0.75):
-                return False
-            return True
+            return not (sub_df_v1[num_col_2].isna().sum() > (len(sub_df_v1) * 0.75))
 
         if len(self.binary_cols) == 0:
             return
@@ -1318,7 +1295,7 @@ class BinaryTestsMixin:
                     threshold = val_at_frac_0
 
                     # Test on a sample of rows
-                    test_series = [True if (x == val0 and y <= threshold) or (x == val1 and y >= threshold) else False
+                    test_series = [bool(x == val0 and y <= threshold or x == val1 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col].head(sample_size), sum_arr.head(sample_size))]
                     test_series = test_series | \
                                   self.orig_df[bin_col].head(sample_size).isna() | \
@@ -1328,7 +1305,7 @@ class BinaryTestsMixin:
                         continue
 
                     # Test on the full columns
-                    test_series = [True if (x == val0 and y <= threshold) or (x == val1 and y >= threshold) else False
+                    test_series = [bool(x == val0 and y <= threshold or x == val1 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col], sum_arr)]
                     if not check_nulls_matching(bin_col, num_col_1, num_col_2):
                         continue
@@ -1350,7 +1327,7 @@ class BinaryTestsMixin:
                     threshold = val_at_frac_1
 
                     # Test on a sample of rows
-                    test_series = [True if (x == val1 and y > threshold) or (x == val0 and y <= threshold) else False
+                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col].head(sample_size), sum_arr.head(sample_size))]
                     test_series = test_series | \
                                   self.orig_df[bin_col].head(sample_size).isna() | \
@@ -1360,7 +1337,7 @@ class BinaryTestsMixin:
                         continue
 
                     # Test on the full columns
-                    test_series = [True if (x == val1 and y > threshold) or (x == val0 and y <= threshold) else False
+                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], sum_arr)]
                     if not check_nulls_matching(bin_col, num_col_1, num_col_2):
                         continue

@@ -95,8 +95,8 @@ class ExportMixin:
                     f.write("<br>A strong pattern, and exceptions to the pattern, were found.<br>")
                     f.write(sub_summary.iloc[0]['Description of Pattern'])
                     num_exceptions = sub_summary.iloc[0]['Number of Exceptions']
-                    f.write((f"<br>Number of exceptions: {num_exceptions} "
-                            f"({num_exceptions * 100.0 / self.num_rows:.4f}% of rows)"))
+                    f.write(f"<br>Number of exceptions: {num_exceptions} "
+                            f"({num_exceptions * 100.0 / self.num_rows:.4f}% of rows)")
                 f.write('</div>')
 
             f.write("</body>")

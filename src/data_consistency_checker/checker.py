@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-# Mixins
-from .display_mixin import DisplayMixin
-from .plots_mixin import PlotsMixin
-from .synth_data_mixin import SynthDataMixin
-from .results_mixin import ResultsMixin
 from .analysis_cache_mixin import AnalysisCacheMixin
 from .data_init_mixin import DataInitMixin
+
+# Mixins
+from .display_mixin import DisplayMixin
 from .execution_mixin import ExecutionMixin
 from .export_mixin import ExportMixin
+from .plots_mixin import PlotsMixin
+from .results_mixin import ResultsMixin
+from .synth_data_mixin import SynthDataMixin
 
 # Test implementation mixins
 from .test_implementations import (
     BaseTestsMixin,
-    NumericTestsMixin,
-    DateTestsMixin,
-    StringTestsMixin,
     BinaryTestsMixin,
+    DateTestsMixin,
     MultiColumnTestsMixin,
+    NumericTestsMixin,
+    StringTestsMixin,
 )
 
 
@@ -48,4 +49,3 @@ class DataConsistencyChecker(BaseTestsMixin, NumericTestsMixin, DateTestsMixin, 
         """
         if contamination_levels_arr is None:
             contamination_levels_arr = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05]
-        pass

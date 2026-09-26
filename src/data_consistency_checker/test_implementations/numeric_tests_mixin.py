@@ -6,46 +6,39 @@ Extracted from check_data_consistency.py for better code organization.
 """
 
 from __future__ import annotations
-from typing import Any
 
-import pandas as pd
-import numpy as np
-import numbers
-import sys
-import math
-import statistics
-import datetime
-import calendar
-import random
-import string
 import copy
+import datetime
+import math
+import random
+import statistics
+import string
+import sys
+from itertools import combinations
+
+import numpy as np
+import pandas as pd
 import scipy
 from dateutil.relativedelta import relativedelta
+from sklearn import metrics, tree
 from sklearn.linear_model import Lasso
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn import tree, metrics
-from sklearn.metrics import f1_score, r2_score
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
-from itertools import combinations
-from decimal import Decimal, ROUND_HALF_UP
+from sklearn.preprocessing import RobustScaler
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 try:
     from termcolor import colored
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
 
-digits = string.digits
-
-from ..checker_utils import (
-    safe_div,
-    is_number,
+from data_consistency_checker.checker_utils import (
+    array_to_str,
     convert_to_numeric,
     get_num_decimal_digits,
-    get_non_alphanumeric,
     is_missing,
-    array_to_str,
-    replace_special_with_space,
+    safe_div,
 )
+
+digits = string.digits
 
 
 class NumericTestsMixin:
@@ -67,9 +60,9 @@ class NumericTestsMixin:
 
         num_pairs, col_pairs = self._get_numeric_column_pairs()
         if num_pairs > self.max_combinations:
-            if self.verbose >= 1: 
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+            if self.verbose >= 1:
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -84,8 +77,8 @@ class NumericTestsMixin:
             q1_dict[col_name] = num_vals.quantile(0.25)
             q3_dict[col_name] = num_vals.quantile(0.75)
 
-        for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
-            test_series = larger_dict[tuple([col_name_1, col_name_2])]
+        for _cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
+            test_series = larger_dict[(col_name_1, col_name_2)]
             if test_series is None:
                 continue
 
@@ -345,9 +338,9 @@ class NumericTestsMixin:
                 continue
             if len(common_values) == 0:
                 continue
-            if set(common_values) == set(('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')):
+            if set(common_values) == {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}:
                 continue
-            if set(common_values) == set(('', '1', '2', '3', '4', '5', '6', '7', '8', '9')):
+            if set(common_values) == {'', '1', '2', '3', '4', '5', '6', '7', '8', '9'}:
                 continue
             test_series = [
                 True if y else x[1] in common_values
@@ -590,7 +583,7 @@ class NumericTestsMixin:
                 spearan_corr = abs(self.numeric_vals[col_name].corr(pd.Series(row_numbers), method='spearman'))
             else:
                 col_vals = [x.timestamp() for x, y in zip(pd.to_datetime(self.orig_df[col_name]), self.orig_df[col_name].isna()) if not y]
-                spearman_corr = abs(pd.Series(col_vals).corr(pd.Series(list(range(len(col_vals)))), method='spearman'))
+                spearman_corr = abs(pd.Series(col_vals).corr(pd.Series(list(range(len(col_vals)))), method='spearman'))  # noqa: F841 - known bug: spearan_corr is checked below
             if spearan_corr >= 0.95:
                 col_percentiles = self.orig_df[col_name].rank(pct=True)
 
@@ -614,7 +607,7 @@ class NumericTestsMixin:
         """
         random_walk = [10.0]
         prev_val = random_walk[0]
-        for i in range(self.num_synth_rows-1):
+        for _i in range(self.num_synth_rows-1):
             new_val = prev_val + ((random.random() - 0.5) * 2.0)
             random_walk.append(new_val)
             prev_val = new_val
@@ -626,7 +619,7 @@ class NumericTestsMixin:
 
         random_walk = [datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")]
         prev_val = random_walk[0]
-        for i in range(self.num_synth_rows-1):
+        for _i in range(self.num_synth_rows-1):
             new_val = prev_val + relativedelta(days=np.random.randint(-10, 10))
             random_walk.append(new_val)
             prev_val = new_val
@@ -778,15 +771,13 @@ class NumericTestsMixin:
             diff_from_next = sorted_vals.diff(-1)
             diff_threshold = (self.numeric_vals[col_name].max() - self.numeric_vals[col_name].min()) / 10.0
 
-            test_arr = [True if not math.isnan(x) and not math.isnan(y) and (abs(x) > diff_threshold) and
-                                (abs(y) > diff_threshold)
-                           else False for x, y in zip(diff_from_prev, diff_from_next)]
+            test_arr = [bool(not math.isnan(x) and not math.isnan(y) and abs(x) > diff_threshold and abs(y) > diff_threshold) for x, y in zip(diff_from_prev, diff_from_next)]
             num_isolated_points = test_arr.count(True)
 
             if num_isolated_points > 0:
                 # Flag the correct rows. We currently have their indexes based on a sorted array.
                 vals_arr = [x for x, y in zip(sorted_vals, test_arr) if y]
-                test_series = [False if x in vals_arr else True for x in self.orig_df[col_name].values]
+                test_series = [x not in vals_arr for x in self.orig_df[col_name].values]
                 # Some versions of pandas cannot work with NaN values here, so use the min & max
                 prev_arr = np.array(
                     sorted([self.orig_df[col_name].min()] +
@@ -821,14 +812,13 @@ class NumericTestsMixin:
             diff_threshold = (pd.to_datetime(self.orig_df[col_name]).max() -
                               pd.to_datetime(self.orig_df[col_name]).min()) / 10.0
 
-            test_arr = [True if (x == x) and (y == y) and (abs(x) > diff_threshold) and (abs(y) > diff_threshold)
-                        else False for x, y in zip(diff_from_prev, diff_from_next)]
+            test_arr = [bool(x == x and y == y and abs(x) > diff_threshold and abs(y) > diff_threshold) for x, y in zip(diff_from_prev, diff_from_next)]
             num_isolated_points = test_arr.count(True)
 
             if num_isolated_points > 0:
                 # Flag the correct rows. We currently have their indexes based on a sorted array.
                 vals_arr = [x for x, y in zip(sorted_vals, test_arr) if y]
-                test_series = [False if x in vals_arr else True for x in self.orig_df[col_name].values]
+                test_series = [x not in vals_arr for x in self.orig_df[col_name].values]
                 prev_arr = np.array(sorted(self.orig_df[col_name].values))[list(self.orig_df[col_name].rank().astype(int)-2)]
                 next_arr = np.array([pd.Timestamp(x) for x in np.concatenate(  # It converts to integer otherwise
                         [np.array(sorted(self.orig_df[col_name].values)), np.array([self.orig_df[col_name].max()])]
@@ -1105,7 +1095,7 @@ class NumericTestsMixin:
                 [col_name],
                 test_series,
                 (f"Some values were unusually close to zero. Any values with absolute value less than {lower_limit:,.2f} "
-                 f"were flagged, given the 10th percentile of absolute values is {d1:,.2f} and the 90th is {d9:,.2f}. " 
+                 f"were flagged, given the 10th percentile of absolute values is {d1:,.2f} and the 90th is {d9:,.2f}. "
                  f" The coefficient is set at {self.idr_limit}"),
                 "",
                 allow_patterns=False,
@@ -1144,9 +1134,7 @@ class NumericTestsMixin:
                 f"The column contains values that are consistently multiples of {v}",
                 display_info={"value": v}
             )
-            if n_multiples > (self.num_rows - self.freq_contamination_level):
-                return True
-            return False
+            return bool(n_multiples > (self.num_rows - self.freq_contamination_level))
 
         exclude_list = [0, 1, -1]
         for col_name in self.numeric_cols:
@@ -1161,7 +1149,7 @@ class NumericTestsMixin:
             min_vals = [x for x in self.numeric_vals[col_name].unique() if x > 0.5 and x not in exclude_list]
             if len(min_vals) == 0:
                 continue
-            min_vals = sorted(list(set(min_vals)))[:5]
+            min_vals = sorted(set(min_vals))[:5]
             found = False
             for v in min_vals:
                 if test_divisor(col_name, v):
@@ -1448,8 +1436,8 @@ class NumericTestsMixin:
         num_pairs, col_pairs = self._get_numeric_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         larger_pairs_with_bool_dict = self.get_larger_pairs_with_bool_dict()
@@ -1567,8 +1555,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         nunique_dict = self.get_nunique_dict()
@@ -1609,7 +1597,7 @@ class NumericTestsMixin:
             vals_arr_2 = self.numeric_vals_filled[col_name_2]
             test_series_a = np.where(
                 self.orig_df[col_name_2] != 0,
-                abs((vals_arr_1 / vals_arr_2)),
+                abs(vals_arr_1 / vals_arr_2),
                 1.0
             )
             test_series = np.where((test_series_a > 0.5) & (test_series_a < 2.0), True, False)
@@ -1639,8 +1627,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         nunique_dict = self.get_nunique_dict()
@@ -1712,8 +1700,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -1723,7 +1711,7 @@ class NumericTestsMixin:
         for col_name in self.numeric_cols:
             count_zeros_dict[col_name] = (self.orig_df[col_name] == 0).tolist().count(True)
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if (count_zeros_dict[col_name_1] > zeros_limit) or (count_zeros_dict[col_name_2] > zeros_limit):
                 continue
 
@@ -1767,13 +1755,13 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             # Skip pairs where only rare rows have no nulls
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
@@ -1812,8 +1800,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -1885,8 +1873,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -1961,8 +1949,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -2031,8 +2019,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -2131,8 +2119,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -2241,8 +2229,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
@@ -2353,8 +2341,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -2440,14 +2428,14 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
         is_missing_dict = self.get_is_missing_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             # Skip pairs where only rare rows have no nulls
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
@@ -2517,13 +2505,13 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
-        for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
+        for _pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             # Skip pairs where only rare rows have no nulls
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
@@ -2564,8 +2552,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_bool_dict = self.get_cols_same_bool_dict()
@@ -2699,8 +2687,8 @@ class NumericTestsMixin:
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         cols_same_count_dict = self.get_cols_same_count_dict()
@@ -2844,7 +2832,7 @@ class NumericTestsMixin:
         self.synth_df['matched zero miss all'] = self.synth_df['matched zero miss all'].replace(0, np.nan)
         self._add_synthetic_column('matched zero miss most', self.synth_df['matched zero miss rand_a'])
         self.synth_df['matched zero miss most'] = self.synth_df['matched zero miss most'].replace(0, np.nan)
-        if self.synth_df.loc[999, 'matched zero miss most'] == np.nan:
+        if self.synth_df.loc[999, 'matched zero miss most'] == np.nan:  # noqa: PLW0177 - known bug: always False
             self.synth_df.loc[999, 'matched zero miss most'] = 1
         else:
             self.synth_df.loc[999, 'matched zero miss most'] = np.nan
@@ -2930,8 +2918,8 @@ class NumericTestsMixin:
         num_combos = len(self.numeric_cols) * (len(self.numeric_cols) * (len(self.numeric_cols)-1)/2)
         if num_combos > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {int(num_combos):,}  triples of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {int(num_combos):,}  triples of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
@@ -2942,7 +2930,7 @@ class NumericTestsMixin:
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
                 print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns.")
             _, column_pairs = self._get_numeric_column_pairs_unique()
-            for cols_idx, (col_name_1, col_name_2) in enumerate(column_pairs):
+            for _cols_idx, (col_name_1, col_name_2) in enumerate(column_pairs):
                 if col_name_1 == col_name_3 or col_name_2 == col_name_3:
                     continue
 
@@ -3046,8 +3034,8 @@ class NumericTestsMixin:
         num_triples, column_triples = self._get_numeric_column_triples()
         if num_triples > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {int(num_triples):,} triples of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {int(num_triples):,} triples of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         # Test if col_name_3 is approximately the product of col_name_1 and col_name_2
@@ -3144,8 +3132,8 @@ class NumericTestsMixin:
         num_triples, column_triples = self._get_numeric_column_triples()
         if num_triples > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {int(num_triples):,} triples of numeric columns."
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {int(num_triples):,} triples of numeric columns."
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
@@ -3158,7 +3146,7 @@ class NumericTestsMixin:
             if self.verbose >= 2 and cols_idx > 0 and cols_idx % 100_000 == 0:
                 print(f"  Examining column set {cols_idx:,} of {len(column_triples):,} combinations of columns.")
 
-            if set(sorted([col_name_1, col_name_2, col_name_3])) in flagged_sets:
+            if {col_name_1, col_name_2, col_name_3} in flagged_sets:
                 continue
 
             if col_triples_any_null_bool_dict[tuple(sorted([col_name_1, col_name_2, col_name_3]))]:
@@ -3197,7 +3185,7 @@ class NumericTestsMixin:
                     test_series,
                     (f'"{col_name_3}" is consistently similar (within 10%) to the ratio of "{col_name_1}" and '
                      f'"{col_name_2}"'))
-                flagged_sets.append(set(sorted([col_name_1, col_name_2, col_name_3])))
+                flagged_sets.append({col_name_1, col_name_2, col_name_3})
                 continue
 
 
@@ -3206,7 +3194,6 @@ class NumericTestsMixin:
         Patterns without exceptions:
         Patterns with exception:
         """
-        pass
 
 
     def _check_ratio_exact(self, test_id):
@@ -3284,8 +3271,8 @@ class NumericTestsMixin:
         num_triples, column_triples = self._get_numeric_column_triples_unique()
         if num_triples > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {int(num_triples):,} triples of numeric columns."
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {int(num_triples):,} triples of numeric columns."
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
@@ -3410,12 +3397,12 @@ class NumericTestsMixin:
         num_triples, column_triples = self._get_numeric_column_triples_unique()
         if num_triples > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. \nThere are {int(num_triples):,} triples of numeric columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. \nThere are {int(num_triples):,} triples of numeric columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
-        percentiles_dict = self.get_percentiles_dict()
+        self.get_percentiles_dict()
 
         for cols_idx, (col_name_1, col_name_2, col_name_3) in enumerate(column_triples):
             if self.verbose >= 2 and cols_idx > 0 and cols_idx % 10_000 == 0:
@@ -3432,19 +3419,16 @@ class NumericTestsMixin:
             med_3 = abs(self.column_medians[col_name_3])
 
             # Test if col_name_1 is larger than abs(col_name_2 - col_name_3)
-            if med_1 > (abs(med_2 - med_3) * 0.5):
-                if test_larger(col_name_2, col_name_3, col_name_1):
-                    continue
+            if med_1 > (abs(med_2 - med_3) * 0.5) and test_larger(col_name_2, col_name_3, col_name_1):
+                continue
 
             # Test if col_name_2 is larger than abs(col_name_1 - col_name_3)
-            if med_2 > (abs(med_1 - med_3) * 0.5):
-                if test_larger(col_name_1, col_name_3, col_name_2):
-                    continue
+            if med_2 > (abs(med_1 - med_3) * 0.5) and test_larger(col_name_1, col_name_3, col_name_2):
+                continue
 
             # Test if col_name_3 is larger than abs(col_name_2 - col_name_3)
-            if med_3 > (abs(med_1 - med_2) * 0.5):
-                if test_larger(col_name_1, col_name_2, col_name_3):
-                    continue
+            if med_3 > (abs(med_1 - med_2) * 0.5) and test_larger(col_name_1, col_name_2, col_name_3):
+                continue
 
     ##################################################################################################################
     # Data consistency checks for numeric column in relation to all other numeric columns.
@@ -3942,8 +3926,8 @@ class NumericTestsMixin:
 
         for col_idx, col_name in enumerate(column_pos_arr):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
-                print((f'  Examining column: {col_idx} of {len(column_pos_arr)} positive numeric columns (and all '
-                       f'numeric columns of similar ranges)'))
+                print(f'  Examining column: {col_idx} of {len(column_pos_arr)} positive numeric columns (and all '
+                       f'numeric columns of similar ranges)')
 
             similar_cols = similar_cols_dict[col_name]
 
@@ -4054,7 +4038,7 @@ class NumericTestsMixin:
         sample_neg_dict = {}
         pos_dict = {}
         neg_dict = {}
-        for col_idx, col_name in enumerate(self.numeric_cols):
+        for _col_idx, col_name in enumerate(self.numeric_cols):
             vals_arr = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])
             num_pos = len([x for x in vals_arr if x > 0])
             num_neg = len([x for x in vals_arr if x < 0])
@@ -4087,8 +4071,8 @@ class NumericTestsMixin:
             calc_size = math.comb(len(cols), subset_size)
             if calc_size > self.max_combinations:
                 if self.verbose >= 2 and not printed_subset_size_msg :
-                    print((f"    Skipping subsets of size {subset_size}. There are {calc_size:,} subsets. "
-                           f"max_combinations is currently set to {self.max_combinations:,}."))
+                    print(f"    Skipping subsets of size {subset_size}. There are {calc_size:,} subsets. "
+                           f"max_combinations is currently set to {self.max_combinations:,}.")
                     printed_subset_size_msg = True
                 continue
 
@@ -4118,7 +4102,7 @@ class NumericTestsMixin:
                 # Test on a sample of rows
                 pos_matching_arr = [1] * len(self.sample_df)
                 neg_matching_arr = [1] * len(self.sample_df)
-                for c_idx, c in enumerate(subset[1:]):
+                for c_idx, c in enumerate(subset[1:]):  # noqa: B007 - used after the loop
                     pos_matching_arr = pos_matching_arr & (sample_pos_dict[subset[0]] == sample_pos_dict[c])
                     if pos_matching_arr.tolist().count(False) > 1:
                         subset_matches = False
@@ -4199,7 +4183,7 @@ class NumericTestsMixin:
         sample_non_zero_dict = {}
         zero_dict = {}
         non_zero_dict = {}
-        for col_idx, col_name in enumerate(self.numeric_cols):
+        for _col_idx, col_name in enumerate(self.numeric_cols):
             num_zero = len([x for x in self.orig_df[col_name] if (x == 0)])
             num_non_zero = len([x for x in self.orig_df[col_name] if (x != 0)])
             if num_zero > (self.num_rows * 0.1) and num_non_zero > (self.num_rows * 0.1):
@@ -4227,8 +4211,8 @@ class NumericTestsMixin:
             skip_subsets = calc_size > self.max_combinations
             if skip_subsets:
                 if self.verbose >= 2 and not printed_subset_size_msg:
-                    print((f"    Skipping subsets of size {subset_size}. There are {calc_size} subsets. max_combinations"
-                           f"is currently set to {self.max_combinations:,}."))
+                    print(f"    Skipping subsets of size {subset_size}. There are {calc_size} subsets. max_combinations"
+                           f"is currently set to {self.max_combinations:,}.")
                     printed_subset_size_msg = True
                 continue
 
@@ -4255,7 +4239,7 @@ class NumericTestsMixin:
                 non_zero_matching_arr = [1] * self.num_rows
 
                 # Test on a sample of rows
-                for c_idx, c in enumerate(subset):
+                for c_idx, c in enumerate(subset):  # noqa: B007 - used after the loop
                     # We compare all columns to the first column in the set, so this must be identical
                     if c == subset[0]:
                         continue
@@ -4668,7 +4652,7 @@ class NumericTestsMixin:
                                 already_in_set = True
                         if already_in_set:
                             continue
-                        return set((i, j))
+                        return {i, j}
             return None
 
         # todo: tighten up so they are all reasonably correlated with each other -- at least 0.9 with at least 1/2 of the other columns in the set
@@ -4900,7 +4884,7 @@ class NumericTestsMixin:
 
                 # Some columns may be included multiple times. Put the columns used into a consistent, list without
                 # duplicates
-                cols = sorted(list(set(cols)))
+                cols = sorted(set(cols))
 
                 # Clean the split points for categorical features to use the values, not 0.5
                 rules = self.get_decision_tree_rules_as_categories(rules, categorical_features)
