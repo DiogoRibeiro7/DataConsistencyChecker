@@ -73,6 +73,14 @@ mypy = "*"
 pre-commit = "*"
 bandit = {extras = ["toml"], version = "*"}
 
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = ">=1.6,<2"
+mkdocs-material = ">=9.7,<10"
+mkdocstrings = {extras = ["python"], version = ">=1.0,<2"}
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

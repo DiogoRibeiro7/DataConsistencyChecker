@@ -55,3 +55,6 @@ dc_cache/
 
 # Generated analysis artifacts
 method_mapping.json
+
+# MkDocs build output
+site/

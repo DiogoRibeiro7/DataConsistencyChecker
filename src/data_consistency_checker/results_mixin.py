@@ -19,14 +19,22 @@ class ResultsMixin(CheckerState):
     """Mixin providing result queries, processing, reports, summaries, state management, and scoring."""
 
     def get_execution_failures(self) -> list[dict[str, Any]]:
-        """Return a defensive copy of failures from the latest quality run."""
+        """
+        Return diagnostics for the checks that raised an error during the last run.
+
+        A failing check does not stop the others (unless `raise_on_error=True`). Each entry is a dictionary with
+        the check's `test_id` and an `error` envelope describing the `OutlierDetectionError`, including the
+        original exception as its `cause`.
+        """
         return copy.deepcopy(self.execution_failures)
 
     def get_report(self) -> DataConsistencyReport:
-        """Return a structured snapshot of the current analysis results.
+        """
+        Return a structured, JSON-safe snapshot of the current results.
 
-        The report contains only JSON-safe primitives and does not expose live
-        pandas objects or mutable checker state.
+        Returns:
+            A `DataConsistencyReport`. It holds only plain values, so it does not change if the checker is used
+                further. Use `to_dict()` on it for a dictionary ready for `json.dumps()`.
         """
         patterns_df = self.get_patterns_list(show_short_list_only=False)
         exceptions_df = self.get_exceptions_list()
@@ -78,22 +86,18 @@ class ResultsMixin(CheckerState):
         return col_name_str[:-5]
 
 
-    def get_test_ids_with_results(self, include_patterns=True, include_exceptions=True):
+    def get_test_ids_with_results(self, include_patterns: bool = True, include_exceptions: bool = True):
         """
-        Gets a list of test ids, which may be used, for example, to loop through tests calling other APIs such as
-        display_detailed_results(). These are the ids of tests that flagged at least one pattern and/or exeception.
+        Return the IDs of the checks that found something.
 
-        include_patterns: bool
-            If True, the returned list will include all test ids for tests that flagged at least one pattern without
-            exceptions
+        Useful, for example, to loop over the checks calling `display_detailed_results()` for each.
 
-        include_exceptions: bool
-            If True, the returned list will include all test ids for tests that flagged at least one pattern with
-            exceptions
+        Args:
+            include_patterns: Include the checks that found at least one pattern without exceptions.
+            include_exceptions: Include the checks that found at least one pattern with exceptions.
 
-        Returns: array of test ids
-            Returns an array of test ids, where each test found at least one pattern, with or without exceptions, as
-            specified
+        Returns:
+            list[str]: The check IDs, in execution order.
         """
 
         ret_list = []
@@ -193,41 +197,46 @@ class ResultsMixin(CheckerState):
 
         return df
 
-    def get_exceptions(self):
+    def get_exceptions(self) -> pd.DataFrame | None:
         """
-        Returns a dataframe with the same set of rows as the original dataframe, but a column for each pattern that was
-        discovered that had exceptions, and a column indicating the final score for each row. This dataframe can
-        be very large and is not generally useful to display, but may be collected for further analysis.
+        Return which rows each exception flags, with the rows' scores.
+
+        The DataFrame has a row per row of the original data, a boolean column per pattern with exceptions (True
+        where the row is flagged), and the `FINAL SCORE` and `NORMALIZED SCORE` columns. It can be large, so it
+        is more useful for further analysis than for display.
 
         Returns:
-            pandas.DataFrame: DataFrame containing exceptions and final scores
+            The DataFrame, or None before `check_data_quality()` has run.
         """
 
         return self.test_results_df
 
-    def get_exceptions_by_column(self):
+    def get_exceptions_by_column(self) -> pd.DataFrame:
         """
-        Returns a dataframe with the same shape as the original dataframe, but with each cell containing, instead
-        of the original value for each feature for each row, a score allocated to that cell. Each pattern with
-        exceptions has a score of 1.0, but patterns the cover multiple columns will give each cell a fraction of this.
-        For example with a pattern covering 4 columns, any cells that are flagged will receive a score of 0.25 for
-        this pattern. Each cell will have the sum of all patterns with exceptions where they are flagged.
+        Return a score per cell of the original data.
+
+        Each pattern with exceptions contributes a score of 1.0 to each row it flags, divided evenly between the
+        columns involved: a flagged row of a pattern over 4 columns adds 0.25 to each of those 4 cells.
+
+        Returns:
+            A DataFrame with the same shape as the original data, holding the summed scores.
         """
 
         return pd.DataFrame(self.test_results_by_column_np, columns=self.orig_df.columns)
 
-    def summarize_patterns_by_test_and_feature(self, all_tests=False, heatmap=False):
+    def summarize_patterns_by_test_and_feature(self, all_tests: bool = False, heatmap: bool = False):
         """
-        Create and return a dataframe with a row for each test and a column for each feature in the original data. Each
-        cell has a 0 or 1, indicating if the pattern was found without exceptions in that feature. Note, some tests to
-        not identify patterns, such as VERY_LARGE. The dataframe is returned, and optionally displayed as a heatmap.
+        Return a table of the patterns found without exceptions, by check and column.
 
-        all_tests: bool
-            If all_tests is True, all tests are included in the output, even those that found no patterns. This may be
-            used specifically to check which found no patterns.
+        Args:
+            all_tests: Include a row for every check, including those that found no patterns.
+            heatmap: Also display the table as a heatmap.
 
-        heatmap: bool
-            If True, a heatmap will be displayed
+        Returns:
+            pd.DataFrame | None: A DataFrame with a row per check and a column per original column, holding a
+                checkmark where the
+                check found a pattern involving that column. Checks such as `VERY_LARGE` only report exceptions,
+                so never appear here with patterns.
         """
 
         if self.patterns_df is None:
@@ -267,19 +276,19 @@ class ResultsMixin(CheckerState):
         return df.replace(0, '')
 
 
-    def summarize_exceptions_by_test_and_feature(self, all_tests=False, heatmap=False):
+    def summarize_exceptions_by_test_and_feature(
+            self, all_tests: bool = False, heatmap: bool = False):
         """
-        Create a dataframe with a row for each test and a column for each feature in the original data. Each cell has an
-        integer, indicating, if the pattern was found in that feature, the number of rows that were flagged. Note,
-        at most contamination_level of the rows (0.5% by default) may be flagged for any test in any feature, as this
-        checks for exceptions to well-established patterns.
+        Return a table of the exceptions found, by check and column.
 
-        all_tests: bool
-            If all_tests is True, all tests are included in the output, even those that found no issues. This may be
-            used specifically to check which found no issues.
+        Args:
+            all_tests: Include a row for every check, including those that found no exceptions.
+            heatmap: Also display the table as a heatmap.
 
-        heatmap: bool:
-            If set True, a heatmap of the dataframe will be displayed.
+        Returns:
+            pd.DataFrame | None: A DataFrame with a row per check and a column per original column, holding the
+                number of rows flagged
+                by the check in that column (blank where none).
         """
 
         if self.exceptions_summary_df is None:
@@ -318,13 +327,12 @@ class ResultsMixin(CheckerState):
         return df.replace(0, '')
 
 
-    def summarize_patterns_by_test(self, heatmap=False):
+    def summarize_patterns_by_test(self, heatmap: bool = False):
         """
-        Create and return a dataframe with a row for each test, indicating the number of features where the pattern
-        was found.
+        Return, for each check that found patterns without exceptions, how many columns or column sets have one.
 
-        heatmap: bool
-            If True, a heatmap of the results are displayed
+        Args:
+            heatmap: Also display the table as a heatmap.
         """
 
         if self.patterns_df is None:
@@ -351,13 +359,17 @@ class ResultsMixin(CheckerState):
             plt.show()
         return df
 
-    def summarize_exceptions_by_test(self, heatmap=False):
+    def summarize_exceptions_by_test(self, heatmap: bool = False):
         """
-        Create and return a dataframe with a row for each test, indicating 1) the number of features where the pattern
-        was found but also exceptions, 2) the number of issues total flagged (across all features and all rows).
+        Return, for each check that found exceptions, how many columns and rows it flagged.
 
-        heatmap: bool
-            If True, a heatmap of the results are displayed
+        Args:
+            heatmap: Also display the table as a heatmap.
+
+        Returns:
+            pd.DataFrame | None: A DataFrame indexed by check ID, with the number of columns flagged at least
+                once, rows flagged at least
+                once, and issues in total.
         """
 
         if self.exceptions_summary_df is None:
@@ -474,10 +486,15 @@ class ResultsMixin(CheckerState):
             ["FINAL SCORE", "NORMALIZED SCORE"]
         ].copy()
 
-    def get_results_by_row_id(self, row_num):
+    def get_results_by_row_id(self, row_num: int) -> list[tuple[str, str]]:
         """
-        Returns a list of tuples, with each tuple containing a test ID, and column name, for all issues flagged in the
-        specified row.
+        Return the exceptions that flag one row.
+
+        Args:
+            row_num: The 0-based row number in the original data.
+
+        Returns:
+            A list of `(test_id, columns)` tuples, one per exception that flags the row.
         """
 
         if self.test_results_df is None:
@@ -727,44 +744,31 @@ class ResultsMixin(CheckerState):
 
     def clear_results(
             self,
-            test_id_list=None,
+            test_id_list: list[str] | None = None,
             col_name_list=None,
-            pattern_id_list=None,
-            issue_id_list=None,
-            clear_code_tests=False,
-            clear_all_patterns=False,
-            clear_all_exceptions=False):
+            pattern_id_list: list[int] | None = None,
+            issue_id_list: list[int] | None = None,
+            clear_code_tests: bool = False,
+            clear_all_patterns: bool = False,
+            clear_all_exceptions: bool = False) -> None:
         """
-        This may be used to iteratively clean the results until the DataConstencyChecker object has an appropriate
-        set of patterns and exceptions. This may be done, for example, to pass the DataConstencyChecker on for
-        further processing or to generate a report, or, for example, until all issues are acknowledged or understood,
-        or until the set of results is zero.
+        Remove selected patterns or exceptions from the results.
 
-        There are several parameters that may be used to specify which patterns or exceptions to remove. Only one
-        may be specified at a time.
+        Use this to prune findings that are not meaningful for your data (for example, relationships between
+        columns that are not really comparable), keeping a final set of findings to report on. Exactly one option
+        may be given per call: call it repeatedly to clear more. `restore_results()` undoes all clearing.
 
-        test_id_list: array of test IDs
-            If set, this will remove any patterns or exceptions based on any of these tests.
-
-        col_name_list: array of column names
-            If set, this will remove any patterns or exceptions based on any of these column names. This includes
-            results that are based on other features as well.
-
-        pattern_id_list: array of integers
-            If set, this will remove the specified patterns. This will not affect the set of exceptions.
-
-        issue_id_list: array of integers
-            If set, this will remove the specified exceptions. This will not affect the set of patterns.
-
-        clear_code_tests: bool
-            If set, all patterns and exceptions related to all tests that are specifif to code and ID values will be
-            removed.
-
-        clear_all_patterns: bool
-            If set, this will remove all patterns. This will not affect the set of exceptions.
-
-        clear_all_exceptions: bool
-            If set, this will remove all exceptions. This will not affect the set of patterns.
+        Args:
+            test_id_list: Remove all patterns and exceptions of these checks.
+            col_name_list (list[str] | None): Remove all patterns and exceptions involving any of these columns,
+                including those that
+                also involve other columns.
+            pattern_id_list: Remove these patterns (see `get_patterns_list()`). Exceptions are not affected.
+            issue_id_list: Remove these exceptions (see `get_exceptions_list()`). Patterns are not affected.
+            clear_code_tests: Remove all findings of the checks specific to code and ID values
+                (`get_tests_for_codes()`).
+            clear_all_patterns: Remove all patterns. Exceptions are not affected.
+            clear_all_exceptions: Remove all exceptions. Patterns are not affected.
         """
 
         def check_col_includes_list(x):
@@ -936,7 +940,7 @@ class ResultsMixin(CheckerState):
 
     def restore_results(self):
         """
-        This resets all the discovered results back to the state when check_data_quality() was last called.
+        Restore the results of the last `check_data_quality()` call, undoing every `clear_results()` call.
         """
         self.patterns_arr = self.safe_patterns_arr.copy()
         self.patterns_df = self.safe_patterns_df.copy()
