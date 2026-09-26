@@ -48,12 +48,15 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", 0, 0)
+    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", 0, 0)
+    # With 80% of the rows null, the upper limit of "large_given_prefix most" as a whole, computed on the remaining
+    # values, falls below its value of 290 in row 999, and this check does not flag values that are large for the
+    # whole column.
+    synth_test(test_id, "80-percent", synth_patterns_cols, [synth_exceptions_cols[1]])
 
 
 @requires_synthetic_all_columns
