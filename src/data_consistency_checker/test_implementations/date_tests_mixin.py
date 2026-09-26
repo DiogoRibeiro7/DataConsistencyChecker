@@ -162,8 +162,8 @@ class DateTestsMixin(CheckerState):
         """
         test_date = datetime.datetime.strptime("01-7-1922", "%d-%m-%Y")
         self._add_synthetic_column('dom rand', pd.date_range(test_date, periods=self.num_synth_rows))
-        self._add_synthetic_column('dom all',  pd.date_range(test_date, periods=self.num_synth_rows, freq='M'))
-        self._add_synthetic_column('dom most', pd.date_range(test_date, periods=self.num_synth_rows-1, freq='M'))
+        self._add_synthetic_column('dom all',  pd.date_range(test_date, periods=self.num_synth_rows, freq=pd.offsets.MonthEnd()))
+        self._add_synthetic_column('dom most', pd.date_range(test_date, periods=self.num_synth_rows-1, freq=pd.offsets.MonthEnd()))
         self.synth_df.loc[999, 'dom most'] = datetime.datetime.strptime("02-7-2022", "%d-%m-%Y")
 
 
@@ -657,7 +657,7 @@ class DateTestsMixin(CheckerState):
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.day,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.day,
                                 )]
-                test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -710,7 +710,7 @@ class DateTestsMixin(CheckerState):
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.month,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.month,
                                 )]
-                test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],

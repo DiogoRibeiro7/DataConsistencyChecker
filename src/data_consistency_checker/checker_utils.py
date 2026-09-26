@@ -13,7 +13,7 @@ import math
 import numbers
 import string
 import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import numpy as np
@@ -279,3 +279,82 @@ def set_warnings_levels() -> None:
         warnings.filterwarnings(action="ignore", category=scipy_stats.ConstantInputWarning)
     with contextlib.suppress(Exception):
         warnings.filterwarnings(action="ignore", category=scipy_stats.NearConstantInputWarning)
+
+
+# ---------------------------------------------------------------------------
+# pandas version compatibility
+# ---------------------------------------------------------------------------
+
+def as_str(values: pd.Series) -> pd.Series:
+    """Convert values to strings, including missing values.
+
+    Before pandas 3, ``astype(str)`` also converted missing values to strings (``'nan'``, ``'None'``,
+    ``'NaT'``), and the checks were written for that. pandas 3 keeps them missing, so this converts them
+    as earlier versions did, giving the same strings whatever the pandas version.
+
+    Args:
+        values: The values to convert.
+
+    Returns:
+        An object Series of strings, with the index and name of ``values``.
+    """
+    strings = np.array(values.astype(str), dtype=object)
+    missing = pd.isna(strings)
+    strings[missing] = [str(v) for v in np.array(values, dtype=object)[missing]]
+    return pd.Series(strings, index=values.index, name=values.name, dtype=object)
+
+
+def map_elements(df: pd.DataFrame, func: Callable[[Any], Any]) -> pd.DataFrame:
+    """Apply ``func`` to each element of ``df``.
+
+    ``DataFrame.applymap()`` was renamed ``DataFrame.map()`` in pandas 2.1 and removed in pandas 3.
+
+    Args:
+        df: The data to map.
+        func: The function applied to each element.
+
+    Returns:
+        A DataFrame of the results, with the same shape as ``df``.
+    """
+    return df.map(func) if hasattr(df, "map") else df.applymap(func)
+
+
+def column_from_values(values: list[Any], index: pd.Index) -> pd.Series:
+    """Build a column from Python values, inferring its dtype as pandas 2 did.
+
+    pandas 3 infers its string dtype for text, which turns ``None`` into NaN. Text is kept in an object column
+    instead, as before.
+
+    Args:
+        values: The column's values.
+        index: The column's index.
+
+    Returns:
+        A Series of ``values`` with the inferred dtype, or object dtype for text.
+    """
+    column = pd.Series(values, index=index)
+    return pd.Series(values, index=index, dtype=object) if isinstance(column.dtype, pd.StringDtype) else column
+
+
+def normalise_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy of ``df`` with the dtypes the checks were written for.
+
+    pandas 3 stores text in a dedicated string dtype and creates datetimes at microsecond resolution. The checks
+    expect text in object columns, with NaN for missing values, and datetimes in nanoseconds (the pandas 2
+    defaults), so such columns are converted.
+
+    Args:
+        df: The data to convert.
+
+    Returns:
+        A copy of ``df`` with string columns as object and datetime columns in nanoseconds.
+    """
+    df = df.copy()
+    for col_idx in range(df.shape[1]):
+        col = df.iloc[:, col_idx]
+        if isinstance(col.dtype, pd.StringDtype):
+            values = col.to_numpy(dtype=object, na_value=np.nan)
+            df.isetitem(col_idx, pd.Series(values, index=df.index, dtype=object))
+        elif pd.api.types.is_datetime64_any_dtype(col.dtype) and col.dt.unit != "ns":
+            df.isetitem(col_idx, col.dt.as_unit("ns"))
+    return df

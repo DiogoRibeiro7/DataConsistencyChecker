@@ -19,7 +19,7 @@ from dateutil.relativedelta import relativedelta
 from sklearn.metrics import f1_score
 
 from data_consistency_checker.checker_state import CheckerState
-from data_consistency_checker.checker_utils import is_missing
+from data_consistency_checker.checker_utils import as_str, is_missing
 
 
 class BinaryTestsMixin(CheckerState):
@@ -82,7 +82,7 @@ class BinaryTestsMixin(CheckerState):
 
                 # Consider imbalanced arrays. We also check the macro f1 score
                 sub_df = sample_1000_df[[col_name_1, col_name_2]].dropna()
-                f1score = f1_score(sub_df[col_name_1].astype(str), sub_df[col_name_2].astype(str), average='macro')
+                f1score = f1_score(as_str(sub_df[col_name_1]), as_str(sub_df[col_name_2]), average='macro')
                 if f1score < 0.75:
                     continue
 
@@ -94,7 +94,7 @@ class BinaryTestsMixin(CheckerState):
 
             # Consider imbalanced arrays. We also check the macro f1 score
             sub_df = self.orig_df[[col_name_1, col_name_2]].dropna()
-            f1score = f1_score(sub_df[col_name_1].astype(str), sub_df[col_name_2].astype(str), average='macro')
+            f1score = f1_score(as_str(sub_df[col_name_1]), as_str(sub_df[col_name_2]), average='macro')
             if f1score < 0.9:
                 continue
 
@@ -143,7 +143,7 @@ class BinaryTestsMixin(CheckerState):
             opp_arr = self.orig_df[col_name_2].map({v1: v2, v2: v1})
             opp_arr = opp_arr.fillna("NONE")
             # todo: flip col2 properly, using map, not ~ -- it may not be 0 & 1
-            f1score = f1_score(self.orig_df[col_name_1].fillna("NONE").astype(str), opp_arr.astype(str), average='macro')
+            f1score = f1_score(as_str(self.orig_df[col_name_1].fillna("NONE")), as_str(opp_arr), average='macro')
             if f1score < 0.9:
                 continue
 
@@ -870,7 +870,7 @@ class BinaryTestsMixin(CheckerState):
                     threshold = statistics.mean([set_0_min, set_1_max])
                     test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -885,7 +885,7 @@ class BinaryTestsMixin(CheckerState):
                     threshold = statistics.mean([set_1_min, set_0_max])
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -900,7 +900,7 @@ class BinaryTestsMixin(CheckerState):
                     threshold = statistics.mean([set_0_01_percentile, set_1_99_percentile])
                     test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -915,7 +915,7 @@ class BinaryTestsMixin(CheckerState):
                     threshold = statistics.mean([set_1_01_percentile, set_0_99_percentile])
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = test_series | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -981,7 +981,7 @@ class BinaryTestsMixin(CheckerState):
             # Test first on a sample of the rows where the bin_col has value 0
             if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
                     sample_sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_0 = sample_sub_df_0[col_name_2].astype(str) == sample_sub_df_0[col_name_3].astype(str)
+                test_series_0 = as_str(sample_sub_df_0[col_name_2]) == as_str(sample_sub_df_0[col_name_3])
             else:
                 test_series_0 = sample_sub_df_0[col_name_2] == sample_sub_df_0[col_name_3]
             test_series_0 = test_series_0 | (sample_sub_df_0[col_name_2].isna() & sample_sub_df_0[col_name_3].isna())
@@ -994,7 +994,7 @@ class BinaryTestsMixin(CheckerState):
             # Test on a sample of the rows where bin_col has value 1
             if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
                     sample_sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_1 = sample_sub_df_1[col_name_2].astype(str) == sample_sub_df_1[col_name_3].astype(str)
+                test_series_1 = as_str(sample_sub_df_1[col_name_2]) == as_str(sample_sub_df_1[col_name_3])
             else:
                 test_series_1 = sample_sub_df_1[col_name_2] == sample_sub_df_1[col_name_3]
             test_series_1 = test_series_1 | (sample_sub_df_1[col_name_2].isna() & sample_sub_df_1[col_name_3].isna())
@@ -1019,8 +1019,8 @@ class BinaryTestsMixin(CheckerState):
 
             # Todo: this handles when the dtype is 'category', but it may be faster to treat as category
             if sub_df_0[col_name_2].dtype.name == 'category' or sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_0 = sub_df_0[col_name_2].astype(str) == sub_df_0[col_name_3].astype(str)
-                test_series_1 = sub_df_1[col_name_2].astype(str) == sub_df_1[col_name_3].astype(str)
+                test_series_0 = as_str(sub_df_0[col_name_2]) == as_str(sub_df_0[col_name_3])
+                test_series_1 = as_str(sub_df_1[col_name_2]) == as_str(sub_df_1[col_name_3])
             else:
                 test_series_0 = sub_df_0[col_name_2] == sub_df_0[col_name_3]
                 test_series_1 = sub_df_1[col_name_2] == sub_df_1[col_name_3]
@@ -1059,7 +1059,7 @@ class BinaryTestsMixin(CheckerState):
             if not test_series:
                 return
 
-            test_series = test_series | \
+            test_series = np.array(test_series) | \
                           self.orig_df[bin_col].isna() | \
                           (self.orig_df[col_name_2].isna() & self.orig_df[col_name_3].isna())
 
@@ -1298,7 +1298,7 @@ class BinaryTestsMixin(CheckerState):
                     # Test on a sample of rows
                     test_series = [bool(x == val0 and y <= threshold or x == val1 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col].head(sample_size), sum_arr.head(sample_size))]
-                    test_series = test_series | \
+                    test_series = np.array(test_series) | \
                                   self.orig_df[bin_col].head(sample_size).isna() | \
                                   self.orig_df[num_col_1].head(sample_size).isna() | \
                                   self.orig_df[num_col_2].head(sample_size).isna()
@@ -1310,7 +1310,7 @@ class BinaryTestsMixin(CheckerState):
                                    for x, y in zip(self.orig_df[bin_col], sum_arr)]
                     if not check_nulls_matching(bin_col, num_col_1, num_col_2):
                         continue
-                    test_series = test_series | \
+                    test_series = np.array(test_series) | \
                                   self.orig_df[bin_col].isna() | \
                                   self.orig_df[num_col_1].isna() | \
                                   self.orig_df[num_col_2].isna()
@@ -1330,7 +1330,7 @@ class BinaryTestsMixin(CheckerState):
                     # Test on a sample of rows
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col].head(sample_size), sum_arr.head(sample_size))]
-                    test_series = test_series | \
+                    test_series = np.array(test_series) | \
                                   self.orig_df[bin_col].head(sample_size).isna() | \
                                   self.orig_df[num_col_1].head(sample_size).isna() | \
                                   self.orig_df[num_col_2].head(sample_size).isna()
@@ -1342,7 +1342,7 @@ class BinaryTestsMixin(CheckerState):
                                    for x, y in zip(self.orig_df[bin_col], sum_arr)]
                     if not check_nulls_matching(bin_col, num_col_1, num_col_2):
                         continue
-                    test_series = test_series | \
+                    test_series = np.array(test_series) | \
                                   self.orig_df[bin_col].isna() | \
                                   self.orig_df[num_col_1].isna() | \
                                   self.orig_df[num_col_2].isna()

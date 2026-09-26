@@ -33,6 +33,7 @@ except ImportError:  # pragma: no cover - optional presentation dependency
 from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import (
     array_to_str,
+    as_str,
     convert_to_numeric,
     get_num_decimal_digits,
     is_missing,
@@ -332,7 +333,7 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             # The format_float_positional function ensures the strings are not in scientific notation
-            vals_arr = pd.Series([x[1] for x in vals_arr.apply(np.format_float_positional).astype(str).str.split('.')])
+            vals_arr = pd.Series([x[1] for x in as_str(vals_arr.apply(np.format_float_positional)).str.split('.')])
             vc = vals_arr.value_counts()
             common_values = [x for x, y in zip(vc.index, vc.values) if y > (self.num_rows * 0.01)]
             if len(common_values) > 10:
@@ -345,7 +346,7 @@ class NumericTestsMixin(CheckerState):
                 continue
             test_series = [
                 True if y else x[1] in common_values
-                for x, y in zip(self.numeric_vals_filled[col_name].apply(np.format_float_positional).astype(str).str.split('.'),
+                for x, y in zip(as_str(self.numeric_vals_filled[col_name].apply(np.format_float_positional)).str.split('.'),
                 self.orig_df[col_name].isna())]
             if len(common_values) == 1:
                 common_values_str = str(common_values)[1:-1].replace("\'\'", '0')
@@ -401,7 +402,7 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 test_series = (self.orig_df[col_name].astype(float).diff() >= 0) | \
-                              [is_missing(x) for x in self.orig_df[col_name].astype(float).diff()]
+                              np.array([is_missing(x) for x in self.orig_df[col_name].astype(float).diff()])
             else:
                 # Check there are few decreasing values
                 decr_series = self.orig_df[col_name].diff().dt.total_seconds() < 0
@@ -474,7 +475,7 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 test_series = (self.orig_df[col_name].astype(float).diff() <= 0) | \
-                              [is_missing(x) for x in self.orig_df[col_name].astype(float).diff()]
+                              np.array([is_missing(x) for x in self.orig_df[col_name].astype(float).diff()])
             else:
                 # Check there are few increasing values
                 incr_series = self.orig_df[col_name].diff().dt.total_seconds() > 0
@@ -1211,7 +1212,7 @@ class NumericTestsMixin(CheckerState):
             # convert any non-numeric values to 0. Leave NaN values as NaN.
             vals = self.orig_df[col_name].fillna(-9595959484)
             vals = convert_to_numeric(vals, 0)
-            vals = vals.astype(int).astype(str).replace('-9595959484', np.nan)
+            vals = as_str(vals.astype(int)).replace('-9595959484', np.nan)
             vals = vals.replace("0", "1")  # We count 0 as having no trailing zeros; it is essentially a 1-digit number.
 
             num_zeros_arr = vals.str.replace('.0', '', regex=False).str.len() - \
@@ -2165,7 +2166,7 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             test_series = [float(x).is_integer() for x in test_series]
-            test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+            test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
                 test_id,
                 [col_name_1, col_name_2],
@@ -2629,17 +2630,17 @@ class NumericTestsMixin(CheckerState):
 
         # Test rounding to 10's
         self._add_synthetic_column('a_rounded_b all_d', (self.synth_df['a_rounded_b rand'] / 10).apply(round) * 10)
-        self._add_synthetic_column('a_rounded_b most_d', self.synth_df['a_rounded_b all_d'])
+        self._add_synthetic_column('a_rounded_b most_d', self.synth_df['a_rounded_b all_d'].astype(float))
         self.synth_df.loc[999, 'a_rounded_b most_d'] = 100.8
 
         # Test rounding to 100's
         self._add_synthetic_column('a_rounded_b all_e',(self.synth_df['a_rounded_b rand'] / 100).apply(round) * 100)
-        self._add_synthetic_column('a_rounded_b most_e', self.synth_df['a_rounded_b all_e'])
+        self._add_synthetic_column('a_rounded_b most_e', self.synth_df['a_rounded_b all_e'].astype(float))
         self.synth_df.loc[999, 'a_rounded_b most_e'] = 100.8
 
         # Test rounding to 1000's
         self._add_synthetic_column('a_rounded_b all_f', (self.synth_df['a_rounded_b rand'] / 1000).apply(round) * 1000)
-        self._add_synthetic_column('a_rounded_b most_f', self.synth_df['a_rounded_b all_f'])
+        self._add_synthetic_column('a_rounded_b most_f', self.synth_df['a_rounded_b all_f'].astype(float))
         self.synth_df.loc[999, 'a_rounded_b most_f'] = 100.8
 
 
@@ -3216,7 +3217,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('larger_sum all',
                                     self.synth_df['larger_sum rand_b'] + self.synth_df['larger_sum rand_a'] + random.randint(1, 10))
         self._add_synthetic_column('larger_sum most',
-                                    self.synth_df['larger_sum all'])
+                                    self.synth_df['larger_sum all'].astype(float))
         self.synth_df.at[999, 'larger_sum most'] = self.synth_df.at[999, 'larger_sum most'] * 0.2
 
 
@@ -3595,7 +3596,7 @@ class NumericTestsMixin(CheckerState):
                     # the differences is this constant.
                     if subtest_2_okay:
                         median_diff = diffs_series.median()
-                        col_values = [math.isclose(x, median_diff) for x in diffs_series]
+                        col_values = np.array([math.isclose(x, median_diff) for x in diffs_series])
                         col_values = self.check_results_for_null(col_values, col_name, subset)
                         if col_values.tolist().count(False) < self.freq_contamination_level:
                             self._process_analysis_binary(
@@ -3616,7 +3617,7 @@ class NumericTestsMixin(CheckerState):
                     if subtest_3_okay:
                         ratios_series = self.orig_df[col_name].astype(float) / col_sums
                         median_ratio = ratios_series.median()
-                        col_values = [math.isclose(x, median_ratio) for x in ratios_series]
+                        col_values = np.array([math.isclose(x, median_ratio) for x in ratios_series])
                         col_values = self.check_results_for_null(col_values, col_name, subset)
                         if col_values.tolist().count(False) < self.freq_contamination_level:
                             self._process_analysis_binary(
@@ -4102,8 +4103,8 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 # Test on a sample of rows
-                pos_matching_arr = [1] * len(self.sample_df)
-                neg_matching_arr = [1] * len(self.sample_df)
+                pos_matching_arr = np.full(len(self.sample_df), True)
+                neg_matching_arr = np.full(len(self.sample_df), True)
                 for c_idx, c in enumerate(subset[1:]):  # noqa: B007 - used after the loop
                     pos_matching_arr = pos_matching_arr & (sample_pos_dict[subset[0]] == sample_pos_dict[c])
                     if pos_matching_arr.tolist().count(False) > 1:
@@ -4118,8 +4119,8 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 # Test on the full columns
-                pos_matching_arr = [1] * self.num_rows
-                neg_matching_arr = [1] * self.num_rows
+                pos_matching_arr = np.full(self.num_rows, True)
+                neg_matching_arr = np.full(self.num_rows, True)
                 subset_matches = True
                 for c in subset[1:]:
                     pos_matching_arr = pos_matching_arr & (pos_dict[subset[0]] == pos_dict[c])
@@ -4235,10 +4236,10 @@ class NumericTestsMixin(CheckerState):
                 if not subset_matches:
                     continue
 
-                sample_zero_matching_arr = [1] * len(self.sample_df)
-                sample_non_zero_matching_arr = [1] * len(self.sample_df)
-                zero_matching_arr = [1] * self.num_rows
-                non_zero_matching_arr = [1] * self.num_rows
+                sample_zero_matching_arr = np.full(len(self.sample_df), True)
+                sample_non_zero_matching_arr = np.full(len(self.sample_df), True)
+                zero_matching_arr = np.full(self.num_rows, True)
+                non_zero_matching_arr = np.full(self.num_rows, True)
 
                 # Test on a sample of rows
                 for c_idx, c in enumerate(subset):  # noqa: B007 - used after the loop

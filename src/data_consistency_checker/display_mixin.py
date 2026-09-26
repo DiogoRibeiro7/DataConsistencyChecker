@@ -19,10 +19,12 @@ from IPython.display import Markdown, display
 
 from .checker_state import CheckerState
 from .checker_utils import (
+    as_str,
     convert_to_numeric,
     get_num_decimal_digits,
     is_missing,
     is_notebook,
+    map_elements,
     print_line,
     print_text,
     replace_special_with_space,
@@ -747,15 +749,15 @@ class DisplayMixin(CheckerState):
             vals2 = convert_to_numeric(df[col_name_2], 0)
             df['SUM'] = (vals1 + vals2).values
         elif test_id in ['RARE_VALUES']:
-            df["Count of Value"] = [display_info['counts'][x] for x in df[col_name].astype(str)]
+            df["Count of Value"] = [display_info['counts'][x] for x in as_str(df[col_name])]
         elif test_id in ['NUMBER_DECIMALS']:
             df['Number decimals'] = [-1 if is_missing(x) else get_num_decimal_digits(x) for x in df[col_name]]
-            df[col_name] = df[col_name].astype(str)
+            df[col_name] = as_str(df[col_name])
         elif test_id in ['ROUNDING']:
             vals = df[col_name].fillna(-9595959484)
             vals = convert_to_numeric(vals, 0)
             vals = vals.astype(int)
-            vals = vals.astype(str)
+            vals = as_str(vals)
             s = vals.str.replace('.0', '', regex=False).str.len() - \
                 vals.str.replace('.0', '', regex=False).str.strip('0').str.len()
             vals = vals.replace('-9595959484', np.nan)
@@ -784,12 +786,12 @@ class DisplayMixin(CheckerState):
         elif test_id in ['MAX_OF_COLUMNS']:
             df['MAX'] = df[source_cols].max(axis=1)
         elif test_id in ['RARE_PAIRS_FIRST_WORD_VAL', 'LARGE_GIVEN_PREFIX', 'SMALL_GIVEN_PREFIX']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             df[f'{col_name_1} FIRST WORD'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['LEADING_WHITESPACE']:
-            df['NUM LEADING SPACES'] = df[col_name].astype(str).str.len() - df[col_name].astype(str).str.lstrip(' ').str.len()
+            df['NUM LEADING SPACES'] = as_str(df[col_name]).str.len() - as_str(df[col_name]).str.lstrip(' ').str.len()
         elif test_id in ['TRAILING_WHITESPACE']:
-            df['NUM TRAILING SPACES'] = df[col_name].astype(str).str.len() - df[col_name].astype(str).str.rstrip(' ').str.len()
+            df['NUM TRAILING SPACES'] = as_str(df[col_name]).str.len() - as_str(df[col_name]).str.rstrip(' ').str.len()
         elif test_id in ['MULTIPLE_OF_CONSTANT']:
             if is_patterns:
                 df['NUM MULTIPLES'] = round(df[col_name] / display_info['value'])
@@ -808,56 +810,56 @@ class DisplayMixin(CheckerState):
         elif test_id in ['CONSTANT_GAP', 'LARGE_GAP', 'SMALL_GAP', 'LATER']:
             df['Gap'] = pd.to_datetime(df[col_name_2]) - pd.to_datetime(df[col_name_1])
         elif test_id in ['NUMBER_ALPHA_CHARS']:
-            df['Num Alpha Chars'] = df[col_name].astype(str).apply(lambda x: len([e for e in x if e.isalpha()]))
+            df['Num Alpha Chars'] = as_str(df[col_name]).apply(lambda x: len([e for e in x if e.isalpha()]))
         elif test_id in ['NUMBER_NUMERIC_CHARS']:
-            df['Num Numeric Chars'] = df[col_name].astype(str).apply(lambda x: len([e for e in x if e.isdigit()]))
+            df['Num Numeric Chars'] = as_str(df[col_name]).apply(lambda x: len([e for e in x if e.isdigit()]))
         elif test_id in ['NUMBER_ALPHANUMERIC_CHARS']:
-            df['Num Alpha-Numeric Chars'] = df[col_name].astype(str).apply(lambda x: len([e for e in x if e.isalnum()]))
+            df['Num Alpha-Numeric Chars'] = as_str(df[col_name]).apply(lambda x: len([e for e in x if e.isalnum()]))
         elif test_id in ['NUMBER_NON-ALPHANUMERIC_CHARS']:
             df['Num Non-Alpha-Numeric Chars'] = display_info['test_series'].loc[df.index]
         elif test_id in ['NUMBER_CHARS', 'MANY_CHARS', 'FEW_CHARS']:
-            df['Num Chars'] = df[col_name].astype(str).str.len()
+            df['Num Chars'] = as_str(df[col_name]).str.len()
         elif test_id in ['FIRST_CHAR_ALPHA', 'FIRST_CHAR_NUMERIC', 'FIRST_CHAR_SMALL_SET', 'FIRST_CHAR_UPPERCASE',
                          'FIRST_CHAR_LOWERCASE']:
-            df['First Char'] = df[col_name].astype(str).str.lstrip().str.slice(0,1)
+            df['First Char'] = as_str(df[col_name]).str.lstrip().str.slice(0,1)
         elif test_id in ['LAST_CHAR_SMALL_SET']:
-            df['Last Char'] = df[col_name].astype(str).str.rstrip().str[-1:]
+            df['Last Char'] = as_str(df[col_name]).str.rstrip().str[-1:]
         elif test_id in ['FIRST_WORD_SMALL_SET']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             df['First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['LAST_WORD_SMALL_SET']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             df['Last Word'] = [x[-1] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['NUMBER_WORDS']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             df['Num Words'] = [len(x) for x in word_arr]
         elif test_id in ['LONGEST_WORDS']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             word_lens_arr = [[len(w) for w in x] for x in word_arr]
             df['Longest Word Len'] = [max(x) if len(x) > 0 else 0 for x in word_lens_arr]
         elif test_id in ['RARE_PAIRS_FIRST_CHAR', 'SAME_FIRST_CHARS']:
-            df[f'{col_name_1} First Char'] = df[col_name_1].astype(str).str[:1]
-            df[f'{col_name_2} First Char'] = df[col_name_2].astype(str).str[:1]
+            df[f'{col_name_1} First Char'] = as_str(df[col_name_1]).str[:1]
+            df[f'{col_name_2} First Char'] = as_str(df[col_name_2]).str[:1]
         elif test_id in ['RARE_PAIRS_FIRST_WORD', 'SAME_FIRST_WORD']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             df[f'{col_name_1} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df[col_name_2].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_2]).apply(replace_special_with_space)
             df[f'{col_name_2} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['SAME_LAST_WORD']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             df[f'{col_name_1} Last Word'] = [x[-1] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df[col_name_2].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_2]).apply(replace_special_with_space)
             df[f'{col_name_2} Last Word'] = [x[-1] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['SIMILAR_NUM_CHARS']:
-            df[f'{col_name_1} Num Chars'] = df[col_name_1].astype(str).str.len()
-            df[f'{col_name_2} Num Chars'] = df[col_name_2].astype(str).str.len()
+            df[f'{col_name_1} Num Chars'] = as_str(df[col_name_1]).str.len()
+            df[f'{col_name_2} Num Chars'] = as_str(df[col_name_2]).str.len()
         elif test_id in ['SIMILAR_NUM_WORDS']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             df[f'{col_name_1} Num Words'] = [len(x) for x in word_arr]
-            col_vals = df[col_name_2].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_2]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             df[f'{col_name_2} Num Words'] = [len(x) for x in word_arr]
         elif test_id in ['SMALL_VS_CORR_COLS', 'LARGE_VS_CORR_COLS']:
@@ -867,11 +869,11 @@ class DisplayMixin(CheckerState):
         elif test_id in ['MISSING_VALUES_PER_ROW']:
             df['Number Missing Values'] = df.isna().sum(axis=1)
         elif test_id in ['ZERO_VALUES_PER_ROW']:
-            df['Number Zero Values'] = df.applymap(lambda x: (x is None) or (x == 0)).sum(axis=1)
+            df['Number Zero Values'] = map_elements(df, lambda x: (x is None) or (x == 0)).sum(axis=1)
         elif test_id in ['UNIQUE_VALUES_PER_ROW']:
             df['Number Unique Values'] = df.apply(lambda x: len(set(x)), axis=1)
         elif test_id in ['NEGATIVE_VALUES_PER_ROW']:
-            df['Number Negative Values'] = df.applymap(lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
+            df['Number Negative Values'] = map_elements(df, lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
         elif test_id in ['DECISION_TREE_CLASSIFIER', 'DECISION_TREE_REGRESSOR', 'PREV_VALUES_DT', 'LINEAR_REGRESSION',
                          'PREDICT_NULL_DT']:
             df["PREDICTION"] = display_info['Pred'].loc[df.index]

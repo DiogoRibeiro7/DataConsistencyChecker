@@ -20,7 +20,7 @@ from sklearn.metrics import f1_score, r2_score
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from data_consistency_checker.checker_state import CheckerState
-from data_consistency_checker.checker_utils import is_missing
+from data_consistency_checker.checker_utils import as_str, is_missing
 
 
 class BaseTestsMixin(CheckerState):
@@ -111,7 +111,7 @@ class BaseTestsMixin(CheckerState):
             if self.orig_df[col_name].nunique() > math.log2(self.num_rows):
                 continue
 
-            counts_series = self.orig_df[col_name].astype(str).value_counts(normalize=False, dropna=False)
+            counts_series = as_str(self.orig_df[col_name]).value_counts(normalize=False, dropna=False)
             all_rare_vals = [str(x) for x, y in zip(counts_series.index, counts_series.values)
                              if y < self.freq_contamination_level]
             non_null_rare_vals = [str(x) for x in all_rare_vals if not is_missing(x)]

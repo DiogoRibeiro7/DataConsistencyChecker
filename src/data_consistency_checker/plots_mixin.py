@@ -19,7 +19,7 @@ from IPython.display import Markdown, display
 from matplotlib.patches import Rectangle
 
 from .checker_state import CheckerState
-from .checker_utils import clean_x_tick_labels, is_notebook, print_text, replace_special_with_space
+from .checker_utils import as_str, clean_x_tick_labels, is_notebook, print_text, replace_special_with_space
 
 
 class PlotsMixin(CheckerState):
@@ -946,8 +946,8 @@ class PlotsMixin(CheckerState):
 
         elif test_id in ['RARE_PAIRS_FIRST_CHAR']:
             df2 = self.orig_df[cols].copy()
-            df2[f'{cols[0]} First Char'] = df2[cols[0]].astype(str).str[:1]
-            df2[f'{cols[1]} First Char'] = df2[cols[1]].astype(str).str[:1]
+            df2[f'{cols[0]} First Char'] = as_str(df2[cols[0]]).str[:1]
+            df2[f'{cols[1]} First Char'] = as_str(df2[cols[1]]).str[:1]
             counts_data = pd.crosstab(df2[f'{cols[0]} First Char'], df2[f'{cols[1]} First Char'])
             s = sns.heatmap(counts_data, cmap="Blues", annot=True, fmt='g')
             s.set_title(f"Counts by First Characters of {cols[0]} and {cols[1]}")
@@ -955,9 +955,9 @@ class PlotsMixin(CheckerState):
 
         elif test_id in ['RARE_PAIRS_FIRST_WORD']:
             df2 = self.orig_df[cols].copy()
-            col_vals = df2[cols[0]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df2[cols[0]]).apply(replace_special_with_space)
             df2[f'{cols[0]} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df2[cols[1]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df2[cols[1]]).apply(replace_special_with_space)
             df2[f'{cols[1]} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
             counts_data = pd.crosstab(df2[f'{cols[0]} First Word'], df2[f'{cols[1]} First Word'])
             s = sns.heatmap(counts_data, cmap="Blues", annot=True, fmt='g')
@@ -1031,7 +1031,7 @@ class PlotsMixin(CheckerState):
 
         elif test_id in ['LARGE_GIVEN_PREFIX', 'SMALL_GIVEN_PREFIX']:
             df2 = self.orig_df[cols].copy()
-            col_vals = df2[cols[0]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df2[cols[0]]).apply(replace_special_with_space)
             df2[cols[0]] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
             if cols[1] in self.date_cols:
                 df2['Epoch'] = (df2[cols[1]] - datetime.datetime(1970, 1, 1)).dt.total_seconds()
@@ -1048,9 +1048,9 @@ class PlotsMixin(CheckerState):
             results_col = self.test_results_df[results_col_name]
             flagged_idxs = np.where(results_col)
             flagged_df = self.orig_df.loc[flagged_idxs]
-            col_vals = flagged_df[cols[0]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(flagged_df[cols[0]]).apply(replace_special_with_space)
             flagged_df[cols[0]] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            vals = pd.Series(flagged_df[cols[0]].astype(str).apply(replace_special_with_space))
+            vals = pd.Series(as_str(flagged_df[cols[0]]).apply(replace_special_with_space))
             vals = pd.Series([x[0] if len(x) > 0 else "" for x in vals.str.split()]).unique()
             nvals = len(vals)
             fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
