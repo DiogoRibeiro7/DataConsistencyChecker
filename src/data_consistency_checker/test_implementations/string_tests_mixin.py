@@ -731,8 +731,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_number_alpha_chars(self, test_id):
         """
-        Handling null values: null values are considered zero-length strings, with no alphabetic, numeric, or
-        special characters.
+        Handling null values: null values are not counted, so neither support nor violate a pattern.
         """
 
         nunique_dict = self.get_nunique_dict()
@@ -742,6 +741,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             test_series = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalpha()]))
+            test_series = test_series.mask(self.orig_df[col_name].isna())
             self._process_analysis_counts(
                 test_id,
                 [col_name],
@@ -766,8 +766,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_number_numeric_chars(self, test_id):
         """
-        Handling null values: null values are considered zero-length strings, with no alphabetic, numeric, or
-        special characters.
+        Handling null values: null values are not counted, so neither support nor violate a pattern.
         """
 
         n_unique_dict = self.get_nunique_dict()
@@ -777,6 +776,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             test_series = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isdigit()]))
+            test_series = test_series.mask(self.orig_df[col_name].isna())
             self._process_analysis_counts(
                 test_id,
                 [col_name],
@@ -837,8 +837,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_number_non_alphanumeric_chars(self, test_id):
         """
-        Handling null values: null values are considered zero-length strings, with no alphabetic, numeric, or
-        special characters.
+        Handling null values: null values are not counted, so neither support nor violate a pattern.
         """
 
         n_unique_dict = self.get_nunique_dict()
@@ -850,6 +849,7 @@ class StringTestsMixin(CheckerState):
             test_series = (as_str(self.orig_df[col_name]
                            .fillna(""))
                            .apply(lambda x: len([e for e in x if (not e.isalnum()) and (e != ' ')])))
+            test_series = test_series.mask(self.orig_df[col_name].isna())
             self._process_analysis_counts(
                 test_id,
                 [col_name],
@@ -876,8 +876,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_number_chars(self, test_id):
         """
-        Handling null values: null values are considered zero-length strings, with no alphabetic, numeric, or
-        special characters.
+        Handling null values: null values are not counted, so neither support nor violate a pattern.
         """
 
         nunique_dict = self.get_nunique_dict()
@@ -887,6 +886,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             test_series = as_str(self.orig_df[col_name].fillna("")).str.len()
+            test_series = test_series.mask(self.orig_df[col_name].isna())
             self._process_analysis_counts(
                 test_id,
                 [col_name],
@@ -2061,13 +2061,18 @@ class StringTestsMixin(CheckerState):
 
 
     def _check_similar_num_chars(self, test_id):
+        """
+        Handling null values: this test skips columns that are more than 75% null. Any patterns are not considered
+        violated in a given row if either cell is null.
+        """
 
-        # Get the character length of each value in the string columns, and their variation in length
+        # Get the character length of each value in the string columns, and their variation in length (among the
+        # non-null values)
         char_len_dict = {}
         col_std_dev_len_dict = {}
         for col_name in self.string_cols:
             char_len_dict[col_name] = as_str(self.orig_df[col_name]).str.len().replace(0, 1)
-            col_std_dev_len_dict[col_name] = char_len_dict[col_name].std()
+            col_std_dev_len_dict[col_name] = char_len_dict[col_name][self.orig_df[col_name].notna()].std()
 
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
@@ -2092,7 +2097,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             test_series = [0.9 < x/y < 1.1 for x, y in zip(char_len_dict[col_name_1], char_len_dict[col_name_2])]
-            test_series = np.array(test_series) | (self.orig_df[col_name_1].isna() & self.orig_df[col_name_2].isna())
+            test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
                 test_id,
                 [col_name_1, col_name_2],
@@ -2228,8 +2233,9 @@ class StringTestsMixin(CheckerState):
             word_counts_1 = word_counts_dict[col_name_1]
             word_counts_2 = word_counts_dict[col_name_2]
 
-            # Skip if either column has all values with the same word count
-            if len(word_counts_1.value_counts()) == 1 and len(word_counts_2.value_counts()) == 1:
+            # Skip if either column has all values with the same word count, considering only the non-null values
+            if len(word_counts_1[self.orig_df[col_name_1].notna()].value_counts()) == 1 and \
+                    len(word_counts_2[self.orig_df[col_name_2].notna()].value_counts()) == 1:
                 continue
 
             similarity_series = [abs(x - y) for x, y in zip(word_counts_1, word_counts_2)]
@@ -2362,12 +2368,12 @@ class StringTestsMixin(CheckerState):
         cols_same_bool_dict = self.get_cols_same_bool_dict()
 
         for col_name_1, col_name_2 in pairs:
-            # Skip columns that are primarily 1 word
-            word_arr = words_list_dict[col_name_1]
+            # Skip columns that are primarily 1 word, considering only the non-null values
+            word_arr = words_list_dict[col_name_1][self.orig_df[col_name_1].notna()]
             num_words_arr = [len(x) for x in word_arr]
             if pd.Series(num_words_arr).quantile(0.5) <= 1:
                 continue
-            word_arr = words_list_dict[col_name_2]
+            word_arr = words_list_dict[col_name_2][self.orig_df[col_name_2].notna()]
             num_words_arr = [len(x) for x in word_arr]
             if pd.Series(num_words_arr).quantile(0.5) <= 1:
                 continue
@@ -2384,7 +2390,8 @@ class StringTestsMixin(CheckerState):
 
             # Test on a sample
             test_series = [x == y for x, y in zip(sample_first_words_dict[col_name_1], sample_first_words_dict[col_name_2])]
-            if test_series.count(False) > 1:
+            test_series = np.array(test_series) | self.sample_df[col_name_1].isna() | self.sample_df[col_name_2].isna()
+            if test_series.tolist().count(False) > 1:
                 continue
 
             # Test on the full columns
@@ -2453,12 +2460,12 @@ class StringTestsMixin(CheckerState):
         cols_same_bool_dict = self.get_cols_same_bool_dict()
 
         for col_name_1, col_name_2 in pairs:
-            # Skip columns that are primarily 1 word
-            word_arr = words_list_dict[col_name_1]
+            # Skip columns that are primarily 1 word, considering only the non-null values
+            word_arr = words_list_dict[col_name_1][self.orig_df[col_name_1].notna()]
             num_words_arr = [len(x) for x in word_arr]
             if pd.Series(num_words_arr).quantile(0.5) <= 1:
                 continue
-            word_arr = words_list_dict[col_name_2]
+            word_arr = words_list_dict[col_name_2][self.orig_df[col_name_2].notna()]
             num_words_arr = [len(x) for x in word_arr]
             if pd.Series(num_words_arr).quantile(0.5) <= 1:
                 continue
@@ -2475,7 +2482,8 @@ class StringTestsMixin(CheckerState):
 
             # Test on a sample
             test_series = [x == y for x, y in zip(sample_last_words_dict[col_name_1], sample_last_words_dict[col_name_2])]
-            if test_series.count(False) > 1:
+            test_series = np.array(test_series) | self.sample_df[col_name_1].isna() | self.sample_df[col_name_2].isna()
+            if test_series.tolist().count(False) > 1:
                 continue
 
             # Test on the full columns
@@ -2594,15 +2602,18 @@ class StringTestsMixin(CheckerState):
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Test on a sample
+            # Test on a sample, ignoring null values
+            sample_null_1 = self.sample_df[col_name_1].isna()
+            sample_null_2 = self.sample_df[col_name_2].isna()
             digits_col_1 = sample_digit_str_dict[col_name_1]
-            if [len(x) > 0 for x in digits_col_1].count(False) > 1:
+            if [(len(x) > 0) or y for x, y in zip(digits_col_1, sample_null_1)].count(False) > 1:
                 continue
             digits_col_2 = sample_digit_str_dict[col_name_2]
-            if [len(x) > 0 for x in digits_col_2].count(False) > 1:
+            if [(len(x) > 0) or y for x, y in zip(digits_col_2, sample_null_2)].count(False) > 1:
                 continue
             test_series = [x == y for x, y in zip(digits_col_1, digits_col_2)]
-            if test_series.count(False) > 1:
+            test_series = np.array(test_series) | sample_null_1 | sample_null_2
+            if test_series.tolist().count(False) > 1:
                 continue
 
             # Test on the full columns
@@ -2651,27 +2662,32 @@ class StringTestsMixin(CheckerState):
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Test on a sample.
+            # Test on a sample, ignoring null values
+            sample_null_1 = self.sample_df[col_name_1].isna()
+            sample_null_2 = self.sample_df[col_name_2].isna()
             special_col_1 = self.sample_df[col_name_1].apply(lambda x: "" if is_missing(x) else x)
             special_col_1 = [[c for c in x if ((not c.isalpha()) and (not c.isdigit()) and (c != ' '))] for x in special_col_1]
-            if [len(x) > 0 for x in special_col_1].count(False) > 1:
+            if [(len(x) > 0) or y for x, y in zip(special_col_1, sample_null_1)].count(False) > 1:
                 continue
             special_col_2 = self.sample_df[col_name_2].apply(lambda x: "" if is_missing(x) else x)
             special_col_2 = [[c for c in x if ((not c.isalpha()) and (not c.isdigit()) and (c != ' '))] for x in special_col_2]
-            if [len(x) > 0 for x in special_col_2].count(False) > 1:
+            if [(len(x) > 0) or y for x, y in zip(special_col_2, sample_null_2)].count(False) > 1:
                 continue
             test_series = [set(x) == set(y) for x, y in zip(special_col_1, special_col_2)]
-            if test_series.count(False) > 1:
+            test_series = np.array(test_series) | sample_null_1 | sample_null_2
+            if test_series.tolist().count(False) > 1:
                 continue
 
-            # Test on the full columns
+            # Test on the full columns, ignoring null values
             special_col_1 = self.orig_df[col_name_1].apply(lambda x: "" if is_missing(x) else x)
             special_col_1 = [[c for c in x if ((not c.isalpha()) and (not c.isdigit()) and (c != ' '))] for x in special_col_1]
-            if [len(x) > 0 for x in special_col_1].count(False) > self.freq_contamination_level:
+            if [(len(x) > 0) or y for x, y in zip(special_col_1, self.orig_df[col_name_1].isna())].count(False) > \
+                    self.freq_contamination_level:
                 continue
             special_col_2 = self.orig_df[col_name_2].apply(lambda x: "" if is_missing(x) else x)
             special_col_2 = [[c for c in x if ((not c.isalpha()) and (not c.isdigit()) and (c != ' '))] for x in special_col_2]
-            if [len(x) > 0 for x in special_col_2].count(False) > self.freq_contamination_level:
+            if [(len(x) > 0) or y for x, y in zip(special_col_2, self.orig_df[col_name_2].isna())].count(False) > \
+                    self.freq_contamination_level:
                 continue
             test_series = [set(x) == set(y) for x, y in zip(special_col_1, special_col_2)]
             test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
@@ -3210,8 +3226,9 @@ class StringTestsMixin(CheckerState):
                         if res_1.tolist().count(True) > 0:
                             continue
 
-                        d1 = num_vals.quantile(0.1)
-                        d9 = num_vals.quantile(0.9)
+                        # Get the deciles of the non-null values, not of the values filled with the median
+                        d1 = num_vals[sub_df[col_name_2].notna().values].quantile(0.1)
+                        d9 = num_vals[sub_df[col_name_2].notna().values].quantile(0.9)
                         lower_limit_subset = d1 - (self.idr_limit * (d9 - d1))
 
                         # Ensure this subset is at least one decile shifted from the full column
@@ -3237,7 +3254,9 @@ class StringTestsMixin(CheckerState):
                         except Exception:
                             continue
 
-                        res = pd.Series([x >= lower_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
+                        # Null values are not flagged
+                        res = pd.Series([pd.isna(x) or (x >= lower_limit_subset)
+                                         for x in pd.to_datetime(sub_df[col_name_2])])
 
                     if 0 < res.tolist().count(False) <= self.freq_contamination_level:
                         index_of_small = [x for x, y in zip(sub_df.index, res) if not y]
@@ -3428,7 +3447,6 @@ class StringTestsMixin(CheckerState):
 
     def _check_small_given_prefix(self, test_id):
         # todo: when show non-flagged, show with the flagged prefixes
-        # todo: dont flag Null values
 
         # Determine if there are too many combinations to execute
         total_combinations = len(self.string_cols) * (len(self.numeric_cols) + len(self.date_cols))
@@ -3451,13 +3469,15 @@ class StringTestsMixin(CheckerState):
 
             col_vals = as_str(self.orig_df[col_name_1]).apply(replace_special_with_space)
 
-            # Check the column's values are usually more than 1 word
-            word_arr = col_vals.str.split() # todo: call self.get_word_counts_dict()
+            # Check the column's non-null values are usually more than 1 word
+            word_arr = col_vals[self.orig_df[col_name_1].notna()].str.split() # todo: call self.get_word_counts_dict()
             word_counts_arr = pd.Series([len(x) for x in word_arr])
             if word_counts_arr.quantile(0.75) <= 1:
                 continue
 
+            # Null values have no first word
             first_words = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
+            first_words = first_words.mask(self.orig_df[col_name_1].isna().values)
             if first_words.nunique() > 10:
                 continue
             vc = first_words.value_counts()
@@ -3492,8 +3512,9 @@ class StringTestsMixin(CheckerState):
                         if res_1.tolist().count(True) > 0:
                             continue
 
-                        d1 = num_vals.quantile(0.1)
-                        d9 = num_vals.quantile(0.9)
+                        # Get the deciles of the non-null values, not of the values filled with the median
+                        d1 = num_vals[sub_df[col_name_2].notna().values].quantile(0.1)
+                        d9 = num_vals[sub_df[col_name_2].notna().values].quantile(0.9)
                         lower_limit_subset = d1 - (self.idr_limit * (d9 - d1))
 
                         # Ensure this subset is at least one decile shifted from the full column
@@ -3519,7 +3540,9 @@ class StringTestsMixin(CheckerState):
                         except Exception:
                             continue
 
-                        res = pd.Series([x >= lower_limit_subset for x in pd.to_datetime(sub_df[col_name_2])])
+                        # Null values are not flagged
+                        res = pd.Series([pd.isna(x) or (x >= lower_limit_subset)
+                                         for x in pd.to_datetime(sub_df[col_name_2])])
 
                     if 0 < res.tolist().count(False) <= self.freq_contamination_level:
                         flagged_prefixes.append(v)
@@ -3917,7 +3940,9 @@ class StringTestsMixin(CheckerState):
                                 num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df]
                             else:
                                 num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df.index]
-                            d1, q1, q2, q3 = num_vals.quantile([0.1, 0.25, 0.50, 0.75], interpolation='midpoint')
+                            # Get the quantiles of the non-null values, not of the values filled with the median
+                            d1, q1, q2, q3 = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index]].quantile(
+                                [0.1, 0.25, 0.50, 0.75], interpolation='midpoint')
                             if d1 is None or q1 is None or q2 is None or q3 is None:
                                 continue
                             if d1 < col_d1_limit:
@@ -3941,6 +3966,9 @@ class StringTestsMixin(CheckerState):
                             res = num_vals >= lower_limit
                         else:
                             res = sub_df[col_name_3] >= lower_limit
+
+                        # Null values are not flagged
+                        res = res | self.orig_df[col_name_3].isna().loc[res.index]
 
                         if res.tolist().count(False) > self.freq_contamination_level:
                             found_many = True
