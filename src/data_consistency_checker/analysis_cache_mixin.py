@@ -457,7 +457,10 @@ class AnalysisCacheMixin(CheckerState):
                                     self.sample_df[col_name_b],
                                     self.sample_df[col_name_a].isna(),
                                     self.sample_df[col_name_b].isna())]
-            if are_same_arr.count(False) > 1:
+            # A missing value in either column is not a difference between the columns
+            num_different = [not (same or n1 or n2) for same, n1, n2 in zip(
+                are_same_arr, self.sample_df[col_name_a].isna(), self.sample_df[col_name_b].isna())].count(True)
+            if num_different > 1:
                 self.cols_same_bool_dict[pairs_tuple] = False
                 self.cols_same_count_dict[pairs_tuple] = (are_same_arr.count(True) / len(self.sample_df)) * self.num_rows
                 return
@@ -468,7 +471,9 @@ class AnalysisCacheMixin(CheckerState):
                                                     self.orig_df[col_name_b],
                                                     self.orig_df[col_name_a].isna(),
                                                     self.orig_df[col_name_b].isna())]
-            if are_same_arr.count(True) > (self.num_rows - self.freq_contamination_level):
+            num_different = [not (same or n1 or n2) for same, n1, n2 in zip(
+                are_same_arr, self.orig_df[col_name_a].isna(), self.orig_df[col_name_b].isna())].count(True)
+            if num_different < self.freq_contamination_level:
                 self.cols_same_bool_dict[pairs_tuple] = True
             else:
                 self.cols_same_bool_dict[pairs_tuple] = False
