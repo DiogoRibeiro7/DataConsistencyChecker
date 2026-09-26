@@ -1,26 +1,20 @@
 """
 This file is executed first and will save a pickle of each dc object, allowing the
-other tests to execute faster.
+other tests to execute faster. It only does anything when TEST_REAL is enabled in utils.py.
 """
 
-# Standard imports
-import dill
 import os
-import sys
 
-# Our code
+import dill
 from list_real_files import real_files
-from utils import TEST_REAL, load_openml_file
-sys.path.insert(1, '..')
-from check_data_consistency import DataConsistencyChecker
+from utils import cache_folder, load_openml_file, requires_real_data
+
+from data_consistency_checker import DataConsistencyChecker
 
 
+@requires_real_data
 def test_init_cache():
-    if not TEST_REAL:
-        return
-
     # If not present, create the folder for the cache
-    cache_folder = "dc_cache"
     os.makedirs(cache_folder, exist_ok=True)
 
     for dataset_name in real_files:
@@ -32,5 +26,5 @@ def test_init_cache():
             data_df = load_openml_file(dataset_name)
             dc = DataConsistencyChecker(verbose=-1)
             dc.init_data(data_df)
-            filehandler = open(file_name, 'wb')
-            dill.dump(dc, filehandler)
+            with open(file_name, "wb") as filehandler:
+                dill.dump(dc, filehandler)

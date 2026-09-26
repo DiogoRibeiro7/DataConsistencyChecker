@@ -33,7 +33,7 @@ def test_display_examples_not_flagged_uses_consecutive_sampling(monkeypatch) -> 
         calls.update(kwargs)
         return sampled
 
-    def fake_draw(df, test_id, cols, display_info, is_patterns, f):
+    def fake_draw(df, test_id, cols, display_info, is_patterns, f):  # noqa: ARG001 - mirrors _draw_sample_dataframe
         calls["draw_df"] = df
         calls["draw_test_id"] = test_id
 
