@@ -45,7 +45,8 @@ def test_synthetic_random_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # Only 200 values remain, so a few of the 50 words in "rare_words all" appear in just one value, and are rare too.
+    synth_test(test_id, "80-percent", synth_patterns_cols, ["rare_words all", "rare_words most"])
 
 
 @requires_synthetic_all_columns
