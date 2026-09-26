@@ -142,7 +142,9 @@ class DateTestsMixin(CheckerState):
             # todo: test all methods with timestamps
             dow_list = pd.Series([x.day_of_week if hasattr(x, 'day_of_week') else x.dayofweek for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = dow_list.value_counts()
-            rare_dow = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * dow_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_dow = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_dow) == 0:
                 continue
             test_series = np.array([x not in rare_dow for x in dow_list])
@@ -177,7 +179,9 @@ class DateTestsMixin(CheckerState):
 
             dom_list = pd.Series([x.day for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = dom_list.value_counts()
-            rare_dom = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * dom_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_dom = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_dom) == 0:
                 continue
             test_series = np.array([x not in rare_dom for x in dom_list])
@@ -214,7 +218,9 @@ class DateTestsMixin(CheckerState):
 
             month_list = pd.Series([x.month for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = month_list.value_counts()
-            rare_months = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * month_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_months = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_months) == 0:
                 continue
             test_series = np.array([x not in rare_months for x in month_list])
@@ -252,7 +258,9 @@ class DateTestsMixin(CheckerState):
 
             hour_list = pd.Series([x.hour for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = hour_list.value_counts()
-            rare_hours = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * hour_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_hours = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_hours) == 0:
                 continue
             test_series = np.array([x not in rare_hours for x in hour_list])
@@ -447,7 +455,7 @@ class DateTestsMixin(CheckerState):
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
                 gap_array = pd.Series([
-                    0 if (is_missing(x) or is_missing(y)) else (x-y).days
+                    np.nan if (is_missing(x) or is_missing(y)) else (x-y).days
                     for x, y in zip(pd.to_datetime(self.orig_df[col_name_1]), pd.to_datetime(self.orig_df[col_name_2]))
                 ])
                 self._process_analysis_counts(

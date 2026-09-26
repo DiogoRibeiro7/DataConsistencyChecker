@@ -44,7 +44,8 @@ def test_synthetic_random_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # The check skips columns with more than 75% missing values.
+    synth_test(test_id, "80-percent", [], [])
 
 
 @requires_synthetic_all_columns
