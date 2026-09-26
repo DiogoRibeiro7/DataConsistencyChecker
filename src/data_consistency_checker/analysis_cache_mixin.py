@@ -450,29 +450,23 @@ class AnalysisCacheMixin(CheckerState):
         def check_match(col_name_a, col_name_b):
             pairs_tuple = tuple(sorted([col_name_a, col_name_b]))
 
+            def compare(df):
+                # Rows with a missing value in either column are neither the same nor different
+                both_present = df[col_name_a].notna() & df[col_name_b].notna()
+                are_same_arr = [bool(present and x == y)
+                                for x, y, present in zip(df[col_name_a], df[col_name_b], both_present)]
+                num_different = [present and not same for same, present in zip(are_same_arr, both_present)].count(True)
+                return are_same_arr, num_different
+
             # Test first on a sample
-            are_same_arr = [(x == y) or (n1 and n2)
-                            for x, y, n1, n2 in zip(
-                                    self.sample_df[col_name_a],
-                                    self.sample_df[col_name_b],
-                                    self.sample_df[col_name_a].isna(),
-                                    self.sample_df[col_name_b].isna())]
-            # A missing value in either column is not a difference between the columns
-            num_different = [not (same or n1 or n2) for same, n1, n2 in zip(
-                are_same_arr, self.sample_df[col_name_a].isna(), self.sample_df[col_name_b].isna())].count(True)
+            are_same_arr, num_different = compare(self.sample_df)
             if num_different > 1:
                 self.cols_same_bool_dict[pairs_tuple] = False
                 self.cols_same_count_dict[pairs_tuple] = (are_same_arr.count(True) / len(self.sample_df)) * self.num_rows
                 return
 
             # Test on the full columns
-            are_same_arr = [(x == y) or (n1 and n2)
-                            for x, y, n1, n2 in zip(self.orig_df[col_name_a],
-                                                    self.orig_df[col_name_b],
-                                                    self.orig_df[col_name_a].isna(),
-                                                    self.orig_df[col_name_b].isna())]
-            num_different = [not (same or n1 or n2) for same, n1, n2 in zip(
-                are_same_arr, self.orig_df[col_name_a].isna(), self.orig_df[col_name_b].isna())].count(True)
+            are_same_arr, num_different = compare(self.orig_df)
             if num_different < self.freq_contamination_level:
                 self.cols_same_bool_dict[pairs_tuple] = True
             else:
