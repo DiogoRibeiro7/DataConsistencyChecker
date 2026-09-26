@@ -18,10 +18,11 @@ import seaborn as sns
 from IPython.display import Markdown, display
 from matplotlib.patches import Rectangle
 
+from .checker_state import CheckerState
 from .checker_utils import clean_x_tick_labels, is_notebook, print_text, replace_special_with_space
 
 
-class PlotsMixin:
+class PlotsMixin(CheckerState):
     """Mixin providing plotting utilities for :class:`DataConsistencyChecker`."""
 
 

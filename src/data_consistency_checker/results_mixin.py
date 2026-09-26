@@ -10,11 +10,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from .checker_state import CheckerState
 from .checker_utils import print_text, truncate_description
 from .report import DataConsistencyReport
 
 
-class ResultsMixin:
+class ResultsMixin(CheckerState):
     """Mixin providing result queries, processing, reports, summaries, state management, and scoring."""
 
     def get_execution_failures(self) -> list[dict[str, Any]]:
@@ -239,7 +240,7 @@ class ResultsMixin:
             test_sub_df = self.patterns_df[self.patterns_df['Test ID'] == test_id]
             if (not all_tests) and test_sub_df.empty:
                 continue
-            test_arr = [test_id]
+            test_arr: list[Any] = [test_id]
             flagged_cols = []
             for i in test_sub_df.index:
                 sub_df_row_cols = test_sub_df.loc[i]['Column(s)']
@@ -289,7 +290,7 @@ class ResultsMixin:
             test_sub_df = self.exceptions_summary_df[self.exceptions_summary_df['Test ID'] == test_id]
             if (not all_tests) and (len(test_sub_df) == 0):
                 continue
-            test_arr = [test_id]
+            test_arr: list[Any] = [test_id]
             test_arr.extend([0]*len(self.orig_df.columns))
 
             for i in test_sub_df.index:

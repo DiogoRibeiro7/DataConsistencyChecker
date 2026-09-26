@@ -16,8 +16,10 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
+from data_consistency_checker.checker_state import CheckerState
 
-class MultiColumnTestsMixin:
+
+class MultiColumnTestsMixin(CheckerState):
     """
     Mixin class containing multi column tests methods.
 

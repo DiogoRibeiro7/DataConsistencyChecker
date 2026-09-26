@@ -5,18 +5,17 @@ from __future__ import annotations
 import numbers
 import statistics
 import warnings
-from typing import Any
 
 import numpy as np
 import pandas as pd
 import pandas.api.types as pandas_types
 
+from .checker_state import CheckerState
 from .checker_utils import convert_to_numeric, is_missing, is_notebook, set_warnings_levels
-from .test_registry import TestDefinition
 from .tests_definitions import get_all_test_definitions
 
 
-class DataInitMixin:
+class DataInitMixin(CheckerState):
     """Mixin providing dataset initialization and cache reset helpers."""
 
     def __init__(
@@ -63,11 +62,11 @@ class DataInitMixin:
         self.rare_contamination_level = -1
 
         # Synthetic data, if specified to create
-        self.synth_df = None
+        self.synth_df = None  # type: ignore[assignment]  # placeholder until generate_synth_data()
         self.num_synth_rows = 1_000
 
         # The data to be examined and statistics related to it
-        self.orig_df = None
+        self.orig_df = None  # type: ignore[assignment]  # placeholder until init_data()
         self.num_rows = -1
         self.column_medians = {}
         self.column_trimmed_means = {}
@@ -118,7 +117,7 @@ class DataInitMixin:
         # the original data. It has the same rows and columns as the original data. If a test finds an issue with
         # columns A, B, and C in rows 10 and 13, then test_results_by_column_np will have, in rows 10 & 13, in columns
         # A, B, and C, 0.33 each (in addition to any other issues these cells have been flagged for).
-        self.test_results_by_column_np = None
+        self.test_results_by_column_np = None  # type: ignore[assignment]  # placeholder until init_data()
 
         # Safe versions of the exceptions found. These are stored to support restore_issues()
         self.safe_patterns_arr = []
@@ -132,7 +131,7 @@ class DataInitMixin:
         # Debugging information
         self.DEBUG_MSG = True
         self.num_exceptions = 0
-        self.execution_failures: list[dict[str, Any]] = []
+        self.execution_failures = []
 
         # Variables used for calls to display_next()
         self.found_tests = []
@@ -160,7 +159,7 @@ class DataInitMixin:
         self.test_dict = get_all_test_definitions(self)
 
         # Remove any tests not yet implemented (legacy filter, kept for compatibility)
-        self.test_dict: dict[str, TestDefinition] = {
+        self.test_dict = {
             test_id: definition
             for test_id, definition in self.test_dict.items()
             if definition.implemented
@@ -209,7 +208,7 @@ class DataInitMixin:
         # running the tests.
         self.orig_df = self.orig_df.reset_index(drop=True)
         self.num_rows = len(self.orig_df)
-        self.num_valid_rows = None
+        self.num_valid_rows = None  # type: ignore[assignment]  # placeholder; filled in below
 
         # Ensure the dataframe has column names in string format. Often dataframes contain numeric column names.
         self.orig_df.columns = [str(x) for x in self.orig_df.columns]

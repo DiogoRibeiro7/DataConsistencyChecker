@@ -19,10 +19,11 @@ from sklearn import metrics, tree
 from sklearn.metrics import f1_score, r2_score
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
+from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import is_missing
 
 
-class BaseTestsMixin:
+class BaseTestsMixin(CheckerState):
     """
     Mixin class containing base tests methods.
 

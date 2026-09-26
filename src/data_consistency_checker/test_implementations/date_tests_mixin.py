@@ -17,10 +17,11 @@ import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
+from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import convert_to_numeric, is_missing
 
 
-class DateTestsMixin:
+class DateTestsMixin(CheckerState):
     """
     Mixin class containing date tests methods.
 

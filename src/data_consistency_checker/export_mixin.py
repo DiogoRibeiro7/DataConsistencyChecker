@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import os
 
+from .checker_state import CheckerState
 
-class ExportMixin:
+
+class ExportMixin(CheckerState):
     """Mixin providing HTML export helpers."""
 
     def gpt_export_html(self):

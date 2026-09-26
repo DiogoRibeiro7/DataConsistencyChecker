@@ -12,10 +12,11 @@ import random
 import numpy as np
 import pandas as pd
 
+from .checker_state import CheckerState
 from .checker_utils import print_text
 
 
-class SynthDataMixin:
+class SynthDataMixin(CheckerState):
     """Provide synthetic data utilities to :class:`DataConsistencyChecker`."""
 
     def generate_synth_data(

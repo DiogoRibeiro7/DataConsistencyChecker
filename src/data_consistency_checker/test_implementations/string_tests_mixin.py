@@ -25,6 +25,7 @@ try:
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
 
+from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import (
     array_to_str,
     convert_to_numeric,
@@ -47,7 +48,7 @@ def _shared_fraction(x, y) -> float:
     return len(set(x).intersection(set(y))) / len(union)
 
 
-class StringTestsMixin:
+class StringTestsMixin(CheckerState):
     """
     Mixin class containing string tests methods.
 

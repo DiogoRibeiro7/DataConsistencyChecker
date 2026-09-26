@@ -6,10 +6,11 @@ import math
 
 import pandas as pd
 
+from .checker_state import CheckerState
 from .checker_utils import is_missing, replace_special_with_space
 
 
-class AnalysisCacheMixin:
+class AnalysisCacheMixin(CheckerState):
     """Mixin providing cached statistics and reusable column-set helpers."""
 
     def get_similar_cols(self, full_cols_arr, include_self, lower_divisor, upper_multiplier,

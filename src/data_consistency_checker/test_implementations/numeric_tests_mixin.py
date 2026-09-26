@@ -30,6 +30,7 @@ try:
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
 
+from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import (
     array_to_str,
     convert_to_numeric,
@@ -41,7 +42,7 @@ from data_consistency_checker.checker_utils import (
 digits = string.digits
 
 
-class NumericTestsMixin:
+class NumericTestsMixin(CheckerState):
     """
     Mixin class containing numeric tests methods.
 
