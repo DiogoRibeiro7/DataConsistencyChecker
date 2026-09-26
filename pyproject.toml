@@ -53,7 +53,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.15"
-DataExcept = ">=1.6,<2.0"
+DataExcept = ">=1.7.0,<2.0"
 pandas = "*"
 numpy = "*"
 scikit-learn = "*"
