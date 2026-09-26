@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numbers
 import os
+from collections.abc import Collection
 from itertools import product
 from textwrap import wrap
 
@@ -16,6 +17,7 @@ import numpy as np
 import pandas as pd
 from IPython.display import Markdown, display
 
+from .checker_state import CheckerState
 from .checker_utils import (
     convert_to_numeric,
     get_num_decimal_digits,
@@ -31,7 +33,7 @@ from .checker_utils import (
 from .test_metadata import TestMetadata, metadata_from_definition
 
 
-class DisplayMixin:
+class DisplayMixin(CheckerState):
     """Mixin providing display helper methods."""
 
     # ------------------------------------------------------------------
@@ -1049,7 +1051,7 @@ class DisplayMixin:
         """
 
         if is_patterns:
-            cols = [x.lstrip('"').rstrip('"') for x in col_name.split(" AND ")]
+            cols: Collection[str] = [x.lstrip('"').rstrip('"') for x in col_name.split(" AND ")]
         else:
             results_col_name = self.get_results_col_name(test_id, col_name)
             cols = self.col_to_original_cols_dict[results_col_name]

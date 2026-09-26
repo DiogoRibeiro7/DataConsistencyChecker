@@ -18,10 +18,11 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 from sklearn.metrics import f1_score
 
+from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import is_missing
 
 
-class BinaryTestsMixin:
+class BinaryTestsMixin(CheckerState):
     """
     Mixin class containing binary tests methods.
 

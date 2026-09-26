@@ -15,8 +15,10 @@ try:
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
 
+from .checker_state import CheckerState
 
-class ExecutionMixin:
+
+class ExecutionMixin(CheckerState):
     """Mixin providing consistency-test execution orchestration."""
 
     def _record_execution_failure(
