@@ -443,8 +443,8 @@ class MultiColumnTestsMixin(CheckerState):
                             return
 
                         # Rows with a missing value in any of the four columns neither support nor violate the pattern
-                        sample_is_na_arr = sample_is_na_dict[col_name_1].values | sample_is_na_dict[col_name_2].values | \
-                            sample_is_na_dict[col_name_3].values | sample_is_na_dict[col_name_4].values
+                        sample_is_na_arr = sample_is_na_dict[col_name_1].to_numpy() | sample_is_na_dict[col_name_2].to_numpy() | \
+                            sample_is_na_dict[col_name_3].to_numpy() | sample_is_na_dict[col_name_4].to_numpy()
                         sample_series = [x == y or z for x, y, z in
                                          zip(match_1_2_sample_arr, match_3_4_sample_arr, sample_is_na_arr)]
                         if sample_series.count(False) > 1:
@@ -463,8 +463,8 @@ class MultiColumnTestsMixin(CheckerState):
                                 (match_3_4_arr.count(False) < match_okay_limit):
                             continue
 
-                        is_na_arr = is_na_dict[col_name_1].values | is_na_dict[col_name_2].values | \
-                            is_na_dict[col_name_3].values | is_na_dict[col_name_4].values
+                        is_na_arr = is_na_dict[col_name_1].to_numpy() | is_na_dict[col_name_2].to_numpy() | \
+                            is_na_dict[col_name_3].to_numpy() | is_na_dict[col_name_4].to_numpy()
                         test_series = [x == y or z for x, y, z in zip(match_1_2_arr, match_3_4_arr, is_na_arr)]
                         self._process_analysis_binary(
                             test_id,

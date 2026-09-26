@@ -269,7 +269,7 @@ class NumericTestsMixin(CheckerState):
                 vals_arr = convert_to_numeric(self.sample_df[col_name], 1)
                 num_digits_series = vals_arr.apply(get_num_decimal_digits)
                 # convert_to_numeric() fills the missing values, so these are removed using the original values
-                num_digits_non_null_series = num_digits_series[self.sample_df[col_name].notna().values]
+                num_digits_non_null_series = num_digits_series[self.sample_df[col_name].notna().to_numpy()]
 
                 counts_series = num_digits_non_null_series.value_counts(normalize=False)
                 most_common_num_digits = counts_series.sort_values().index[-1]
@@ -284,7 +284,7 @@ class NumericTestsMixin(CheckerState):
             # Test on the full column
             vals_arr = convert_to_numeric(self.orig_df[col_name], 1)
             num_digits_series = vals_arr.apply(get_num_decimal_digits)
-            num_digits_non_null_series = num_digits_series[self.orig_df[col_name].notna().values]
+            num_digits_non_null_series = num_digits_series[self.orig_df[col_name].notna().to_numpy()]
 
             counts_series = num_digits_non_null_series.value_counts(normalize=False)
             if len(counts_series) == 0:
@@ -411,16 +411,16 @@ class NumericTestsMixin(CheckerState):
                               np.array([is_missing(x) for x in diff_series])
             else:
                 # Compare each value to the previous non-missing value. Rows with missing values have no difference.
-                diff_series = pd.to_datetime(self.orig_df[col_name]).dropna().diff().reindex(self.orig_df.index)
+                gap_series = pd.to_datetime(self.orig_df[col_name]).dropna().diff().reindex(self.orig_df.index)
 
                 # Check there are few decreasing values
-                decr_series = diff_series.dt.total_seconds() < 0
+                decr_series = gap_series.dt.total_seconds() < 0
                 num_decr = decr_series.tolist().count(True)
                 if num_decr > self.freq_contamination_level:
                     continue
 
                 # Check the number of increases is significantly more than the number of decreases
-                incr_series = diff_series.dt.total_seconds() > 0
+                incr_series = gap_series.dt.total_seconds() > 0
                 num_incr = incr_series.tolist().count(True)
                 if num_decr > (num_incr / 10.0):
                     continue
@@ -429,8 +429,7 @@ class NumericTestsMixin(CheckerState):
                 if num_incr < (self.num_valid_rows[col_name] / 20):
                     continue
 
-                test_series = np.array([x.total_seconds() for x in diff_series]) >= 0
-                test_series = test_series | diff_series.isna()
+                test_series = (gap_series.dt.total_seconds() >= 0) | gap_series.isna()
             # The shift operation is undefined for the first row, which results in a NaN that we fill here.
             test_series[0] = True
             self._process_analysis_binary(
@@ -490,16 +489,16 @@ class NumericTestsMixin(CheckerState):
                               np.array([is_missing(x) for x in diff_series])
             else:
                 # Compare each value to the previous non-missing value. Rows with missing values have no difference.
-                diff_series = pd.to_datetime(self.orig_df[col_name]).dropna().diff().reindex(self.orig_df.index)
+                gap_series = pd.to_datetime(self.orig_df[col_name]).dropna().diff().reindex(self.orig_df.index)
 
                 # Check there are few increasing values
-                incr_series = diff_series.dt.total_seconds() > 0
+                incr_series = gap_series.dt.total_seconds() > 0
                 num_incr = incr_series.tolist().count(True)
                 if num_incr > self.freq_contamination_level:
                     continue
 
                 # Check the number of decreases is significantly more than the number of increases
-                decr_series = diff_series.dt.total_seconds() < 0
+                decr_series = gap_series.dt.total_seconds() < 0
                 num_decr = decr_series.tolist().count(True)
                 if num_incr > (num_decr / 10.0):
                     continue
@@ -508,8 +507,7 @@ class NumericTestsMixin(CheckerState):
                 if num_decr < (self.num_valid_rows[col_name] / 20):
                     continue
 
-                test_series = np.array([x.total_seconds() for x in diff_series]) <= 0
-                test_series = test_series | diff_series.isna()
+                test_series = (gap_series.dt.total_seconds() <= 0) | gap_series.isna()
             # The shift operation is undefined for the first row, which results in a NaN we fill here.
             test_series[0] = True
             self._process_analysis_binary(
@@ -836,7 +834,7 @@ class NumericTestsMixin(CheckerState):
                     ).astype(pd.Timestamp)])[list(non_null_vals.rank().astype(int))]
                 prev_arr = pd.Series(prev_arr, index=non_null_vals.index).reindex(self.orig_df.index).values
                 next_arr = pd.Series(next_arr, index=non_null_vals.index, dtype=object).reindex(
-                    self.orig_df.index, fill_value=pd.NaT).values
+                    self.orig_df.index, fill_value=pd.NaT).values  # type: ignore[arg-type]  # NaT is not in the stubs
 
                 self._process_analysis_binary(
                     test_id,
@@ -2681,9 +2679,9 @@ class NumericTestsMixin(CheckerState):
         for col_name in self.numeric_cols:
             # Missing values are kept as NaN, so they neither match nor violate any of the relationships
             vals_arr = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name]).where(
-                self.orig_df[col_name].notna().values)
+                self.orig_df[col_name].notna().to_numpy())
             vals_arr_sample = convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name]).where(
-                self.sample_df[col_name].notna().values)
+                self.sample_df[col_name].notna().to_numpy())
             number_decimals_dict[col_name] = vals_arr.dropna().apply(get_num_decimal_digits)
 
             sample_floor_dict[col_name] = vals_arr_sample.apply(np.floor)
@@ -3574,7 +3572,7 @@ class NumericTestsMixin(CheckerState):
                     subset = list(subset)
 
                     # Check all 3 sub-tests on a sample first, skipping rows with missing values
-                    sample_df = self.sample_df[subset + [col_name]].dropna().astype(float)
+                    sample_df = self.sample_df[[*subset, col_name]].dropna().astype(float)
                     col_sums = sample_df[subset].sum(axis=1)
                     sample_diffs_series = sample_df[col_name] - col_sums
                     sample_col_values = sample_diffs_series == 0
@@ -3594,7 +3592,7 @@ class NumericTestsMixin(CheckerState):
                     # Check if col_name is the sum of subset
                     if subtest_1_okay or subtest_2_okay or subtest_3_okay:
                         # Rows with missing values are not tested, so skip where few rows have none
-                        if self.orig_df[subset + [col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
+                        if self.orig_df[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
                             continue
                         df = self.orig_df[subset].astype(float)
                         col_sums = df.sum(axis=1, skipna=False)  # The sums are NaN where any value is missing
@@ -4020,7 +4018,7 @@ class NumericTestsMixin(CheckerState):
                         continue
 
                     # Rows with missing values are not tested, so skip where few rows have none
-                    if self.orig_df[subset + [col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
+                    if self.orig_df[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
                         continue
 
                     # Test on the full columns

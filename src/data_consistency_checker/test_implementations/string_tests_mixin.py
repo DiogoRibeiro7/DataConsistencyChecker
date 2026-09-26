@@ -1835,7 +1835,7 @@ class StringTestsMixin(CheckerState):
             col_vals = as_str(self.orig_df[col_name]).apply(replace_special_with_space)
             # Missing values have no first word
             first_words_dict[col_name] = pd.Series([x[0] if len(x) >0 else "" for x in col_vals.str.split()]).where(
-                self.orig_df[col_name].notna().values)
+                self.orig_df[col_name].notna().to_numpy())
 
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
@@ -1926,7 +1926,7 @@ class StringTestsMixin(CheckerState):
         for col_name in self.string_cols:
             col_vals = as_str(self.orig_df[col_name]).apply(replace_special_with_space)
             # Missing values have no first word and no words
-            is_valid = self.orig_df[col_name].notna().values
+            is_valid = self.orig_df[col_name].notna().to_numpy()
             first_words_dict[col_name] = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()]).where(
                 is_valid)
             word_count_dict[col_name] = pd.Series([len(x) for x in col_vals.str.split()]).where(is_valid, 0)
@@ -3357,7 +3357,7 @@ class StringTestsMixin(CheckerState):
 
             # Null values have no first word
             first_words = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
-            first_words = first_words.mask(self.orig_df[col_name_1].isna().values)
+            first_words = first_words.mask(self.orig_df[col_name_1].isna().to_numpy())
             if first_words.nunique() > 10:
                 continue
 
@@ -3500,7 +3500,7 @@ class StringTestsMixin(CheckerState):
 
             # Null values have no first word
             first_words = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
-            first_words = first_words.mask(self.orig_df[col_name_1].isna().values)
+            first_words = first_words.mask(self.orig_df[col_name_1].isna().to_numpy())
             if first_words.nunique() > 10:
                 continue
             vc = first_words.value_counts()
@@ -3632,7 +3632,7 @@ class StringTestsMixin(CheckerState):
                     # Rows with a missing value in col_name_1 have no position in the sort order, so are placed last
                     if col_name_1 in self.numeric_cols:
                         sort_order = self.numeric_vals_filled[col_name_1].where(
-                            self.orig_df[col_name_1].notna().values).sort_values().index
+                            self.orig_df[col_name_1].notna().to_numpy()).sort_values().index
                     else:
                         sort_order = self.orig_df[col_name_1].sort_values().index
                     df = df.loc[sort_order]
@@ -3774,7 +3774,7 @@ class StringTestsMixin(CheckerState):
                                 sample_indexes = sub_df.sample(n=50).index
                             num_vals = self.numeric_vals_filled[col_name_3].loc[sample_indexes]
                             # Use the non-null values, not the values filled with the median
-                            num_vals = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index].values]
+                            num_vals = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index].to_numpy()]
                             q2, q3 = num_vals.quantile([0.5, 0.75])
                             if (q2 > col_q2_limit) or (q3 > col_q3_limit):
                                 continue
