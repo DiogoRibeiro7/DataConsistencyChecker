@@ -7,6 +7,7 @@ counted against the pattern and is not flagged.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from data_consistency_checker import DataConsistencyChecker
@@ -50,3 +51,24 @@ def test_check_runs_on_its_synthetic_data(test_id: str, add_nones: str) -> None:
     assert checker.get_execution_failures() == []
     if test_id not in ABOUT_MISSING_VALUES | MISSING_AS_A_VALUE:
         assert _rows_flagged_for_missing_values(checker, per_row=test_id in PER_ROW) == []
+
+
+def test_columns_never_present_together_are_not_related() -> None:
+    # "a" is missing in even rows and "b" in odd rows: no row shows how they relate, so no finding may involve both.
+    rng = np.random.default_rng(0)
+    a = rng.integers(1, 100, 200).astype(float)
+    b = rng.integers(1, 100, 200).astype(float)
+    df = pd.DataFrame({"a": a, "b": b, "sum": a + b, "mean": (a + b) / 2, "diff": a - b})
+    df.loc[::2, "a"] = np.nan
+    df.loc[1::2, "b"] = np.nan
+    checks = ["CONSTANT_DIFF", "CONSTANT_PRODUCT", "CONSTANT_RATIO", "SUM_OF_COLUMNS", "MEAN_OF_COLUMNS",
+              "SIMILAR_TO_DIFF", "ZERO_VALUES_PER_ROW", "UNIQUE_VALUES_PER_ROW"]
+    checker = DataConsistencyChecker(verbose=-1)
+    checker.init_data(df)
+
+    checker.check_data_quality(execute_list=checks, raise_on_error=True)
+
+    findings = pd.concat([checker.patterns_df, checker.exceptions_summary_df])
+    related = [(test_id, cols) for test_id, cols in zip(findings["Test ID"], findings["Column(s)"])
+               if {"a", "b"} <= set(checker.col_to_original_cols_dict[cols])]
+    assert related == []
