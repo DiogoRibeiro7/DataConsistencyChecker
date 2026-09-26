@@ -6,39 +6,20 @@ Extracted from check_data_consistency.py for better code organization.
 """
 
 from __future__ import annotations
-from typing import Any
 
-import pandas as pd
-import numpy as np
-import numbers
-import sys
-import math
-import statistics
 import datetime
-import calendar
+import math
 import random
 import string
-import copy
-import scipy
-from dateutil.relativedelta import relativedelta
-from sklearn.linear_model import Lasso
-from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
-from sklearn import tree, metrics
-from sklearn.metrics import f1_score, r2_score
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
-from itertools import combinations
-from decimal import Decimal, ROUND_HALF_UP
+import sys
 
-from ..checker_utils import (
-    safe_div,
-    is_number,
-    convert_to_numeric,
-    get_num_decimal_digits,
-    get_non_alphanumeric,
-    is_missing,
-    array_to_str,
-    replace_special_with_space,
-)
+import numpy as np
+import pandas as pd
+from sklearn import metrics, tree
+from sklearn.metrics import f1_score, r2_score
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+
+from data_consistency_checker.checker_utils import is_missing
 
 
 class BaseTestsMixin:
@@ -87,14 +68,14 @@ class BaseTestsMixin:
                     test_id,
                     [col_name],
                     null_arr,
-                    f"The column contains values that are consistently NULL"
+                    "The column contains values that are consistently NULL"
                 )
             if 0 <= num_null < self.freq_contamination_level:
                 self._process_analysis_binary(
                     test_id,
                     [col_name],
                     non_null_arr,
-                    f"The column contains values that are consistently non-NULL"
+                    "The column contains values that are consistently non-NULL"
                 )
 
 
@@ -199,13 +180,13 @@ class BaseTestsMixin:
 
             # Test on a sample first
             counts_arr = self.sample_df[col_name].value_counts()
-            test_series = [True if counts_arr[x] == 1 else False for x in self.sample_df[col_name]]
+            test_series = [counts_arr[x] == 1 for x in self.sample_df[col_name]]
             if test_series.count(False) > 1:
                 continue
 
             counts_arr = self.orig_df[col_name].value_counts(dropna=False)
             repeated_vals = [x for x, y in zip(counts_arr.index, counts_arr.values) if y > 1]
-            test_series = [True if counts_arr[x] == 1 else False for x in self.orig_df[col_name]]
+            test_series = [counts_arr[x] == 1 for x in self.orig_df[col_name]]
             single_test_results[col_name] = test_series.count(False)
             self._process_analysis_binary(
                 test_id,
@@ -316,7 +297,7 @@ class BaseTestsMixin:
                 x_train = pd.get_dummies(x_train, columns=x_train.columns)
 
                 # Ensure the Y column is in a consistent format, using ordinal values
-                encode_dict = {x: y for x, y in zip(y_train.unique(), range(y_train.nunique()))}
+                encode_dict = dict(zip(y_train.unique(), range(y_train.nunique())))
                 decode_dict = {y: x for x, y in zip(y_train.unique(), range(y_train.nunique()))}
                 y_train_numeric = y_train.map(encode_dict)
                 y_lag_1_numeric = y_lag_1.map(encode_dict)
@@ -403,10 +384,7 @@ class BaseTestsMixin:
                 # Predict on a smaller sample first
                 y_pred = regr.predict(x_train)
                 mae = metrics.median_absolute_error(y_train, y_pred)
-                if self.column_medians[col_name] != 0:
-                    norm_mae = abs(mae / self.column_medians[col_name])
-                else:
-                    norm_mae = np.inf
+                norm_mae = abs(mae / self.column_medians[col_name]) if self.column_medians[col_name] != 0 else np.inf
                 if norm_mae > 0.1:
                     continue
 
@@ -473,7 +451,7 @@ class BaseTestsMixin:
 
             # We map the numeric values in the target column back to their original values
             if decode_dict:
-                for v in decode_dict.keys():
+                for v in decode_dict:
                     rules = rules.replace(f"class: {v}", f"value: {decode_dict[v]}")
 
             # todo: this is copied to clean_dt_splitpoints(). Call that instead.
@@ -483,7 +461,7 @@ class BaseTestsMixin:
                     rules = rules.replace(f"Lag_{i}", f"The value {i} rows previously")
             else:  # Classification
                 for i in range(look_back_range):
-                    for v in decode_dict.keys():
+                    for v in decode_dict:
                         val = decode_dict[v]
                         rules = rules.replace(f"Lag_{i}_{val} <= 0.50", f"The value {i} rows previously was not '{val}'")
                         rules = rules.replace(f"Lag_{i}_{val} >  0.50", f"The value {i} rows previously was '{val}'")
@@ -754,6 +732,7 @@ class BaseTestsMixin:
                 [col_name_1, col_name_2],
                 test_series,
                 f'The values in "{col_name_2}" are consistently the same as those in "{col_name_1}"')
+            return None
 
         def test_pair():
             if not test_arrs(self.sample_df[col_name_1], self.sample_df[col_name_2], is_sample=True):
@@ -769,10 +748,10 @@ class BaseTestsMixin:
         num_pairs, pairs = self._get_numeric_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping testing pairs of numeric columns. There are {num_pairs:,} pairs. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping testing pairs of numeric columns. There are {num_pairs:,} pairs. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
         else:
-            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                     print(f"  Examining pair number {pair_idx:,} of {num_pairs:,} pairs of numeric columns")
                 test_pair()
@@ -781,10 +760,10 @@ class BaseTestsMixin:
         num_pairs, pairs = self._get_binary_column_pairs_unique(same_vocabulary=True)
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping testing pairs of binary columns. There are {num_pairs:,} pairs. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping testing pairs of binary columns. There are {num_pairs:,} pairs. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
         else:
-            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                     print(f"  Examining pair number {pair_idx:,} of {num_pairs:,} pairs of binary columns")
                 test_pair()
@@ -793,10 +772,10 @@ class BaseTestsMixin:
         num_pairs, pairs = self._get_string_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping testing pairs of string columns. There are {num_pairs:,} pairs. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping testing pairs of string columns. There are {num_pairs:,} pairs. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
         else:
-            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                     print(f"  Examining pair number {pair_idx:,} of {num_pairs:,} pairs of string columns")
                 test_pair()
@@ -805,10 +784,10 @@ class BaseTestsMixin:
         num_pairs, pairs = self._get_date_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping testing pairs of date columns. There are {num_pairs:,} pairs. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping testing pairs of date columns. There are {num_pairs:,} pairs. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
         else:
-            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
+            for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):  # noqa: B007 - read by the nested check function
                 if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                     print(f"  Examining pair number {pair_idx:,} of {num_pairs:,} pairs of date columns")
                 test_pair()
@@ -876,38 +855,37 @@ class BaseTestsMixin:
             vc_2 = other_values_2.value_counts()
             if (len(vc_1) <= 5) and (arr1.nunique() >= 10):
                 common_alternatives = [x for x, y in zip(vc_1.index, vc_1.values) if y > self.freq_contamination_level]
-                col_values = np.array([True if ((x == 1) or (y in common_alternatives)) else False
+                col_values = np.array([bool(x == 1 or y in common_alternatives)
                                        for x, y in zip(same_indicator, arr1)])
                 if is_sample:
                     return col_values.tolist().count(False) <= 1
-                else:
-                    self._process_analysis_binary(
-                        test_id,
-                        [col_name_2, col_name_1],
-                        col_values,
-                        (f'The values in "{col_name_1}" are consistently either the same as those in "{col_name_2}", '
-                         f'or one of {common_alternatives}'))
+                self._process_analysis_binary(
+                    test_id,
+                    [col_name_2, col_name_1],
+                    col_values,
+                    (f'The values in "{col_name_1}" are consistently either the same as those in "{col_name_2}", '
+                     f'or one of {common_alternatives}'))
             elif (len(vc_2) <= 5) and (arr2.nunique() >= 10):
                 common_alternatives = [x for x, y in zip(vc_2.index, vc_2.values) if y > self.freq_contamination_level]
-                col_values = np.array([True if ((x == 1) or (y in common_alternatives)) else False
+                col_values = np.array([bool(x == 1 or y in common_alternatives)
                                        for x, y in zip(same_indicator, arr2)])
                 if is_sample:
                     return col_values.tolist().count(False) <= 1
-                else:
-                    self._process_analysis_binary(
-                        test_id,
-                        [col_name_1, col_name_2],
-                        col_values,
-                        (f'The values in "{col_name_2}" are consistently either the same as those in "{col_name_1}", '
-                         f'or one of {common_alternatives}'))
+                self._process_analysis_binary(
+                    test_id,
+                    [col_name_1, col_name_2],
+                    col_values,
+                    (f'The values in "{col_name_2}" are consistently either the same as those in "{col_name_1}", '
+                     f'or one of {common_alternatives}'))
             else:
                 return False
+            return None
 
         num_pairs, col_pairs = self._get_column_pairs_unique()
         if num_pairs > self.max_combinations:
             if self.verbose >= 1:
-                print((f"  Skipping test. There are {num_pairs:,} pairs of columns. "
-                       f"max_combinations is currently set to {self.max_combinations:,}."))
+                print(f"  Skipping test. There are {num_pairs:,} pairs of columns. "
+                       f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
         # For this test, we do not use self.sample_df, as it has the extreme values removed, which may be preferable
@@ -984,7 +962,7 @@ class BaseTestsMixin:
                 df = self.orig_df[[col_name_1, col_name_2]].copy().fillna('NONE')
                 counts_arr = df.fillna('NONE').value_counts(dropna=False)
                 repeated_vals = [x for x, y in zip(counts_arr.index, counts_arr.values) if y > 1]
-                test_series = [True if counts_arr[x, y] == 1 else False
+                test_series = [counts_arr[x, y] == 1
                                for x, y in zip(df[col_name_1], df[col_name_2])]
                 self._process_analysis_binary(
                     test_id,

@@ -56,7 +56,7 @@ class DataConsistencyReport:
         exceptions: tuple[dict[str, Any], ...],
         row_scores: tuple[dict[str, Any], ...],
         execution_failures: tuple[dict[str, Any], ...],
-    ) -> "DataConsistencyReport":
+    ) -> DataConsistencyReport:
         """Build a report while normalizing nested values for JSON output."""
         return cls(
             n_rows=int(n_rows),

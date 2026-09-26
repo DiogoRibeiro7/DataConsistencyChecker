@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 try:
     import tomllib
@@ -55,7 +56,7 @@ class DataConsistencyConfig:
         return payload
 
     @classmethod
-    def from_dict(cls, values: Mapping[str, Any]) -> "DataConsistencyConfig":
+    def from_dict(cls, values: Mapping[str, Any]) -> DataConsistencyConfig:
         """Build a validated config from a dictionary-like object."""
         valid_fields = {field.name for field in fields(cls)}
         unknown = sorted(set(values) - valid_fields)
@@ -77,7 +78,7 @@ class DataConsistencyConfig:
         return cls(**normalized)
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "DataConsistencyConfig":
+    def from_file(cls, path: str | Path) -> DataConsistencyConfig:
         """Load configuration from JSON or TOML."""
         config_path = Path(path)
         suffix = config_path.suffix.lower()

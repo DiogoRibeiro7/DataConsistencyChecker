@@ -68,8 +68,8 @@ class ExecutionMixin:
         test_start_id: int = 0,
         fast_only: bool = False,
         include_code_tests: bool = True,
-        freq_contamination_level: int | float = 0.005,
-        rare_contamination_level: int | float = 0.1,
+        freq_contamination_level: float = 0.005,
+        rare_contamination_level: float = 0.1,  # noqa: ARG002
         run_parallel: bool = False,
         raise_on_error: bool = False,
     ) -> None:
@@ -105,7 +105,7 @@ class ExecutionMixin:
 
         if self.orig_df is None or len(self.orig_df) == 0:
             print("Valid dataframe not specified, possibly due to not calling init_data(), or passing a null dataframe")
-            return None
+            return
 
         # execute_list and exclude_list should not both be set.
         assert execute_list is None or exclude_list is None
@@ -123,25 +123,25 @@ class ExecutionMixin:
         if execute_list:
             specified_test_list.extend(execute_list)
         for t in specified_test_list:
-            if t not in self.test_dict.keys():
+            if t not in self.test_dict:
                 print(f"Error {t} is not a valid test")
 
         # Store the contamination_level in terms of number of rows. It may have been passed either in this form or as a
         # fraction.
-        if freq_contamination_level > 1 and type(freq_contamination_level) == int:
+        if freq_contamination_level > 1 and type(freq_contamination_level) is int:
             if freq_contamination_level > len(self.orig_df):
-                print((f"Error. contamination rate set to {freq_contamination_level}, more than the number of rows in "
-                       f"the dataframe passed. The contamination_level rate should be substantially smaller."))
-                return None
+                print(f"Error. contamination rate set to {freq_contamination_level}, more than the number of rows in "
+                       f"the dataframe passed. The contamination_level rate should be substantially smaller.")
+                return
             self.freq_contamination_level = freq_contamination_level
         elif freq_contamination_level < 1.0:
             self.freq_contamination_level = freq_contamination_level * len(self.orig_df)
             if self.freq_contamination_level < 1.0:
                 if freq_contamination_level != 0.005:
-                    print((f"Error. contamination rate set to {freq_contamination_level}, not allowing even 1 row to "
+                    print(f"Error. contamination rate set to {freq_contamination_level}, not allowing even 1 row to "
                            f"be in violation of the patterns. Must be set to a larger value given the number of rows "
-                           "available."))
-                    return None
+                           "available.")
+                    return
                 self.freq_contamination_level = 1
 
         # Adjust the test_start_id to 0 if necessary. 0 is the lowest valid value.
@@ -157,16 +157,15 @@ class ExecutionMixin:
                 continue
             if (not include_code_tests) and self.test_dict[test_id].code:
                 continue
-            if (self.execute_list is None and self.exclude_list is None) or \
+            if ((self.execute_list is None and self.exclude_list is None) or \
                     (self.execute_list and test_id in self.execute_list) or \
-                    (self.exclude_list and test_id not in self.exclude_list):
-                if self.test_dict[test_id].implemented:
-                    self.execution_test_list.append(test_id)
+                    (self.exclude_list and test_id not in self.exclude_list)) and self.test_dict[test_id].implemented:
+                self.execution_test_list.append(test_id)
 
         # Check at least one valid test was specified
         if len(self.execution_test_list) == 0:
             print("No valid tests specified.")
-            return None
+            return
 
         # Initialize the variables related to the run
         self.n_tests_executed = 0

@@ -7,19 +7,18 @@ class easier to navigate.
 
 from __future__ import annotations
 
-import os
 import datetime
 import math
-from typing import Any, Iterable
+import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 import seaborn as sns
-from IPython.display import display, Markdown
+from IPython.display import Markdown, display
+from matplotlib.patches import Rectangle
 
-from .checker_utils import clean_x_tick_labels, replace_special_with_space, print_text, is_notebook
+from .checker_utils import clean_x_tick_labels, is_notebook, print_text, replace_special_with_space
 
 
 class PlotsMixin:
@@ -62,37 +61,37 @@ class PlotsMixin:
             handle_results(matrix)
 
         print_text("Blank cells indicate counts of zero for the corresponding pair of features.")
-        print_text(f"## Fraction of rows where both columns contain the same value")
+        print_text("## Fraction of rows where both columns contain the same value")
         def test_same(col_name_1, col_name_2):
             return self.orig_df[self.orig_df[col_name_1] == self.orig_df[col_name_2]]
         run_test(test_same)
 
-        print_text(f"## Fraction of rows where both columns contain null")
+        print_text("## Fraction of rows where both columns contain null")
         def test_null(col_name_1, col_name_2):
             return self.orig_df[(self.orig_df[col_name_1].isna()) & (self.orig_df[col_name_2].isna())]
         run_test(test_null)
 
-        print_text(f"## Fraction of rows where both columns contain zero")
+        print_text("## Fraction of rows where both columns contain zero")
         def test_zero(col_name_1, col_name_2):
             return self.orig_df[(self.orig_df[col_name_1] == 0) & (self.orig_df[col_name_2] == 0)]
         run_test(test_zero)
 
-        print_text(f"## Fraction of rows where both columns contain positive values")
+        print_text("## Fraction of rows where both columns contain positive values")
         def test_both_positive(col_name_1, col_name_2):
             return self.orig_df[(self.numeric_vals_filled[col_name_1] >= 0) & (self.numeric_vals_filled[col_name_2] >= 0)]
         run_test(test_both_positive)
 
-        print_text(f"## Fraction of rows where both columns contain negative values")
+        print_text("## Fraction of rows where both columns contain negative values")
         def test_both_negative(col_name_1, col_name_2):
             return self.orig_df[(self.numeric_vals_filled[col_name_1] < 0) & (self.numeric_vals_filled[col_name_2] < 0)]
         run_test(test_both_negative)
 
-        print_text(f"## Fraction of rows where one columns is the negative of the other")
+        print_text("## Fraction of rows where one columns is the negative of the other")
         def test_negative(col_name_1, col_name_2):
             return self.orig_df[self.numeric_vals_filled[col_name_1] == (-1)*self.numeric_vals_filled[col_name_2]]
         run_test(test_negative)
 
-        print_text(f"## Fraction of rows where one columns is an even multiple of the other")
+        print_text("## Fraction of rows where one columns is an even multiple of the other")
         def test_even_multiple(col_name_1, col_name_2):
             val_arr_1 = self.numeric_vals_filled[col_name_1]
             val_arr_2 = self.numeric_vals_filled[col_name_2]
@@ -101,12 +100,12 @@ class PlotsMixin:
             return self.orig_df.loc[test_series]
         run_test(test_even_multiple)
 
-        print_text(f"## Fraction of rows where one column is larger (using absolute values) than the other")
+        print_text("## Fraction of rows where one column is larger (using absolute values) than the other")
         def test_larger(col_name_1, col_name_2):
             return self.orig_df[abs(self.numeric_vals_filled[col_name_1]) > abs(self.numeric_vals_filled[col_name_2])]
         run_test(test_larger)
 
-        print_text(f"## Fraction of rows where one columns is ten or more times (using absolute values) larger than the other")
+        print_text("## Fraction of rows where one columns is ten or more times (using absolute values) larger than the other")
         def test_much_larger(col_name_1, col_name_2):
             return self.orig_df[abs(self.numeric_vals_filled[col_name_1]) > abs((10.0)*self.numeric_vals_filled[col_name_2])]
         run_test(test_much_larger)
@@ -242,10 +241,7 @@ class PlotsMixin:
             n_rows = math.ceil(num_feats / 4)
             fig, ax = plt.subplots(nrows=n_rows, ncols=4, figsize=(14, 4 * n_rows))
             for feat_idx, col_name in enumerate(feats):
-                if n_rows == 1:
-                    cur_ax = ax[feat_idx]
-                else:
-                    cur_ax = ax[feat_idx // 4][feat_idx % 4]
+                cur_ax = ax[feat_idx] if n_rows == 1 else ax[feat_idx // 4][feat_idx % 4]
                 s = sns.scatterplot(data=df, x=df[col_name], y=df['FINAL SCORE'], ax=cur_ax)
                 s.set(xlabel=None)
                 s.set_title(col_name)
@@ -273,10 +269,7 @@ class PlotsMixin:
             fig, ax = plt.subplots(nrows=n_rows, ncols=4, figsize=(14, 4 * n_rows))
             for feat_idx, col_name in enumerate(feats):
                 vc = self.orig_df[col_name].value_counts()
-                if n_rows == 1:
-                    cur_ax = ax[feat_idx]
-                else:
-                    cur_ax = ax[feat_idx // 4][feat_idx % 4]
+                cur_ax = ax[feat_idx] if n_rows == 1 else ax[feat_idx // 4][feat_idx % 4]
                 if len(vc) > 10:
                     common_vals = []
                     for v_idx in vc.index:
@@ -527,7 +520,7 @@ class PlotsMixin:
         clean_x_tick_labels(fig, 1, ax)
         self.show_image(f)
 
-    def __plot_heatmap(self, test_id, cols, f):
+    def __plot_heatmap(self, test_id, cols, f):  # noqa: ARG002
         """Display heatmap for counts of value combinations."""
         col_name_1, col_name_2 = cols
         plt.subplots(figsize=(4, 4))
@@ -619,10 +612,7 @@ class PlotsMixin:
         for v_idx, v in enumerate(vals):
             sub_df = self.orig_df[self.orig_df[cols[0]] == v]
             sub_flagged_df = flagged_df[flagged_df[cols[0]] == v]
-            if nvals == 1:
-                curr_ax = ax
-            else:
-                curr_ax = ax[v_idx]
+            curr_ax = ax if nvals == 1 else ax[v_idx]
             s = sns.histplot(data=sub_df, x=cols[1], color='blue', bins=100, ax=curr_ax)
             flagged_vals = sub_flagged_df[cols[1]].values
             for fv in flagged_vals:
@@ -633,7 +623,7 @@ class PlotsMixin:
         plt.tight_layout()
         self.show_image(f)
 
-    def __plot_larger_relationship(self, test_id, cols, columns_set, show_exceptions, display_info, f):
+    def __plot_larger_relationship(self, test_id, cols, columns_set, show_exceptions, display_info, f):  # noqa: ARG002
         """Plot relationships where one column is larger."""
         col_medians = [self.column_medians[c] for c in cols]
         cols = np.array(cols)[np.argsort(col_medians)]
@@ -646,7 +636,7 @@ class PlotsMixin:
             df['Feature'] = [c] * len(df)
             df_arr.append(df)
         df = pd.concat(df_arr)
-        s = sns.boxplot(data=df.dropna(), orient='h', x='Value', y='Feature')
+        sns.boxplot(data=df.dropna(), orient='h', x='Value', y='Feature')
         if test_id in ['MUCH_LARGER']:
             plt.xscale('log')
         clean_x_tick_labels(fig, 1, ax)
@@ -681,10 +671,7 @@ class PlotsMixin:
                     # Determine the y value of the current edge, given the proposed y value for the node, at the x
                     # position of n
                     x_pos_middle_node = n[1]
-                    if (y > y_pos_other_node):
-                        y_diff = y - y_pos_other_node
-                    else:
-                        y_diff = y_pos_other_node - y
+                    y_diff = y - y_pos_other_node if y > y_pos_other_node else y_pos_other_node - y
                     x_diff = node[1] - x_pos_other_node
                     frac_along_x = (x_pos_middle_node - x_pos_other_node) / x_diff
                     y_edge_at_n = y_pos_other_node + (frac_along_x * y_diff)
@@ -712,11 +699,10 @@ class PlotsMixin:
                 for c in range(len(nodes)):
                     if mat[r][c] != 1:
                         continue
-                    else:
-                        for other_r in range(len(nodes)):
-                            if (mat[other_r][c] > 0) and (mat[r][other_r] > 0):
-                                mat[r][c] = 2
-                                num_chanaged += 1
+                    for other_r in range(len(nodes)):
+                        if (mat[other_r][c] > 0) and (mat[r][other_r] > 0):
+                            mat[r][c] = 2
+                            num_chanaged += 1
         print('after:')
         print(mat)
 
@@ -727,7 +713,6 @@ class PlotsMixin:
 
         # Define the location of each node.
         positions = {}
-        preferred_y_pos_arr = [50, 55, 45, 60, 40, 65, 35, 70, 30, 75, 25, 80, 20, 85, 15, 90, 10, 95, 5]
         for node_idx, node in enumerate(nodes):
             y_pos = 50
             num_conflicts_arr = []
@@ -736,7 +721,6 @@ class PlotsMixin:
                     num_conflicts_arr.append(get_num_conflicts(node, y))
                 idx_arr = np.argsort(num_conflicts_arr)
                 # If multiple positions are equally unobstructed, favour the position closest to 50.
-                min_val = min(num_conflicts_arr)
                 y_pos = (idx_arr[0] + 1) * 5
             positions[node[0]] = (node[1], y_pos)
 
@@ -763,9 +747,9 @@ class PlotsMixin:
         plt.ylim(0, 100)
         plt.title("Relationships of Column Magnitudes")
         plt.show()
-        print_text(('Edges indicate pairs of columns where one column, row by row, contains strictly larger values '
+        print_text('Edges indicate pairs of columns where one column, row by row, contains strictly larger values '
                     'than the other column. Redundant edges are removed. The x-position of the nodes represents the '
-                    'median value of the column.'))
+                    'median value of the column.')
 
     def _draw_results_plots(self, test_id, cols, columns_set, show_exceptions, display_info, f):
         """Dispatch to appropriate plotting routine for a test."""
@@ -1031,10 +1015,7 @@ class PlotsMixin:
             for idx, bin_id in enumerate(bins_with_flagged):
                 rows_for_bin = np.where(display_info['bin_assignments'] == bin_id)
                 bin_df = df2.loc[rows_for_bin]
-                if nvals == 1:
-                    curr_ax = ax
-                else:
-                    curr_ax = ax[idx]
+                curr_ax = ax if nvals == 1 else ax[idx]
                 s = sns.histplot(data=bin_df, x=cols[1], color='blue', bins=100, ax=curr_ax)
                 s.set_title(f"Values for bin {bin_id}\nFlagged values in red")
 
@@ -1073,10 +1054,7 @@ class PlotsMixin:
             for v_idx, v in enumerate(vals):
                 sub_df = df2[df2[cols[0]] == v]
                 sub_flagged_df = flagged_df[flagged_df[cols[0]] == v]
-                if nvals == 1:
-                    curr_ax = ax
-                else:
-                    curr_ax = ax[v_idx]
+                curr_ax = ax if nvals == 1 else ax[v_idx]
                 s = sns.histplot(data=sub_df, x=cols[1], color='blue', bins=100, ax=curr_ax)
                 flagged_vals = sub_flagged_df[cols[1]].values
                 for fv in flagged_vals:
@@ -1110,7 +1088,7 @@ class PlotsMixin:
                     plotted_vals.append(val)
 
             for val in plotted_vals:
-                if (val == None) or (val != val):
+                if (val is None) or (val != val):
                     df2 = self.orig_df[self.orig_df[cols[0]].isna()]
                 else:
                     df2 = self.orig_df[self.orig_df[cols[0]] == val]
@@ -1158,10 +1136,7 @@ class PlotsMixin:
             counts_df.columns = [x.strip() for x in counts_df.columns]
             counts_df.index = [x.strip() for x in counts_df.index]
             fig_size_x = len(counts_df.columns) * 2
-            if len(counts_df) > 10:
-                fig_size_y = len(counts_df) * 0.4
-            else:
-                fig_size_y = max(3, len(counts_df) * 0.9)
+            fig_size_y = len(counts_df) * 0.4 if len(counts_df) > 10 else max(3, len(counts_df) * 0.9)
             fig, ax = plt.subplots(figsize=(fig_size_x, fig_size_y))
             s = sns.heatmap(counts_df, annot=True, cmap="YlGnBu", fmt='g', linewidths=1.0, linecolor='black', clip_on=False)
             s.set_title(f'Counts by combination of values in \n"{cols[0]}" and \n"{cols[1]}"')
@@ -1187,10 +1162,7 @@ class PlotsMixin:
                 v1 = vals.iloc[v_idx][cols[1]]
                 sub_df = self.orig_df[(self.orig_df[cols[0]] == v0) & (self.orig_df[cols[1]] == v1)]
                 sub_flagged_df = flagged_df[(flagged_df[cols[0]] == v0) & (flagged_df[cols[1]] == v1)]
-                if nvals == 1:
-                    curr_ax = ax
-                else:
-                    curr_ax = ax[v_idx]
+                curr_ax = ax if nvals == 1 else ax[v_idx]
                 s = sns.histplot(data=sub_df, x=cols[2], color='blue', bins=100, ax=curr_ax)
                 flagged_vals = sub_flagged_df[cols[2]].values
                 for fv in flagged_vals:
@@ -1198,10 +1170,7 @@ class PlotsMixin:
                         continue
                     s.axvline(fv, color='red')
                 s.set_title(f'Distribution of \n"{cols[2]}" where \n"{cols[0]}" is "{v0}" and \n"{cols[1]}" is "{v1}"')
-                if nvals == 1:
-                    ax_curr = ax
-                else:
-                    ax_curr = ax[v_idx]
+                ax_curr = ax if nvals == 1 else ax[v_idx]
                 num_ticks = len(ax_curr.xaxis.get_ticklabels())
                 for label_idx, label in enumerate(ax_curr.xaxis.get_ticklabels()):
                     if label_idx != (num_ticks - 1):
@@ -1221,7 +1190,7 @@ class PlotsMixin:
             s = sns.barplot(orient='h', y=labels, x=counts)
             s.set_title("Counts of combinations of values in columns")
             for p_idx, p in enumerate(s.patches):
-                s.annotate('{:.1f}'.format(counts[p_idx]), (p.get_width()+0.25, (p.get_y() + (p.get_height() / 2))+0.1))
+                s.annotate(f'{counts[p_idx]:.1f}', (p.get_width()+0.25, (p.get_y() + (p.get_height() / 2))+0.1))
             self.show_image(f)
 
         elif test_id in ['DECISION_TREE_REGRESSOR', 'LINEAR_REGRESSION'] or (test_id in ['PREV_VALUES_DT'] and cols[-1] in self.numeric_cols):

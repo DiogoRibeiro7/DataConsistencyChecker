@@ -10,7 +10,7 @@ Test Categories:
                                  SAME_OR_CONSTANT, UNIQUE_PAIR
 """
 
-from ..test_registry import TestDefinition
+from data_consistency_checker.test_registry import TestDefinition
 
 
 def _test(short_description, description, test_func, gen_func, shortlist, implemented, fast, code):

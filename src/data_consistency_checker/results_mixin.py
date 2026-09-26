@@ -74,8 +74,7 @@ class ResultsMixin:
         col_name_str = ""
         for c in col_names:
             col_name_str += f'"{c}" AND '
-        col_name_str = col_name_str[:-5]
-        return col_name_str
+        return col_name_str[:-5]
 
 
     def get_test_ids_with_results(self, include_patterns=True, include_exceptions=True):
@@ -106,8 +105,7 @@ class ResultsMixin:
         # Get the set of unique tests, and sort them based on their standard test order
         ret_list = list(set(ret_list))
         idx_full_list = [self.get_test_list().index(x) for x in ret_list]
-        ret_list = np.array(ret_list)[np.argsort(idx_full_list)].tolist()
-        return ret_list
+        return np.array(ret_list)[np.argsort(idx_full_list)].tolist()
 
     def get_single_feature_tests_matrix(self):
         """
@@ -264,10 +262,9 @@ class ResultsMixin:
             plt.show()
 
         # Replace any '1' values with checkmarks to make the display more clear.
-        df = df.replace(1, u'\u2714')
-        df = df.replace(0, '')
+        df = df.replace(1, '\u2714')
+        return df.replace(0, '')
 
-        return df
 
     def summarize_exceptions_by_test_and_feature(self, all_tests=False, heatmap=False):
         """
@@ -317,9 +314,8 @@ class ResultsMixin:
             plt.show()
 
         # Replace any 0 values with a blank to make the display more clear.
-        df = df.replace(0, '')
+        return df.replace(0, '')
 
-        return df
 
     def summarize_patterns_by_test(self, heatmap=False):
         """
@@ -370,10 +366,7 @@ class ResultsMixin:
         row_counts = []
         for test_id in g.groups:
             result_cols = [c for c in self.test_results_df.columns if c.startswith(f"TEST {test_id} --")]
-            if result_cols:
-                num_rows = self.test_results_df[result_cols].any(axis=1).sum()
-            else:
-                num_rows = 0
+            num_rows = self.test_results_df[result_cols].any(axis=1).sum() if result_cols else 0
             row_counts.append(num_rows)
 
         df = pd.DataFrame({
@@ -427,8 +420,7 @@ class ResultsMixin:
             ax.set_ylabel(None)
             plt.show()
 
-        df = df.replace(0, '')
-        return df
+        return df.replace(0, '')
 
     def get_outlier_scores(self, normalized: bool = False) -> list[int] | list[float]:
         """Return row-level outlier scores.
@@ -544,7 +536,7 @@ class ResultsMixin:
         df = self.test_results_df[self.test_results_df[results_col_name] == 1]
         if len(df) == 0:
             return None
-        df.index = [x[0] if type(x) == tuple else x for x in df.index]
+        df.index = [x[0] if type(x) is tuple else x for x in df.index]
         row_idxs = df.index
         return self.orig_df.loc[row_idxs]
 
@@ -592,10 +584,7 @@ class ResultsMixin:
         """
         test_series = np.array(test_series)
 
-        if len(original_cols) == 1:
-            col_name = original_cols[0]
-        else:
-            col_name = self.get_col_set_name(original_cols)
+        col_name = original_cols[0] if len(original_cols) == 1 else self.get_col_set_name(original_cols)
 
         num_true = test_series.tolist().count(True)
         if allow_patterns and num_true == self.num_rows:
@@ -657,7 +646,7 @@ class ResultsMixin:
                 s += str(x)
                 if x_ix == len(sorted_arr)-1:
                     break
-                elif len(sorted_arr) == 2 and x_ix == 0:
+                if len(sorted_arr) == 2 and x_ix == 0:
                     s += " or "
                 elif len(sorted_arr) > 2:
                     if x_ix == len(sorted_arr)-2:
@@ -668,10 +657,7 @@ class ResultsMixin:
 
         test_series = pd.Series(test_series)
 
-        if len(original_cols) == 1:
-            col_name = original_cols[0]
-        else:
-            col_name = self.get_col_set_name(original_cols)
+        col_name = original_cols[0] if len(original_cols) == 1 else self.get_col_set_name(original_cols)
 
         if test_series.nunique() == 1:
             if allow_patterns:
@@ -722,19 +708,19 @@ class ResultsMixin:
             print()
             print('Patterns without Exceptions:')
             print(f"Found {len(self.patterns_df)} patterns without exceptions")
-            print((f"{self.patterns_df['Test ID'].nunique()} tests "
+            print(f"{self.patterns_df['Test ID'].nunique()} tests "
                    f"({self.patterns_df['Test ID'].nunique() * 100.0 / self.n_tests_executed:.2f}% of tests) "
                    f"identified at least one pattern without exceptions each. \nBy default some patterns are not listed "
-                   f"in calls to display_detailed_results()."))
+                   f"in calls to display_detailed_results().")
             print()
             print('Patterns with Exceptions:')
             print(f"Found {len(self.exceptions_summary_df)} patterns with exceptions")
-            print((f"{self.exceptions_summary_df['Test ID'].nunique()} tests "
+            print(f"{self.exceptions_summary_df['Test ID'].nunique()} tests "
                    f"({self.exceptions_summary_df['Test ID'].nunique() * 100.0 / self.n_tests_executed:.2f}% of tests) "
-                   f"flagged at least one exception each."))
+                   f"flagged at least one exception each.")
             if self.test_results_df is not None:
-                print((f"Flagged {len(self.test_results_df[self.test_results_df['FINAL SCORE'] > 0]):,} row(s) with at "
-                       f"least one exception."))
+                print(f"Flagged {len(self.test_results_df[self.test_results_df['FINAL SCORE'] > 0]):,} row(s) with at "
+                       f"least one exception.")
             print(f"Flagged {(self.test_results_by_column_np.sum(axis=0) > 0).sum()} column(s) with at least one exception.")
 
 
@@ -809,8 +795,8 @@ class ResultsMixin:
             return
 
         if num_specfied > 1:
-            print(("Only one method or removing results may be specified in each call to clear_results(). The function "
-                   "may be called any number of times."))
+            print("Only one method or removing results may be specified in each call to clear_results(). The function "
+                   "may be called any number of times.")
             return
 
         if (self.exceptions_summary_df is None) or (self.test_results_df is None) or (self.exceptions_summary_df is None):

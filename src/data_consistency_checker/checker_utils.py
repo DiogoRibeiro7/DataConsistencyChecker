@@ -8,21 +8,22 @@ package to keep the main module more maintainable.
 
 from __future__ import annotations
 
-import numbers
+import contextlib
 import math
+import numbers
 import string
-from typing import Any, Iterable
+import warnings
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
+import scipy.stats as scipy_stats
 from IPython import get_ipython
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from sklearn.exceptions import ConvergenceWarning
-import scipy.stats as scipy_stats
-import warnings
-
 
 # ---------------------------------------------------------------------------
 # General utility helpers
@@ -146,7 +147,7 @@ def styling_flagged_rows(x: pd.DataFrame, flagged_cells: np.ndarray) -> pd.DataF
         "background-color: #e5f8fa; color: black", index=x.index, columns=x.columns
     )
     for row_idx in x.index:
-        for col_idx, col_name in enumerate(x.columns[:-1]):
+        for col_idx, _col_name in enumerate(x.columns[:-1]):
             if flagged_cells[row_idx, col_idx] > 0:
                 df_styler.loc[row_idx][
                     x.columns[col_idx]
@@ -210,7 +211,7 @@ def is_missing(x: Any) -> bool:
         return True
     if type(x) in [str, np.str_]:
         return (x.strip() == "") or (x == "nan") or (x == "None") or (len(x) == 0)
-    if type(x) == list:
+    if type(x) is list:
         return len(x) == 0
     return False
 
@@ -218,8 +219,7 @@ def is_missing(x: Any) -> bool:
 def array_to_str(arr: Iterable[Any]) -> str:
     """Create a prettified string version of ``arr``."""
     arr_sorted = sorted(arr)
-    arr_str = ", ".join(str(v) for v in arr_sorted)
-    return arr_str
+    return ", ".join(str(v) for v in arr_sorted)
 
 
 def replace_special_with_space(x: str | None) -> str:
@@ -247,7 +247,7 @@ def is_uppercase(x: str | None) -> bool:
     return (65 <= ord(x) <= 90) or (193 <= ord(x) <= 221)
 
 
-def call_test(dc: Any, test_id: str) -> None:
+def call_test(dc: Any, test_id: str) -> None:  # noqa: ARG001
     """Placeholder for test invocation logging."""
     print(test_id)
 
@@ -264,7 +264,7 @@ def clean_x_tick_labels(fig: Figure, n_axis: int, ax: Axes) -> None:
                 label.set_visible(False)
 
     num_chars = 0
-    for label_idx, label in enumerate(ax.xaxis.get_ticklabels()):
+    for label in ax.xaxis.get_ticklabels():
         if label.get_visible():
             num_chars += len(label._text)
 
@@ -276,17 +276,11 @@ def set_warnings_levels() -> None:
     """Suppress third-party library warnings."""
     warnings.filterwarnings(action="ignore", category=ConvergenceWarning)
     warnings.filterwarnings(action="ignore", category=FutureWarning)
-    try:
+    with contextlib.suppress(Exception):
         warnings.filterwarnings(
             action="ignore", category=scipy_stats.SpearmanRConstantInputWarning
         )
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         warnings.filterwarnings(action="ignore", category=scipy_stats.ConstantInputWarning)
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         warnings.filterwarnings(action="ignore", category=scipy_stats.NearConstantInputWarning)
-    except Exception:
-        pass

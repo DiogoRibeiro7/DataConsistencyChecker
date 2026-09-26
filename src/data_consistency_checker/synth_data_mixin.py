@@ -8,7 +8,6 @@ modify real datasets for demonstration purposes.
 from __future__ import annotations
 
 import random
-from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -57,7 +56,7 @@ class SynthDataMixin:
                     return pd.DataFrame()
 
         self.synth_df = pd.DataFrame()
-        for test_id in self.test_dict.keys():
+        for test_id in self.test_dict:
             random.seed(seed)
             np.random.seed(seed)
             if all_cols or (
@@ -106,7 +105,7 @@ class SynthDataMixin:
 
     def modify_real_data(
         self, df: pd.DataFrame, num_modifications: int = 5
-    ) -> Tuple[pd.DataFrame, List[Tuple[int, str]]]:
+    ) -> tuple[pd.DataFrame, list[tuple[int, str]]]:
         """Introduce slight modifications to an existing dataset.
 
         Args:
@@ -117,7 +116,7 @@ class SynthDataMixin:
             A tuple with the modified DataFrame and a list describing the changed
             cells. Each list element is ``(row_index, column_name)``.
         """
-        cell_list: List[Tuple[int, str]] = []
+        cell_list: list[tuple[int, str]] = []
         for _ in range(num_modifications):
             row_index = random.randint(0, len(df) - 1)
             col_index = random.randint(0, len(df.columns) - 1)
