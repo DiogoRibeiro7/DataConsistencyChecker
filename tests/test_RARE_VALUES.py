@@ -35,7 +35,8 @@ def test_synthetic_no_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_one_row_nulls():
-    synth_test(test_id, "one-row", [], ["rare_vals all", "rare_vals most"])  # Null is now a rare value
+    # As documented by the check, Null values are not flagged as rare values.
+    synth_test(test_id, "one-row", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones

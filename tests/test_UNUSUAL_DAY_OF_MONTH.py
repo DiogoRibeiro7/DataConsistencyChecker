@@ -43,7 +43,8 @@ def test_synthetic_random_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # Rare days are those in under 0.5% of the non-Null values. With 200 left, the one exception is not rare.
+    synth_test(test_id, "80-percent", synth_patterns_cols, 0)
 
 
 @requires_synthetic_all_columns

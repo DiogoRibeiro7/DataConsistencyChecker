@@ -177,7 +177,9 @@ class DateTestsMixin(CheckerState):
 
             dom_list = pd.Series([x.day for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = dom_list.value_counts()
-            rare_dom = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Days are rare relative to the number of non-missing values
+            rare_limit = self.freq_contamination_level * dom_list.notna().mean()
+            rare_dom = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_dom) == 0:
                 continue
             test_series = np.array([x not in rare_dom for x in dom_list])
@@ -447,7 +449,7 @@ class DateTestsMixin(CheckerState):
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
                 gap_array = pd.Series([
-                    0 if (is_missing(x) or is_missing(y)) else (x-y).days
+                    np.nan if (is_missing(x) or is_missing(y)) else (x-y).days
                     for x, y in zip(pd.to_datetime(self.orig_df[col_name_1]), pd.to_datetime(self.orig_df[col_name_2]))
                 ])
                 self._process_analysis_counts(

@@ -112,7 +112,9 @@ class BaseTestsMixin(CheckerState):
                 continue
 
             counts_series = as_str(self.orig_df[col_name]).value_counts(normalize=False, dropna=False)
-            all_rare_vals = [str(x) for x, y in zip(counts_series.index, counts_series.values)
+            # Null values are neither rare nor common values
+            non_null_counts_series = as_str(self.orig_df[col_name].dropna()).value_counts(normalize=False)
+            all_rare_vals = [str(x) for x, y in zip(non_null_counts_series.index, non_null_counts_series.values)
                              if y < self.freq_contamination_level]
             non_null_rare_vals = [str(x) for x in all_rare_vals if not is_missing(x)]
             # It is not possible to sort None or NaN values
@@ -121,7 +123,7 @@ class BaseTestsMixin(CheckerState):
                 if v not in rare_vals:
                     rare_vals.append(v)
 
-            all_common_vals = [str(x).strip() for x in counts_series.index if x not in rare_vals]
+            all_common_vals = [str(x).strip() for x in non_null_counts_series.index if x not in rare_vals]
             non_null_common_vals = [str(x).strip() for x in all_common_vals if not is_missing(x)]
             common_vals = sorted(non_null_common_vals)
             for v in all_common_vals:
@@ -828,26 +830,26 @@ class BaseTestsMixin(CheckerState):
             if arr2.isna().sum() > (len(arr2) * 0.75):
                 return False
 
-            # Skip columns that have few unique values
-            if is_sample:
-                if arr1.nunique() < math.sqrt(len(arr1)):
-                    return False
-                if arr2.nunique() < math.sqrt(len(arr2)):
-                    return False
-            else:
-                if arr1.nunique() < math.sqrt(self.num_rows):
-                    return False
-                if arr2.nunique() < math.sqrt(self.num_rows):
-                    return False
+            # Skip columns that have few unique values, relative to their number of non-missing values
+            if arr1.nunique() < math.sqrt(arr1.notna().sum()):
+                return False
+            if arr2.nunique() < math.sqrt(arr2.notna().sum()):
+                return False
 
-            same_indicator = [x == y or (is_missing(x) and is_missing(y)) for x, y in zip(arr1, arr2)]
+            # Rows with a missing value in either column neither support nor violate the pattern. They are marked as
+            # the same, so are not checked for other values, but are not counted as the same.
+            is_missing_arr = (arr1.isna() | arr2.isna()).tolist()
+            same_indicator = [m or x == y or (is_missing(x) and is_missing(y))
+                              for x, y, m in zip(arr1, arr2, is_missing_arr)]
+            num_same = same_indicator.count(True) - is_missing_arr.count(True)
+            num_non_missing = is_missing_arr.count(False)
 
             # Exclude column pairs which are not the same value in at least 10% of rows
-            if same_indicator.count(True) < (len(arr1) * 0.1):
+            if num_same < (num_non_missing * 0.1):
                 return False
 
             # Exclude column pairs which are the same value in over 95% of rows
-            if same_indicator.count(True) > (len(arr1) * 0.95):
+            if num_same > (num_non_missing * 0.95):
                 return False
 
             other_values_1 = pd.Series([np.nan if y == 1 else x for x, y in zip(arr1, same_indicator)])
@@ -913,7 +915,12 @@ class BaseTestsMixin(CheckerState):
             if most_freq_per_col[col_name_2] > 0.99:
                 continue
 
-            if not test_arrs(sample_df[col_name_1], sample_df[col_name_2], is_sample=True):
+            # If the sample has missing values in either column, test on a sample of the rows where both have values
+            pair_sample_df = sample_df[[col_name_1, col_name_2]]
+            if pair_sample_df.isna().values.any():
+                pair_sample_df = self.orig_df[[col_name_1, col_name_2]].dropna()
+                pair_sample_df = pair_sample_df.sample(n=min(len(pair_sample_df), 50), random_state=0)
+            if not test_arrs(pair_sample_df[col_name_1], pair_sample_df[col_name_2], is_sample=True):
                 continue
             test_arrs(self.orig_df[col_name_1], self.orig_df[col_name_2], is_sample=False)
 
