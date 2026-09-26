@@ -19,11 +19,25 @@ DataConsistencyChecker
 
 ## Flow of an analysis
 
+```mermaid
+flowchart TD
+    data["pandas DataFrame"] --> init["Infer column types and cache statistics"]
+    init --> checks["Select and run registry checks"]
+    checks --> patterns["Patterns without exceptions"]
+    checks --> exceptions["Patterns with exceptions"]
+    checks --> failures["Record check failures; continue by default"]
+    exceptions --> scores["Count flags for each row"]
+    patterns --> results["Review findings and export reports"]
+    scores --> results
+    failures --> results
+```
+
 1. **`init_data()`** (`DataInitMixin`) infers the type of each column, converts dates, takes a sample of the
    rows, and precomputes values used by many checks, such as numeric versions of the columns and their
    medians.
 2. **`check_data_quality()`** (`ExecutionMixin`) selects the checks from the registry and runs each one. A
-   failing check is recorded as a structured `OutlierDetectionError` and the others continue.
+   failing check is recorded as a structured `OutlierDetectionError` and the others continue by default.
+   With `raise_on_error=True`, the failure is raised and execution stops.
 3. **Each check** (in `test_implementations/`) examines its columns or column sets, usually first on the sample,
    and passes a boolean series (True where a row follows the pattern) to `_process_analysis_binary()`
    (`ResultsMixin`). That decides, from the contamination level, whether it is a pattern, a pattern with

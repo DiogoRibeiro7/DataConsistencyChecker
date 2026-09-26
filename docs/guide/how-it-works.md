@@ -54,8 +54,9 @@ the score is transparent: `get_results_by_row_id()` lists exactly which checks f
   single deviation stands out.
 - **Shared work is amortised.** Many checks reuse the same statistics (percentiles, missing-value masks, column
   pairs), which are computed once per dataset.
-- **What is *not* found is informative too.** The checks are broad enough that finding little suggests a very
-  consistent dataset, and rows with a score of 0 are typical rows.
+- **Unflagged rows provide context.** Compare flagged rows with rows that follow the discovered patterns.
+  A score of 0 means no active finding flags a row; it does not rule out problems the selected checks cannot
+  detect.
 
 ## Limitations
 
