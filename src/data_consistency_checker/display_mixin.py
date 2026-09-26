@@ -323,46 +323,6 @@ class DisplayMixin:
             current folder will be used.
         """
 
-        def print_test_header(test_id, f):
-            nonlocal printed_test_header
-            nonlocal test_id_list
-
-            if printed_test_header:
-                return
-            if len(test_id_list) == 1 or (self.execute_list is not None and len(self.execute_list) == 1):
-                return
-
-            if f:
-                f.write(''.join(['.'] * 100) + "<br>" + os.linesep)
-                f.write("<H2>" + test_id + "</H2>" + os.linesep)
-            elif is_notebook():
-                print(''.join(['.'] * 100))
-                display(Markdown(f"### {test_id}"))
-            else:
-                print("\n\n\n")
-                print(stars)
-                print(test_id)
-                print(stars)
-
-            printed_test_header = True
-
-        def print_column_header(col_name, test_id, f):
-            print_line(f)
-            if not is_notebook():
-                if f:
-                    f.write(hyphens + "<br" + os.linesep)
-                else:
-                    print_line(f)
-                    print(hyphens)
-
-            s = f"Columns(s): {self._get_condensed_col_list(test_id, col_name)}"
-            if f:
-                f.write(s + "<br>" + os.linesep)
-            elif is_notebook():
-                display(Markdown(f"### {s}"))
-            else:
-                print(s)
-
         if (self.orig_df is None) or (len(self.orig_df) == 0):
             print("Empty dataset")
             return
@@ -381,81 +341,19 @@ class DisplayMixin:
             show_exceptions = False
 
         if max_shown == -1:
-            if save_to_disk:
-                max_shown = 50_000
-            else:
-                max_shown = 200  # This includes patterns & exceptions
-            if include_examples:
-                max_shown /= 2
-            if plot_results:
-                max_shown /= 2
+            max_shown = self._default_max_shown(save_to_disk, include_examples, plot_results)
 
-        if (test_id_list is None) and (pattern_id_list is None) and (col_name_list is None) and \
-                (issue_id_list is None) and (row_id_list is None):
-            msg = ("This is beyond the limit to display all at once. Try specifying tests and/or columns to be "
-                   "displayed here, specific issues, or row numbers, or setting include_examples and/or "
-                   "plot_results to False.")
-
-            if show_patterns and show_exceptions and \
-                    ((len(self.exceptions_summary_df) + len(self.patterns_df)) > max_shown):
-                print()
-                print((f"{len(self.exceptions_summary_df) + len(self.patterns_df)} patterns and exceptions were "
-                       f"identified. {msg}"))
-                return
-            if show_patterns and (len(self.patterns_df) > max_shown):
-                print()
-                print(f"{len(self.exceptions_summary_df) + len(self.patterns_df)} patterns were identified. {msg}")
-                return
-            if show_exceptions and (len(self.exceptions_summary_df) > max_shown):
-                print()
-                print(f"{len(self.exceptions_summary_df)} issues were identified. {msg}")
-                return
+        no_filters = (test_id_list is None) and (pattern_id_list is None) and (col_name_list is None) and \
+            (issue_id_list is None) and (row_id_list is None)
+        if no_filters and self._exceeds_display_limit(show_patterns, show_exceptions, max_shown):
+            return
 
         # Initialize the folder and file handle for HTML exports if specified
         f = None  # file handle used for HTML export
         if save_to_disk:
-            if output_folder is None:
-                self.output_folder = os.path.join(os.getcwd(), "Output")
-            else:
-                self.output_folder = output_folder
-            os.makedirs(self.output_folder, exist_ok=True)
+            f = self._open_detailed_results_file(output_folder)
 
-            f = open(os.path.join(self.output_folder, "Data_consistency.html"), 'w')
-            f.write("<html>" + os.linesep)
-            f.write("<head>" + os.linesep)
-            f.write("</head>" + os.linesep)
-            f.write("<body>" + os.linesep)
-            f.write("<h1>Data Consistency Check Results</h1>" + os.linesep)
-            f.write("<body>" + os.linesep)
-
-        if test_id_list:
-            if len(test_id_list) > 1:
-                print_line(f)
-                s = f"Displaying results for tests: {str(test_id_list).replace('[','').replace(']','')}"
-                print_text(s, f)
-
-            # Check for any tests that are specified that contradict the setting for show_short_list_only
-            if show_short_list_only:
-                for test_id in test_id_list:
-                    if test_id not in self.get_patterns_shortlist():
-                        sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
-                        if len(sub_patterns_test):
-                            print_text((f"Not displaying patterns without exceptions for {test_id}. This test is not in "
-                                        f"the short list and the parameter show_short_list_only was set to True"), f)
-
-            # Check for any invalid test IDs
-            for test_id in test_id_list:
-                if test_id not in self.get_test_list():
-                    print_text(f"{test_id} is not a valid test ID", f)
-
-        if col_name_list:
-            print_line(f)
-            print_text(f"Displaying results for columns: {col_name_list}", f)
-
-            # Check for any invalid column names
-            for col_name in col_name_list:
-                if col_name not in self.orig_df.columns:
-                    print_text(f"{col_name} is not a valid column name", f)
+        self._describe_display_filters(test_id_list, col_name_list, show_short_list_only, f)
 
         if test_id_list is None:
             test_id_list = self.get_test_list()
@@ -473,8 +371,9 @@ class DisplayMixin:
             # Create a dataframe representing only the specified rows
             row_id_list_df = self.test_results_df.loc[row_id_list]
 
-        stars = "******************************************************************************"
-        hyphens = '----------------------------------------------------------------------------'
+        # Each test's results are introduced by a header, unless results for only one test can be shown
+        show_test_headers = not (len(test_id_list) == 1 or
+                                 (self.execute_list is not None and len(self.execute_list) == 1))
         count_shown = 0
 
         max_shown_msg = (f"**Showing the first {int(max_shown)} findings. To see additional patterns or exceptions, "
@@ -510,34 +409,11 @@ class DisplayMixin:
                     if pattern_id_list and (pattern_id not in pattern_id_list):
                         continue
 
-                    if len(sub_patterns) > 0:
-                        count_shown += 1
-                        print_test_header(test_id, f)
-                        print_column_header(columns_set, test_id, f)
-                        print_text("Pattern found (without exceptions)", f)
-                        if test_id in ['PREV_VALUES_DT', 'DECISION_TREE_REGRESSOR', 'DECISION_TREE_CLASSIFIER',
-                                       'PREDICT_NULL_DT']:
-                            print_text("**Description**:", f)
-                            print_text(sub_patterns.iloc[0]['Description of Pattern'], f)
-                        else:
-                            print_text(f"**Description**: {sub_patterns.iloc[0]['Description of Pattern']}", f)
-                        cols = [x.lstrip('"').rstrip('"') for x in columns_set.split(" AND ")]
-                        if include_examples:
-                            self._display_examples_not_flagged(
-                                test_id,
-                                cols,
-                                columns_set,
-                                is_patterns=True,
-                                display_info=sub_patterns.iloc[0]['Display Information'],
-                                f=f)
-                        if plot_results:
-                            self._draw_results_plots(
-                                test_id,
-                                cols,
-                                columns_set,
-                                show_exceptions=False,
-                                display_info=sub_patterns.iloc[0]['Display Information'],
-                                f=f)
+                    count_shown += 1
+                    self._print_finding_header(test_id, columns_set, show_test_headers and not printed_test_header, f)
+                    printed_test_header = True
+                    self._display_pattern_details(
+                        test_id, columns_set, sub_patterns.iloc[0], include_examples, plot_results, f)
 
             # Display patterns with exceptions
             if show_exceptions:
@@ -547,9 +423,8 @@ class DisplayMixin:
                         print_text(max_shown_msg, f)
                         return
 
-                    if row_id_list:
-                        if not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
-                            continue
+                    if row_id_list and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
+                        continue
 
                     # If columns_set_arr is specified, only report issues with some overlap of columns with
                     # columns_set_arr. The columns_set in the issues dataframe may be a single string. If so, convert
@@ -572,94 +447,272 @@ class DisplayMixin:
                         continue
 
                     count_shown += 1
-                    print_test_header(test_id, f)
-                    print_column_header(columns_set, test_id, f)
-                    print_text(f"**Issue ID**: {issue_id}", f)
-                    if test_id in ['RARE_VALUES', 'VERY_SMALL', 'VERY_LARGE', 'VERY_SMALL_ABS', 'LARGE_GIVEN_DATE',
-                                   'SMALL_GIVEN_DATE', 'LARGE_GIVEN_VALUE', 'SMALL_GIVEN_VALUE', 'LARGE_GIVEN_PREFIX',
-                                   'SMALL_GIVEN_PREFIX', 'LARGE_GIVEN_PAIR', 'SMALL_GIVEN_PAIR']:
-                        print_text("Unusual values were found.\n", f)
-                    else:
-                        print_text("A strong pattern, and exceptions to the pattern, were found.\n", f)
-                    if test_id in ['GROUPED_STRINGS', 'GROUPED_STRINGS_BY_NUMERIC']:
-                        # These display special output, so the formatting must be preserved.
-                        print_text(f"**Description**:",f )
-                        print_text(sub_summary.iloc[0]['Description of Pattern'])
-                    elif test_id in ['PREV_VALUES_DT', 'DECISION_TREE_REGRESSOR', 'DECISION_TREE_CLASSIFIER',
-                                     'PREDICT_NULL_DT']:
-                        # These display a decision tree, so the formatting must be preserved.
-                        print_text(f"**Description**:", f)
-                        print_text(sub_summary.iloc[0]['Description of Pattern'], f)
-                    else:
-                        multiline_desc = wrap(sub_summary.iloc[0]['Description of Pattern'], 100)
-                        print_text(f"**Description**: {'<br>'.join(multiline_desc)}", f)
-                    num_exceptions = sub_summary.iloc[0]['Number of Exceptions']
-                    print_text((f"**Number of exceptions**: {num_exceptions} "
-                                f"({num_exceptions * 100.0 / self.num_rows:.4f}% of rows)"), f)
-
-                    # Provide examples of the pattern and, for exceptions, of the exceptions
-                    if include_examples:
-                        # Display examples not flagged
-                        result_col_name = self.get_results_col_name(test_id, columns_set)
-                        cols = self.col_to_original_cols_dict[result_col_name]
-                        self._display_examples_not_flagged(
-                            test_id,
-                            cols,
-                            columns_set,
-                            is_patterns=False,
-                            display_info=sub_summary.iloc[0]['Display Information'],
-                            f=f)
-
-                        flagged_df = self._get_rows_flagged(test_id, columns_set)
-                        if flagged_df is None:
-                            continue
-                        print_line(f)
-                        if len(flagged_df) > 10:
-                            print_text("**Examples of flagged values**:", f)
-                        else:
-                            print_text("**Flagged values**:", f)
-                        display_cols = list(self.col_to_original_cols_dict[self.get_results_col_name(test_id, columns_set)])
-                        flagged_df = flagged_df.head(10)
-                        self._draw_sample_dataframe(
-                            flagged_df[display_cols],
-                            test_id,
-                            cols,
-                            display_info=sub_summary.iloc[0]['Display Information'],
-                            is_patterns=False,
-                            f=f)
-                        print_line(f)
-
-                        # For some tests, we display the rows before and after the flagged rows as well, to provide
-                        # context
-                        if test_id in ['PREV_VALUES_DT', 'COLUMN_ORDERED_ASC', 'COLUMN_ORDERED_DESC',
-                                       'COLUMN_TENDS_ASC', 'COLUMN_TENDS_DESC', 'SIMILAR_PREVIOUS', 'RUNNING_SUM',
-                                       'GROUPED_STRINGS', 'GROUPED_STRINGS_BY_NUMERIC']:
-                            print_line(f)
-                            print_text((f"Showing a flagged example (row {flagged_df.index[0]}) with 5 rows "
-                                        f"before and 5 rows after (if available) the flagged row"), f)
-                            self._draw_rows_around_flagged_row(
-                                flagged_df[display_cols],
-                                test_id,
-                                cols,
-                                display_info=sub_summary.iloc[0]['Display Information'],
-                                f=f)
-
-                    # For some tests, we display one or more plots to make the exceptions more clear
-                    if plot_results:
-                        result_col_name = self.get_results_col_name(test_id, columns_set)
-                        cols = self.col_to_original_cols_dict[result_col_name]
-                        self._draw_results_plots(
-                            test_id,
-                            cols,
-                            columns_set,
-                            show_exceptions=True,
-                            display_info=sub_summary.iloc[0]['Display Information'],
-                            f=f)
+                    self._print_finding_header(test_id, columns_set, show_test_headers and not printed_test_header, f)
+                    printed_test_header = True
+                    self._display_exception_details(
+                        test_id, columns_set, issue_id, sub_summary.iloc[0], include_examples, plot_results, f)
 
         if save_to_disk:
-            f.write("</body>" + os.linesep)
-            f.write("</html>" + os.linesep)
-            f.close()
+            self._close_detailed_results_file(f)
+
+    @staticmethod
+    def _default_max_shown(save_to_disk, include_examples, plot_results):
+        """
+        Called by display_detailed_results() to determine how many patterns and exceptions (in total) may be shown
+        when max_shown is not specified. Fewer are shown when each includes examples or plots.
+        """
+        max_shown: float = 50_000 if save_to_disk else 200
+        if include_examples:
+            max_shown /= 2
+        if plot_results:
+            max_shown /= 2
+        return max_shown
+
+    def _exceeds_display_limit(self, show_patterns, show_exceptions, max_shown):
+        """
+        Called by display_detailed_results() where no filters are specified. If more patterns and/or exceptions were
+        found than may be displayed at once, this explains how to narrow the results and returns True.
+        """
+        msg = ("This is beyond the limit to display all at once. Try specifying tests and/or columns to be "
+               "displayed here, specific issues, or row numbers, or setting include_examples and/or "
+               "plot_results to False.")
+
+        if show_patterns and show_exceptions and \
+                ((len(self.exceptions_summary_df) + len(self.patterns_df)) > max_shown):
+            print()
+            print((f"{len(self.exceptions_summary_df) + len(self.patterns_df)} patterns and exceptions were "
+                   f"identified. {msg}"))
+            return True
+        if show_patterns and (len(self.patterns_df) > max_shown):
+            print()
+            print(f"{len(self.exceptions_summary_df) + len(self.patterns_df)} patterns were identified. {msg}")
+            return True
+        if show_exceptions and (len(self.exceptions_summary_df) > max_shown):
+            print()
+            print(f"{len(self.exceptions_summary_df)} issues were identified. {msg}")
+            return True
+        return False
+
+    def _open_detailed_results_file(self, output_folder):
+        """
+        Called by display_detailed_results() when saving to disk. Creates the output folder if necessary, and opens
+        the HTML report, writing its header. Returns the open file handle.
+        """
+        if output_folder is None:
+            self.output_folder = os.path.join(os.getcwd(), "Output")
+        else:
+            self.output_folder = output_folder
+        os.makedirs(self.output_folder, exist_ok=True)
+
+        f = open(os.path.join(self.output_folder, "Data_consistency.html"), 'w')
+        f.write("<html>" + os.linesep)
+        f.write("<head>" + os.linesep)
+        f.write("</head>" + os.linesep)
+        f.write("<body>" + os.linesep)
+        f.write("<h1>Data Consistency Check Results</h1>" + os.linesep)
+        f.write("<body>" + os.linesep)
+        return f
+
+    @staticmethod
+    def _close_detailed_results_file(f):
+        """Called by display_detailed_results() to complete and close the HTML report."""
+        f.write("</body>" + os.linesep)
+        f.write("</html>" + os.linesep)
+        f.close()
+
+    def _describe_display_filters(self, test_id_list, col_name_list, show_short_list_only, f):
+        """
+        Called by display_detailed_results() to describe the tests and columns requested, noting any that are
+        invalid, or tests whose patterns are hidden by show_short_list_only.
+        """
+        if test_id_list:
+            if len(test_id_list) > 1:
+                print_line(f)
+                s = f"Displaying results for tests: {str(test_id_list).replace('[','').replace(']','')}"
+                print_text(s, f)
+
+            # Check for any tests that are specified that contradict the setting for show_short_list_only
+            if show_short_list_only:
+                for test_id in test_id_list:
+                    if test_id not in self.get_patterns_shortlist():
+                        sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
+                        if len(sub_patterns_test):
+                            print_text((f"Not displaying patterns without exceptions for {test_id}. This test is not in "
+                                        f"the short list and the parameter show_short_list_only was set to True"), f)
+
+            # Check for any invalid test IDs
+            for test_id in test_id_list:
+                if test_id not in self.get_test_list():
+                    print_text(f"{test_id} is not a valid test ID", f)
+
+        if col_name_list:
+            print_line(f)
+            print_text(f"Displaying results for columns: {col_name_list}", f)
+
+            # Check for any invalid column names
+            for col_name in col_name_list:
+                if col_name not in self.orig_df.columns:
+                    print_text(f"{col_name} is not a valid column name", f)
+
+    def _print_finding_header(self, test_id, col_name, include_test_header, f):
+        """
+        Called by display_detailed_results() before each pattern or exception displayed. Prints a header for the test
+        (if include_test_header is True, which is the case for the first finding shown for each test), then a header
+        for the column(s) involved.
+        """
+        if include_test_header:
+            if f:
+                f.write(''.join(['.'] * 100) + "<br>" + os.linesep)
+                f.write("<H2>" + test_id + "</H2>" + os.linesep)
+            elif is_notebook():
+                print(''.join(['.'] * 100))
+                display(Markdown(f"### {test_id}"))
+            else:
+                stars = "******************************************************************************"
+                print("\n\n\n")
+                print(stars)
+                print(test_id)
+                print(stars)
+
+        hyphens = '----------------------------------------------------------------------------'
+        print_line(f)
+        if not is_notebook():
+            if f:
+                f.write(hyphens + "<br" + os.linesep)
+            else:
+                print_line(f)
+                print(hyphens)
+
+        s = f"Columns(s): {self._get_condensed_col_list(test_id, col_name)}"
+        if f:
+            f.write(s + "<br>" + os.linesep)
+        elif is_notebook():
+            display(Markdown(f"### {s}"))
+        else:
+            print(s)
+
+    def _display_pattern_details(self, test_id, columns_set, pattern, include_examples, plot_results, f):
+        """
+        Called by display_detailed_results() to describe one pattern found without exceptions, optionally with
+        example rows and plots.
+
+        pattern: pd.Series
+            The row of patterns_df describing the pattern.
+        """
+        print_text("Pattern found (without exceptions)", f)
+        if test_id in ['PREV_VALUES_DT', 'DECISION_TREE_REGRESSOR', 'DECISION_TREE_CLASSIFIER',
+                       'PREDICT_NULL_DT']:
+            print_text("**Description**:", f)
+            print_text(pattern['Description of Pattern'], f)
+        else:
+            print_text(f"**Description**: {pattern['Description of Pattern']}", f)
+        cols = [x.lstrip('"').rstrip('"') for x in columns_set.split(" AND ")]
+        if include_examples:
+            self._display_examples_not_flagged(
+                test_id,
+                cols,
+                columns_set,
+                is_patterns=True,
+                display_info=pattern['Display Information'],
+                f=f)
+        if plot_results:
+            self._draw_results_plots(
+                test_id,
+                cols,
+                columns_set,
+                show_exceptions=False,
+                display_info=pattern['Display Information'],
+                f=f)
+
+    def _display_exception_details(self, test_id, columns_set, issue_id, summary, include_examples, plot_results, f):
+        """
+        Called by display_detailed_results() to describe one pattern found with exceptions, optionally with example
+        rows that were and were not flagged, and plots.
+
+        summary: pd.Series
+            The row of exceptions_summary_df describing the pattern and its exceptions.
+        """
+        print_text(f"**Issue ID**: {issue_id}", f)
+        if test_id in ['RARE_VALUES', 'VERY_SMALL', 'VERY_LARGE', 'VERY_SMALL_ABS', 'LARGE_GIVEN_DATE',
+                       'SMALL_GIVEN_DATE', 'LARGE_GIVEN_VALUE', 'SMALL_GIVEN_VALUE', 'LARGE_GIVEN_PREFIX',
+                       'SMALL_GIVEN_PREFIX', 'LARGE_GIVEN_PAIR', 'SMALL_GIVEN_PAIR']:
+            print_text("Unusual values were found.\n", f)
+        else:
+            print_text("A strong pattern, and exceptions to the pattern, were found.\n", f)
+        if test_id in ['GROUPED_STRINGS', 'GROUPED_STRINGS_BY_NUMERIC']:
+            # These display special output, so the formatting must be preserved.
+            print_text("**Description**:", f)
+            print_text(summary['Description of Pattern'])
+        elif test_id in ['PREV_VALUES_DT', 'DECISION_TREE_REGRESSOR', 'DECISION_TREE_CLASSIFIER',
+                         'PREDICT_NULL_DT']:
+            # These display a decision tree, so the formatting must be preserved.
+            print_text("**Description**:", f)
+            print_text(summary['Description of Pattern'], f)
+        else:
+            multiline_desc = wrap(summary['Description of Pattern'], 100)
+            print_text(f"**Description**: {'<br>'.join(multiline_desc)}", f)
+        num_exceptions = summary['Number of Exceptions']
+        print_text((f"**Number of exceptions**: {num_exceptions} "
+                    f"({num_exceptions * 100.0 / self.num_rows:.4f}% of rows)"), f)
+
+        # Provide examples of the pattern and, for exceptions, of the exceptions
+        if include_examples:
+            # Display examples not flagged
+            result_col_name = self.get_results_col_name(test_id, columns_set)
+            cols = self.col_to_original_cols_dict[result_col_name]
+            self._display_examples_not_flagged(
+                test_id,
+                cols,
+                columns_set,
+                is_patterns=False,
+                display_info=summary['Display Information'],
+                f=f)
+
+            flagged_df = self._get_rows_flagged(test_id, columns_set)
+            if flagged_df is None:
+                return
+            print_line(f)
+            if len(flagged_df) > 10:
+                print_text("**Examples of flagged values**:", f)
+            else:
+                print_text("**Flagged values**:", f)
+            display_cols = list(self.col_to_original_cols_dict[self.get_results_col_name(test_id, columns_set)])
+            flagged_df = flagged_df.head(10)
+            self._draw_sample_dataframe(
+                flagged_df[display_cols],
+                test_id,
+                cols,
+                display_info=summary['Display Information'],
+                is_patterns=False,
+                f=f)
+            print_line(f)
+
+            # For some tests, we display the rows before and after the flagged rows as well, to provide
+            # context
+            if test_id in ['PREV_VALUES_DT', 'COLUMN_ORDERED_ASC', 'COLUMN_ORDERED_DESC',
+                           'COLUMN_TENDS_ASC', 'COLUMN_TENDS_DESC', 'SIMILAR_PREVIOUS', 'RUNNING_SUM',
+                           'GROUPED_STRINGS', 'GROUPED_STRINGS_BY_NUMERIC']:
+                print_line(f)
+                print_text((f"Showing a flagged example (row {flagged_df.index[0]}) with 5 rows "
+                            f"before and 5 rows after (if available) the flagged row"), f)
+                self._draw_rows_around_flagged_row(
+                    flagged_df[display_cols],
+                    test_id,
+                    cols,
+                    display_info=summary['Display Information'],
+                    f=f)
+
+        # For some tests, we display one or more plots to make the exceptions more clear
+        if plot_results:
+            result_col_name = self.get_results_col_name(test_id, columns_set)
+            cols = self.col_to_original_cols_dict[result_col_name]
+            self._draw_results_plots(
+                test_id,
+                cols,
+                columns_set,
+                show_exceptions=True,
+                display_info=summary['Display Information'],
+                f=f)
 
     def _draw_sample_dataframe(self, df, test_id, cols, display_info, is_patterns, f):
         """
