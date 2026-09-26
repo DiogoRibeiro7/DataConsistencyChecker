@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from data_consistency_checker.checker_state import CheckerState
+from data_consistency_checker.checker_utils import map_elements
 
 
 class MultiColumnTestsMixin(CheckerState):
@@ -92,7 +93,7 @@ class MultiColumnTestsMixin(CheckerState):
             # Test on a sample
             test_series = [z in (x, y) for x, y, z in
                            zip(self.sample_df[col_name_a], self.sample_df[col_name_b], self.sample_df[col_name_c])]
-            test_series = test_series | \
+            test_series = np.array(test_series) | \
                           sample_col_pair_both_null_dict[tuple(sorted([col_name_a, col_name_c]))] | \
                           sample_col_pair_both_null_dict[tuple(sorted([col_name_b, col_name_c]))]
 
@@ -102,7 +103,7 @@ class MultiColumnTestsMixin(CheckerState):
             # Test of the full data
             test_series = [z in (x, y) for x, y, z in
                            zip(self.orig_df[col_name_a], self.orig_df[col_name_b], self.orig_df[col_name_c])]
-            test_series = test_series | \
+            test_series = np.array(test_series) | \
                           col_pair_both_null_dict[tuple(sorted([col_name_a, col_name_c]))] | \
                           col_pair_both_null_dict[tuple(sorted([col_name_b, col_name_c]))]
             num_matching = test_series.tolist().count(True)
@@ -616,7 +617,7 @@ class MultiColumnTestsMixin(CheckerState):
         if len(self.numeric_cols) < 2:
             return
 
-        num_zeros_arr = self.orig_df.applymap(lambda x: (x is None) or (x == 0)).sum(axis=1)
+        num_zeros_arr = map_elements(self.orig_df, lambda x: (x is None) or (x == 0)).sum(axis=1)
 
         # If there are consistently no 0 values per row, this is not an interesting pattern
         most_common_count = statistics.mode(num_zeros_arr)
@@ -720,7 +721,7 @@ class MultiColumnTestsMixin(CheckerState):
         if len(self.numeric_cols) < 2:
             return
 
-        test_series = self.orig_df.applymap(lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
+        test_series = map_elements(self.orig_df, lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
         self._process_analysis_counts(
             test_id,
             list(self.orig_df.columns),

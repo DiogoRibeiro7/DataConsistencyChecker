@@ -7,7 +7,7 @@ import math
 import pandas as pd
 
 from .checker_state import CheckerState
-from .checker_utils import is_missing, replace_special_with_space
+from .checker_utils import as_str, is_missing, replace_special_with_space
 
 
 class AnalysisCacheMixin(CheckerState):
@@ -420,7 +420,7 @@ class AnalysisCacheMixin(CheckerState):
         self.words_list_dict = {}
         for col_name in self.string_cols:
             self.words_list_dict[col_name] = \
-                self.orig_df[col_name].astype(str).apply(replace_special_with_space).str.split().values
+                as_str(self.orig_df[col_name]).apply(replace_special_with_space).str.split().values
         return self.words_list_dict
 
     def get_word_counts_dict(self):
@@ -434,7 +434,7 @@ class AnalysisCacheMixin(CheckerState):
             return self.word_counts_dict
         self.word_counts_dict = {}
         for col_name in self.string_cols:
-            col_vals = self.orig_df[col_name].fillna("").astype(str).apply(replace_special_with_space)
+            col_vals = as_str(self.orig_df[col_name].fillna("")).apply(replace_special_with_space)
             word_counts_arr = [0 if x is None else len(x) for x in col_vals.str.split()]
             self.word_counts_dict[col_name] = word_counts_arr
         return self.word_counts_dict

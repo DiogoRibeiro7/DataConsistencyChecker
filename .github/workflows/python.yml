@@ -73,6 +73,21 @@ jobs:
           fail_ci_if_error: false
         continue-on-error: true
 
+  test-latest:
+    name: Tests (latest dependency releases)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install the package with the newest release of each dependency
+        run: python -m pip install . pytest
+      - name: Show the dependency versions
+        run: python -m pip list
+      - name: Run tests
+        run: python -m pytest -q
+
   package:
     name: Package Build
     runs-on: ubuntu-latest

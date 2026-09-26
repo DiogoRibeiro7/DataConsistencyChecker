@@ -776,7 +776,7 @@ class ResultsMixin(CheckerState):
             return len(set(cols_arr).intersection(col_name_list)) == 0
 
         def check_exception_col_includes_list(row):
-            cols_arr = self.col_to_original_cols_dict[self.get_results_col_name(row[0], row[1])]
+            cols_arr = self.col_to_original_cols_dict[self.get_results_col_name(row.iloc[0], row.iloc[1])]
             return len(set(cols_arr).intersection(col_name_list)) == 0
 
         num_specfied = 0

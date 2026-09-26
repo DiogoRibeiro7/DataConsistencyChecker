@@ -13,7 +13,19 @@ import numpy as np
 import pandas as pd
 
 from .checker_state import CheckerState
-from .checker_utils import print_text
+from .checker_utils import normalise_dtypes, print_text
+
+
+def _with_missing(values: pd.Series, positions: list[int]) -> pd.Series:
+    """Return a copy of ``values`` with missing values at the given positions.
+
+    pandas 3 no longer upcasts a boolean column to hold a missing value, so this is done explicitly, as pandas 2
+    did: to object, holding NaN.
+    """
+    is_bool = values.dtype == bool
+    values = values.astype(object) if is_bool else values.copy()
+    values.iloc[positions] = np.nan if is_bool else None
+    return values
 
 
 class SynthDataMixin(CheckerState):
@@ -71,25 +83,19 @@ class SynthDataMixin(CheckerState):
 
         if add_nones == "one-row":
             for col_name in self.synth_df.columns:
-                self.synth_df.loc[0, col_name] = None
+                self.synth_df[col_name] = _with_missing(self.synth_df[col_name], [0])
         elif add_nones == "in-sync":
             none_idxs = random.sample(range(self.num_synth_rows - 10), self.num_synth_rows // 2)
             for col_name in self.synth_df.columns:
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
+                self.synth_df[col_name] = _with_missing(self.synth_df[col_name], none_idxs)
         elif add_nones == "random":
             for col_name in self.synth_df.columns:
                 none_idxs = random.sample(range(self.num_synth_rows - 10), self.num_synth_rows // 2)
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
+                self.synth_df[col_name] = _with_missing(self.synth_df[col_name], none_idxs)
         elif add_nones == "80-percent":
             none_idxs = random.sample(range(self.num_synth_rows - 10), int(self.num_synth_rows * 0.8))
             for col_name in self.synth_df.columns:
-                col_vals = self.synth_df[col_name].copy()
-                col_vals.iloc[none_idxs] = None
-                self.synth_df[col_name] = col_vals
+                self.synth_df[col_name] = _with_missing(self.synth_df[col_name], none_idxs)
 
         return self.synth_df
 
@@ -100,7 +106,7 @@ class SynthDataMixin(CheckerState):
         """
         self.synth_df = pd.concat([
             self.synth_df,
-            pd.DataFrame({col_name: col_values})],
+            normalise_dtypes(pd.DataFrame({col_name: col_values}))],
             axis=1)
 
 
