@@ -767,7 +767,7 @@ class PlotsMixin:
                     'than the other column. Redundant edges are removed. The x-position of the nodes represents the '
                     'median value of the column.'))
 
-    def __draw_results_plots(self, test_id, cols, columns_set, show_exceptions, display_info, f):
+    def _draw_results_plots(self, test_id, cols, columns_set, show_exceptions, display_info, f):
         """Dispatch to appropriate plotting routine for a test."""
 
         if test_id in ['UNUSUAL_ORDER_MAGNITUDE', 'FEW_NEIGHBORS', 'FEW_WITHIN_RANGE', 'VERY_SMALL', 'VERY_LARGE',
