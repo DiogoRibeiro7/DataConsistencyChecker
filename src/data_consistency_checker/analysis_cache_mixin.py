@@ -573,8 +573,8 @@ class AnalysisCacheMixin(CheckerState):
     def get_col_triples_any_null_bool_dict(self):
         """
         Similar to get_col_pairs_either_null_bool_dict(), but checks triples of numeric columns and triples where one
-        is binary and two are numeric. Each element contains a single boolean value for each pair of columns indicating
-        True if there are at least 10% of the rows having no nulls.
+        is binary and two are numeric. Each element contains a single boolean value for each triple of columns,
+        True if over 90% of the rows have a null in at least one of the three columns.
         """
         if self.col_triples_all_null_bool_dict:
             return self.col_triples_all_null_bool_dict
@@ -596,7 +596,7 @@ class AnalysisCacheMixin(CheckerState):
         for triple in triples_arr:
             triple = list(triple)
             self.col_triples_all_null_bool_dict[tuple(sorted(triple))] = \
-                self.orig_df[triple].isna().sum(axis=1).tolist().count(True) > threshold
+                self.orig_df[triple].isna().any(axis=1).sum() > threshold
 
         return self.col_triples_all_null_bool_dict
 
