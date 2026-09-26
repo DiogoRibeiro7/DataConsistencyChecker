@@ -161,6 +161,16 @@ poetry run mkdocs serve           # preview at http://127.0.0.1:8000
 poetry run mkdocs build --strict  # what CI runs
 ```
 
+Keep the Material theme dark by default (slate, indigo, cyan), with a visible light-mode toggle. The landing
+page uses the `dcc-hero` and three-column `dcc-cards` layouts in `docs/stylesheets/extra.css`; check layout,
+contrast and navigation on desktop and mobile in both themes when changing them. Keep the design restrained
+and the content specific to the package.
+
+Use mkdocstrings for API signatures, Mermaid fences for workflow diagrams and LaTeX math for formulas.
+The API reference and checks catalog must continue to reflect the source code. Builds are strict by default;
+fix build warnings before submitting. The Docs workflow validates every pull request and publishes relevant
+changes on `main` with the official configure, upload-artifact and deploy GitHub Pages Actions.
+
 ## Pull requests
 
 - Keep each pull request focused on one change, and describe what it changes and how it was validated.

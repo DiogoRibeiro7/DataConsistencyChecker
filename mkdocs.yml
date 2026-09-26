@@ -5,36 +5,44 @@ repo_url: https://github.com/DiogoRibeiro7/DataConsistencyChecker
 repo_name: DiogoRibeiro7/DataConsistencyChecker
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; 2023&ndash;2024 Brett Kennedy, 2026 Diogo Ribeiro &mdash; MIT License
+strict: true
 
 theme:
   name: material
   features:
     - content.code.copy
     - content.action.edit
+    - content.tabs.link
     - navigation.footer
     - navigation.indexes
     - navigation.sections
+    - navigation.tabs
     - navigation.top
     - search.highlight
     - search.suggest
     - toc.follow
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
+    - scheme: slate
       primary: indigo
-      accent: indigo
+      accent: cyan
       toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/weather-sunny
+        icon: material/brightness-7
         name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
   icon:
     repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js
 
 exclude_docs: |
   _hooks/
@@ -66,17 +74,25 @@ plugins:
 markdown_extensions:
   - admonition
   - attr_list
+  - def_list
+  - footnotes
   - md_in_html
   - tables
   - toc:
       permalink: true
   - pymdownx.details
+  - pymdownx.arithmatex:
+      generic: true
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets:
       check_paths: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
 
@@ -105,3 +121,4 @@ nav:
       - Contributing: development/contributing.md
       - Testing: development/testing.md
       - Architecture: development/architecture.md
+  - Releases: https://github.com/DiogoRibeiro7/DataConsistencyChecker/releases
