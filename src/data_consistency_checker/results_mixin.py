@@ -681,7 +681,7 @@ class ResultsMixin(CheckerState):
             if allow_patterns:
                 self.patterns_arr.append([test_id,
                                           col_name,
-                                          f'{pattern_string_1} {test_series[0]} {pattern_string_2}',
+                                          f'{pattern_string_1} {test_series.dropna().iloc[0]} {pattern_string_2}',
                                           display_info])
                 self.col_to_original_cols_dict[col_name] = original_cols
         elif test_series.nunique() <= 5:
