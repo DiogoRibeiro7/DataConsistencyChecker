@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: DataConsistencyChecker
+abstract: >-
+  Interpretable data-quality checks, pattern discovery and outlier detection for tabular data. It runs a large
+  set of simple, explainable checks over a pandas DataFrame and reports the rows that break each pattern found.
+authors:
+  - given-names: Diogo
+    family-names: Ribeiro
+  - given-names: Brett
+    family-names: Kennedy
+repository-code: "https://github.com/DiogoRibeiro7/DataConsistencyChecker"
+url: "https://diogoribeiro7.github.io/DataConsistencyChecker/"
+license: MIT
+keywords:
+  - data-quality
+  - data-validation
+  - data-profiling
+  - outlier-detection
+  - anomaly-detection
+  - pattern-detection
+  - tabular-data
+references:
+  - type: software
+    title: DataConsistencyChecker
+    abstract: The original project this package is based on.
+    authors:
+      - given-names: Brett
+        family-names: Kennedy
+    repository-code: "https://github.com/Brett-Kennedy/DataConsistencyChecker"
+    year: 2023
