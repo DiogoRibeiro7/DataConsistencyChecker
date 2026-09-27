@@ -136,13 +136,7 @@ def test_position_non_alphanumeric_counts_positions_from_the_end() -> None:
     assert _findings(pd.DataFrame({"code": values}), "POSITION_NON-ALPHANUMERIC") == ["code"]
 
 
-@pytest.mark.parametrize("smaller_sums_value", [
-    0,
-    pytest.param(1, marks=pytest.mark.xfail(
-        strict=True, raises=AssertionError,
-        reason="Known defect: when the second value goes with the smaller sums, the check tests the opposite direction",
-    )),
-])
+@pytest.mark.parametrize("smaller_sums_value", [0, 1])
 def test_binary_matches_sum_finds_which_value_goes_with_smaller_sums(smaller_sums_value: int) -> None:
     rng = np.random.default_rng(0)
     df = pd.DataFrame({"a": rng.integers(0, 100, 200).astype(float), "b": rng.integers(0, 100, 200).astype(float)})

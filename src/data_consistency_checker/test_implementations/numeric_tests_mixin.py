@@ -1251,7 +1251,7 @@ class NumericTestsMixin(CheckerState):
             if min_normal == max_normal:
                 desc_str = f'The column has values with consistently {min_normal} trailing zeros.'
 
-            if min_normal > 0:
+            if min_normal == 0:
                 exception_str = f" -- flagging values with with {max_normal + 3} or more trailing zeros"
             else:
                 exception_str = (f" -- flagging values with less than {min_normal} or with more than {max_normal + 2} "
@@ -3750,7 +3750,7 @@ class NumericTestsMixin(CheckerState):
                     test_np = two_rows_np[:, subset]
                     col_mins = test_np.min(axis=1)
                     test_series = np.where(two_rows_np[:, col_idx] == col_mins, True, False)
-                    if test_series.tolist().count(False) > 0:
+                    if test_series.tolist().count(False) > 1:
                         continue
 
                     # Test on a subset of the rows

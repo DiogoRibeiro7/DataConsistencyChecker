@@ -947,8 +947,9 @@ class StringTestsMixin(CheckerState):
     def _check_many_chars(self, test_id):
         for col_name in self.string_cols:
             val_lens = as_str(self.orig_df[col_name].fillna("")).str.len()
-            q1 = val_lens.quantile(0.25)
-            q3 = val_lens.quantile(0.75)
+            val_lens_no_null = as_str(self.orig_df[col_name].dropna()).str.len()
+            q1 = val_lens_no_null.quantile(0.25)
+            q3 = val_lens_no_null.quantile(0.75)
             upper_limit = q3 + (self.iqr_limit * (q3 - q1))
             test_series = val_lens < upper_limit
             self._process_analysis_binary(
@@ -2893,7 +2894,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Test on a sample first
-            test_series = [True if v and w else
+            test_series = [True if v or w else
                            ((not v) and (not w) and (len(x) < len(y)) and (x != y[:len(x)]) and (x != y[-len(x):]) and (x in y))
                            for v, w, x, y in zip(
                                 sample_is_missing_dict[col_name_1],
@@ -2904,7 +2905,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Test on the full data
-            test_series = [True if v and w else
+            test_series = [True if v or w else
                            ((not v) and (not w) and (len(x) < len(y)) and (x != y[:len(x)]) and (x != y[-len(x):]) and (x in y))
                            for v, w, x, y in zip(
                                 is_missing_dict[col_name_1],

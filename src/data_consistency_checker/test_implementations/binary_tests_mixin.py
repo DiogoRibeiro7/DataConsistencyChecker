@@ -246,12 +246,12 @@ class BinaryTestsMixin(CheckerState):
                     test_series = np.array(~mask_ab)
                     pattern_str = f'"{col_name_1}" value: {val_1a} consistently implies "{col_name_2}" value: {val_2a}'
             elif count_ba < self.freq_contamination_level:
-                expected_count = (count_1a / self.num_rows) * (count_2b)
+                expected_count = (count_1b / self.num_rows) * (count_2a)
                 if count_ba < expected_count:
                     test_series = np.array(~mask_ba)
                     pattern_str = f'"{col_name_1}" value: {val_1b} consistently implies "{col_name_2}" value: {val_2b}'
             elif count_bb < self.freq_contamination_level:
-                expected_count = (count_1a / self.num_rows) * (count_2b)
+                expected_count = (count_1b / self.num_rows) * (count_2b)
                 if count_bb < expected_count:
                     test_series = np.array(~mask_bb)
                     pattern_str = f'"{col_name_1}" value: "{val_1b}" consistently implies "{col_name_2}" value: {val_2a}'
@@ -399,7 +399,8 @@ class BinaryTestsMixin(CheckerState):
             def get_or(x):
                 or_v = 0
                 for v in x:
-                    or_v = or_v | (is_missing(v) | v)
+                    # Missing values are filled with -1 below. As in get_and(), they leave the result unchanged.
+                    or_v = or_v | (is_missing(v) | max(v, 0))
                 return or_v
 
             # Determine which other columns may potentially be OR'd to match col_name.
@@ -542,7 +543,7 @@ class BinaryTestsMixin(CheckerState):
 
                 col_vals_3 = self.column_unique_vals[col_name_3]
                 if self.orig_df[col_name_3].tolist().count(col_vals_3[0]) < (self.num_rows * 0.1) or \
-                        self.orig_df[col_name_3].tolist().count(col_vals_1[1]) < (self.num_rows * 0.1):
+                        self.orig_df[col_name_3].tolist().count(col_vals_3[1]) < (self.num_rows * 0.1):
                     continue
 
                 # Test on sample first
@@ -1354,7 +1355,7 @@ class BinaryTestsMixin(CheckerState):
                     threshold = val_at_frac_1
 
                     # Test on a sample of rows
-                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
+                    test_series = [bool(x == val1 and y <= threshold or x == val0 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col].head(sample_size), sum_arr.head(sample_size))]
                     test_series = np.array(test_series) | \
                                   self.orig_df[bin_col].head(sample_size).isna() | \
@@ -1364,7 +1365,7 @@ class BinaryTestsMixin(CheckerState):
                         continue
 
                     # Test on the full columns
-                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
+                    test_series = [bool(x == val1 and y <= threshold or x == val0 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col], sum_arr)]
                     if not check_nulls_matching(bin_col, num_col_1, num_col_2):
                         continue
@@ -1378,7 +1379,7 @@ class BinaryTestsMixin(CheckerState):
                         [num_col_1, num_col_2, bin_col],
                         test_series,
                         (f'Column "{bin_col}" is consistently {val1} when the sum of columns "{num_col_1}" and '
-                         f'"{num_col_2}" is over {threshold} and {val0} when the sum is under'),
+                         f'"{num_col_2}" is under {threshold} and {val0} when the sum is over.'),
                     )
 
     ##################################################################################################################

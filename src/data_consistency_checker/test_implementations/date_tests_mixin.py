@@ -658,7 +658,7 @@ class DateTestsMixin(CheckerState):
             col_name_1 = self.date_cols[col_name_idx_1]
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
-                matches_arr = [(y1 == y2) and (m1 == m2) and (d1 == d1) for y1, y2, m1, m2, d1, d2 in
+                matches_arr = [(y1 == y2) and (m1 == m2) and (d1 == d2) for y1, y2, m1, m2, d1, d2 in
                                zip(pd.to_datetime(self.orig_df[col_name_1]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.month,
