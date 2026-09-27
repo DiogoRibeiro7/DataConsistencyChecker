@@ -86,3 +86,27 @@ def test_similar_to_negative_treats_zero_as_the_negative_of_zero() -> None:
 
     assert _patterns(checker) == ['"x" AND "y"']
     assert checker.exceptions_summary_df.empty
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# LARGER_THAN_ABS_DIFF
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def test_larger_than_abs_diff_skips_a_triple_with_any_two_columns_usually_equal() -> None:
+    # The check is not enabled, so its method is called directly. Of the three pairs of columns that are skipped
+    # when usually equal, one was tested twice and another never. Here "x" is usually equal to "z", so
+    # "x" > abs("y" - "z") holds trivially, and was reported.
+    rng = np.random.default_rng(0)
+    x = rng.integers(100, 200, 1000).astype(float)
+    z = x.copy()
+    z[:50] += 1  # Equal in 95% of the rows
+    df = pd.DataFrame({"x": x, "y": rng.integers(50, 150, 1000).astype(float), "z": z})
+    checker = DataConsistencyChecker(verbose=-1)
+    checker.init_data(df)
+    checker.freq_contamination_level = 5  # As check_data_quality() sets it by default: 0.5% of the rows
+
+    checker._check_larger_than_abs_diff("LARGER_THAN_ABS_DIFF")
+
+    assert checker.patterns_arr == []
+    assert checker.results_summary_arr == []

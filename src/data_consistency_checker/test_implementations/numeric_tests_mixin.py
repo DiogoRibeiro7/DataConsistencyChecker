@@ -3393,7 +3393,7 @@ class NumericTestsMixin(CheckerState):
             num_same = (self.orig_df[col_a] == self.orig_df[col_c]).tolist().count(True)
             if num_same > (self.num_rows * 0.9):
                 return True
-            num_same = (self.orig_df[col_a] == self.orig_df[col_c]).tolist().count(True)
+            num_same = (self.orig_df[col_b] == self.orig_df[col_c]).tolist().count(True)
             if num_same > (self.num_rows * 0.9):
                 return True
 
