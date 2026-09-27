@@ -5,6 +5,8 @@ Each test builds a small dataset on which a check and its mirror (or its sibling
 
 from __future__ import annotations
 
+import string
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -28,6 +30,16 @@ def _patterns(checker: DataConsistencyChecker) -> list[str]:
 def _exceptions(checker: DataConsistencyChecker) -> list[tuple[str, int]]:
     exceptions = checker.exceptions_summary_df
     return list(zip(exceptions["Column(s)"], exceptions["Number of Exceptions"]))
+
+
+def _findings(checker: DataConsistencyChecker) -> list[tuple]:
+    """The patterns and exceptions found, with their descriptions."""
+    patterns = checker.patterns_df
+    exceptions = checker.exceptions_summary_df
+    return sorted(
+        list(zip(patterns["Test ID"], patterns["Column(s)"], patterns["Description of Pattern"]))
+        + list(zip(exceptions["Test ID"], exceptions["Column(s)"], exceptions["Description of Pattern"],
+                   exceptions["Number of Exceptions"])))
 
 
 def _flagged_rows(checker: DataConsistencyChecker, test_id: str, column_set: str) -> list[int]:
@@ -97,3 +109,31 @@ def test_first_char_case_checks_use_unicode_case(test_id, chars, odd_value, odd_
     else:
         assert _patterns(checker) == ["code"]
         assert _exceptions(checker) == []
+
+
+@pytest.mark.parametrize(
+    ("test_id", "chars"),
+    [
+        ("FIRST_CHAR_ALPHA", string.ascii_letters),
+        ("FIRST_CHAR_NUMERIC", string.digits),
+        ("FIRST_CHAR_SMALL_SET", "ABC"),
+        ("FIRST_CHAR_UPPERCASE", string.ascii_uppercase),
+        ("FIRST_CHAR_LOWERCASE", string.ascii_lowercase),
+        ("LAST_CHAR_SMALL_SET", "abc"),
+    ],
+)
+def test_first_and_last_char_checks_look_past_whitespace(test_id, chars) -> None:
+    # Leading and trailing whitespace have their own checks. Only FIRST_CHAR_ALPHA and LAST_CHAR_SMALL_SET skipped it
+    # when testing the first or last character, and none of the FIRST_CHAR_* checks when deciding whether all values
+    # start with the same character.
+    at_end = test_id.startswith("LAST_CHAR")
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({"varied": _codes(chars, rng, at_end), "same": _codes(chars[0], rng, at_end)})
+    padded = df.copy()
+    for col_name in padded.columns:
+        padded.loc[[5, 17], col_name] = [f"{x}  " if at_end else f"  {x}" for x in padded.loc[[5, 17], col_name]]
+
+    expected = _findings(_run(df, [test_id]))
+
+    assert (test_id, "varied") in [finding[:2] for finding in expected]
+    assert _findings(_run(padded, [test_id])) == expected

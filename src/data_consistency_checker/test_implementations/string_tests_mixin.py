@@ -311,7 +311,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_alpha(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -351,7 +351,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_numeric(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -361,12 +361,12 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Test on a sample of the full data
-            sample_series = as_str(self.sample_df[col_name]).str.slice(0, 1).str.isdigit()
+            sample_series = as_str(self.sample_df[col_name]).str.lstrip().str.slice(0, 1).str.isdigit()
             if sample_series.tolist().count(False) > 1:
                 continue
 
             # Test of the full data
-            test_series = as_str(self.orig_df[col_name]).str.slice(0, 1).str.isdigit()
+            test_series = as_str(self.orig_df[col_name]).str.lstrip().str.slice(0, 1).str.isdigit()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
@@ -400,7 +400,7 @@ class StringTestsMixin(CheckerState):
             if self.orig_df[col_name].nunique() < math.sqrt(self.num_rows):
                 continue
 
-            test_series = pd.Series([str(x)[:1] if not y else None for x, y in zip(self.orig_df[col_name], self.orig_df[col_name].isna())])
+            test_series = pd.Series([str(x).lstrip()[:1] if not y else None for x, y in zip(self.orig_df[col_name], self.orig_df[col_name].isna())])
             num_non_null_vals = self.orig_df[col_name].notna().sum()
 
             counts_series = test_series.value_counts(normalize=False)  # Get the counts for each first letter
@@ -442,7 +442,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_uppercase(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -451,7 +451,7 @@ class StringTestsMixin(CheckerState):
             if value_lens_arr.quantile(0.9) <= 1:
                 continue
 
-            test_series = as_str(self.orig_df[col_name]).str[:1].str.isupper()
+            test_series = as_str(self.orig_df[col_name]).str.lstrip().str[:1].str.isupper()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
@@ -476,7 +476,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_lowercase(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -485,7 +485,7 @@ class StringTestsMixin(CheckerState):
             if value_lens_arr.quantile(0.9) <= 1:
                 continue
 
-            test_series = as_str(self.orig_df[col_name]).str[:1].str.islower()
+            test_series = as_str(self.orig_df[col_name]).str.lstrip().str[:1].str.islower()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
