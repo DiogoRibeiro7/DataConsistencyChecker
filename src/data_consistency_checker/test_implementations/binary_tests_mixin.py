@@ -856,7 +856,7 @@ class BinaryTestsMixin(CheckerState):
             for num_col in self.numeric_cols:
                 # Check the numeric column that has the values has a reasonable number of values besides the most frequent
                 if self.orig_df[num_col].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
-                    return
+                    continue
 
                 set_0_numeric_vals = pd.Series([float(x) for x in sub_df_0[num_col] if str(x).replace('-', '').replace('.', '').isdigit()])
                 set_1_numeric_vals = pd.Series([float(x) for x in sub_df_1[num_col] if str(x).replace('-', '').replace('.', '').isdigit()])
@@ -875,7 +875,7 @@ class BinaryTestsMixin(CheckerState):
 
                 # Test if the numeric values are strictly larger for value 0
                 if set_0_min > set_1_max:
-                    # Test if the binary column is consistently vol_0 for the larger values in the numeric column
+                    # Test if the binary column is consistently val0 for the larger values in the numeric column
                     threshold = statistics.mean([set_0_min, set_1_max])
                     test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
@@ -890,7 +890,7 @@ class BinaryTestsMixin(CheckerState):
 
                 # Test if the numeric values are strictly larger for value 1
                 elif set_1_min > set_0_max:
-                    # Test if the binary column is consistently vol_0 for the larger values in the numeric column
+                    # Test if the binary column is consistently val1 for the larger values in the numeric column
                     threshold = statistics.mean([set_1_min, set_0_max])
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
@@ -905,7 +905,7 @@ class BinaryTestsMixin(CheckerState):
 
                 # Test if the numeric values tend to be larger for value 0
                 elif set_0_01_percentile > set_1_99_percentile:
-                    # Test if the binary column is consistently vol_0 for the larger values in the numeric column
+                    # Test if the binary column is consistently val0 for the larger values in the numeric column
                     threshold = statistics.mean([set_0_01_percentile, set_1_99_percentile])
                     test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
@@ -918,9 +918,9 @@ class BinaryTestsMixin(CheckerState):
                          f'values under {threshold} and "{val0}" when values are over {threshold}')
                     )
 
-                # Test if the numeric values tend to be larger for value 0
+                # Test if the numeric values tend to be larger for value 1
                 elif set_1_01_percentile > set_0_99_percentile:
-                    # Test if the binary column is consistently vol_1 for the larger values in the numeric column
+                    # Test if the binary column is consistently val1 for the larger values in the numeric column
                     threshold = statistics.mean([set_1_01_percentile, set_0_99_percentile])
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
                                    for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
@@ -1246,9 +1246,9 @@ class BinaryTestsMixin(CheckerState):
             # Check the two columns that have the values that are checked have a reasonable number of values besides
             # the most frequent
             if self.orig_df[num_col_1].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
-                return
+                continue
             if self.orig_df[num_col_2].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
-                return
+                continue
 
             if not self.check_columns_same_scale_2(num_col_1, num_col_2):
                 continue
@@ -1272,7 +1272,8 @@ class BinaryTestsMixin(CheckerState):
                 continue
 
             for num_col_1, num_col_2 in pairs:
-                if not self.check_columns_same_scale_2(num_col_1, num_col_2):
+                # Pairs skipped above, with a near-constant column or columns on different scales, have no sums
+                if (num_col_1, num_col_2) not in sums_arr_dict:
                     continue
 
                 if (nunique_dict[num_col_1] < 10) or (nunique_dict[num_col_2] < 10):
@@ -1297,7 +1298,7 @@ class BinaryTestsMixin(CheckerState):
                 val_0_for_smaller = False
                 val_1_for_smaller = False
 
-                # Test if the binary column is consistently val_0 for the larger values in the numeric column.
+                # Test if the binary column is consistently val_0 for the smaller values in the numeric column.
                 # If bin_col is val_0 for smaller values, then the threshold will be at the point in the sorted
                 # array corresponding to the number of instances of val_0
                 val_at_frac_0 = sorted_sum_arr[num_non_null_val_0]
