@@ -149,6 +149,22 @@ def test_min_and_max_of_columns_allow_an_exception_in_the_rows_checked_first(tes
     assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [row]
 
 
+def test_rounding_describes_both_limits_when_values_usually_have_trailing_zeros() -> None:
+    # The two exception descriptions were swapped. With at least one trailing zero usual, values with too few are
+    # flagged too, but the description gave only the upper limit.
+    rng = np.random.default_rng(0)
+    values = rng.integers(1, 10, 300) * 10 ** rng.integers(1, 3, 300)  # 1 or 2 trailing zeros
+    values[100] = 7
+
+    checker = _run(pd.DataFrame({"n": values}), ["ROUNDING"])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [100]
+    assert checker.exceptions_summary_df["Description of Pattern"].tolist() == [
+        "The column has values with consistently 1 to 2 trailing zeros, with exceptions -- flagging values with less "
+        "than 1 or with more than 4 trailing zeros."
+    ]
+
+
 def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
     # The day of the first column was compared with itself, so only the year and month were checked.
     start = pd.Series(pd.date_range("2020-01-01", periods=1000, freq="D"))

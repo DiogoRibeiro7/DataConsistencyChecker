@@ -1251,7 +1251,7 @@ class NumericTestsMixin(CheckerState):
             if min_normal == max_normal:
                 desc_str = f'The column has values with consistently {min_normal} trailing zeros.'
 
-            if min_normal > 0:
+            if min_normal == 0:
                 exception_str = f" -- flagging values with with {max_normal + 3} or more trailing zeros"
             else:
                 exception_str = (f" -- flagging values with less than {min_normal} or with more than {max_normal + 2} "
