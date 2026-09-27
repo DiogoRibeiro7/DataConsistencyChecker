@@ -3750,7 +3750,7 @@ class NumericTestsMixin(CheckerState):
                     test_np = two_rows_np[:, subset]
                     col_mins = test_np.min(axis=1)
                     test_series = np.where(two_rows_np[:, col_idx] == col_mins, True, False)
-                    if test_series.tolist().count(False) > 0:
+                    if test_series.tolist().count(False) > 1:
                         continue
 
                     # Test on a subset of the rows

@@ -112,6 +112,27 @@ def test_binary_xor_checks_inputs_with_other_values_than_the_result(input_values
     assert checker.patterns_df["Column(s)"].tolist() == ['"in_a" AND "in_b" AND "out"']
 
 
+@pytest.mark.parametrize(("test_id", "func"), [("MIN_OF_COLUMNS", "min"), ("MAX_OF_COLUMNS", "max")])
+def test_min_and_max_of_columns_allow_an_exception_in_the_rows_checked_first(test_id, func) -> None:
+    # Both checks first compare two sampled rows. MIN_OF_COLUMNS skipped the columns if either row was an exception,
+    # where MAX_OF_COLUMNS, and the next check on a larger sample, allow one.
+    def rows_checked_first(data):
+        checker = DataConsistencyChecker(verbose=-1)
+        checker.init_data(data)
+        return checker.sample_df[checker.numeric_cols].sample(n=2, random_state=0).index.tolist()
+
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({name: rng.integers(100, 1000, 300) for name in ["a", "b", "c"]}).astype(float)
+    df["target"] = getattr(df[["a", "b", "c"]], func)(axis=1)
+    row = rows_checked_first(df)[0]
+    df.loc[row, "target"] = df.loc[row, ["a", "b", "c"]].median()  # neither the minimum nor the maximum
+    assert row in rows_checked_first(df)
+
+    checker = _run(df, [test_id])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [row]
+
+
 def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
     # The day of the first column was compared with itself, so only the year and month were checked.
     start = pd.Series(pd.date_range("2020-01-01", periods=1000, freq="D"))
