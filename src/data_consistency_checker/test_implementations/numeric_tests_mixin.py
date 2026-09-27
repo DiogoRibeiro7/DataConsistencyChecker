@@ -15,7 +15,9 @@ import statistics
 import string
 import sys
 import warnings
+from collections.abc import Callable, Sequence
 from itertools import combinations
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -26,11 +28,6 @@ from sklearn.linear_model import Lasso
 from sklearn.preprocessing import RobustScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-try:
-    from termcolor import colored
-except ImportError:  # pragma: no cover - optional presentation dependency
-    colored = None
-
 from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import (
     array_to_str,
@@ -40,6 +37,12 @@ from data_consistency_checker.checker_utils import (
     is_missing,
     safe_div,
 )
+
+colored: Callable[..., str] | None
+try:
+    from termcolor import colored
+except ImportError:  # pragma: no cover - optional presentation dependency
+    colored = None
 
 digits = string.digits
 
@@ -160,8 +163,9 @@ class NumericTestsMixin(CheckerState):
             else:
                 larger_pairs_arr.append([col_name_1, col_name_2])
 
-        patterns_arr = []  # The set of unique columns in each pattern
-        patterns_pairs_arr = []  # The set of pair-wise relationships between columns in each pattern
+        patterns_arr: list[list[str]] = []  # The set of unique columns in each pattern
+        # The set of pair-wise relationships between columns in each pattern
+        patterns_pairs_arr: list[list[list[str]]] = []
         for col_name_1, col_name_2 in larger_pairs_arr:
             found_existing_pattern = False
             for p_idx, p in enumerate(patterns_arr):
@@ -176,11 +180,11 @@ class NumericTestsMixin(CheckerState):
                 patterns_arr.append([col_name_1, col_name_2])
                 patterns_pairs_arr.append([[col_name_1, col_name_2]])
 
-        for pattern_idx, cols in enumerate(patterns_arr):
+        for pattern_idx, pattern_cols in enumerate(patterns_arr):
 
             # Order the columns in the pattern based on their median values
-            col_medians = [self.column_medians[c] for c in cols]
-            cols = np.array(cols)[np.argsort(col_medians)]
+            col_medians = [self.column_medians[c] for c in pattern_cols]
+            cols = np.array(pattern_cols)[np.argsort(col_medians)]
 
             if len(cols) == 2:
                 desc = (f'"{patterns_pairs_arr[pattern_idx][0][0]}" is consistently larger than '
@@ -631,15 +635,15 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('sim_prev rand', [random.random() for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('sim_prev all', random_walk)
         self._add_synthetic_column('sim_prev most', random_walk)
-        self.synth_df.loc[999, 'sim_prev most'] += 15
+        self.synth_df.loc[999, 'sim_prev most'] = cast(float, self.synth_df.loc[999, 'sim_prev most']) + 15
 
-        random_walk = [datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")]
-        prev_val = random_walk[0]
+        date_walk = [datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")]
+        prev_date = date_walk[0]
         for _i in range(self.num_synth_rows-1):
-            new_val = prev_val + relativedelta(days=np.random.randint(-10, 10))
-            random_walk.append(new_val)
-            prev_val = new_val
-        self._add_synthetic_column('sim_prev date_most', random_walk)
+            new_date = prev_date + relativedelta(days=np.random.randint(-10, 10))
+            date_walk.append(new_date)
+            prev_date = new_date
+        self._add_synthetic_column('sim_prev date_most', date_walk)
         self.synth_df.loc[999, 'sim_prev date_most'] = datetime.datetime.strptime("01-7-2025", "%d-%m-%Y")
 
 
@@ -660,12 +664,14 @@ class NumericTestsMixin(CheckerState):
             if col_name in self.numeric_cols:
                 num_vals = self.numeric_vals_filled[col_name][non_null_arr]
                 diff_to_prev_arr = abs(num_vals.diff())
-                col_med = self.column_medians[col_name]
+                col_med: float | pd.Timestamp = self.column_medians[col_name]
                 diff_to_median_arr = abs(num_vals - self.column_medians[col_name])
             else:
                 date_vals = pd.to_datetime(self.orig_df[col_name])[non_null_arr]
                 diff_to_prev_arr = abs(date_vals.diff())
-                col_med = pd.to_datetime(self.orig_df[col_name]).quantile(0.5, interpolation='midpoint')
+                # pandas-stubs types the quantile of a datetime Series as a float
+                col_med = cast(pd.Timestamp,
+                               pd.to_datetime(self.orig_df[col_name]).quantile(0.5, interpolation='midpoint'))
                 diff_to_median_arr = abs(date_vals - col_med)
             test_series = diff_to_prev_arr < diff_to_median_arr
             test_series.iloc[0] = True  # The first value has no difference from the previous, so can not be tested
@@ -776,9 +782,9 @@ class NumericTestsMixin(CheckerState):
             if len(self.numeric_vals[col_name]) < self.num_rows:
                 continue
 
-            sorted_vals = copy.copy(self.orig_df[col_name].astype(float).values)
-            sorted_vals.sort()
-            sorted_vals = pd.Series(sorted_vals)
+            sorted_arr = copy.copy(self.orig_df[col_name].astype(float).to_numpy())
+            sorted_arr.sort()
+            sorted_vals = pd.Series(sorted_arr)
             diff_from_prev = sorted_vals.diff(1)
             diff_from_next = sorted_vals.diff(-1)
             diff_threshold = (self.numeric_vals[col_name].max() - self.numeric_vals[col_name].min()) / 10.0
@@ -812,9 +818,10 @@ class NumericTestsMixin(CheckerState):
                 )
 
         for col_name in self.date_cols:
-            sorted_vals = copy.copy(pd.to_datetime(self.orig_df[col_name]).values)
-            sorted_vals.sort()
-            sorted_vals = pd.Series(sorted_vals)
+            # .values of a datetime Series is a datetime64 array, converted to UTC if timezone-aware
+            sorted_arr = copy.copy(cast(np.ndarray, pd.to_datetime(self.orig_df[col_name]).values))
+            sorted_arr.sort()
+            sorted_vals = pd.Series(sorted_arr)
             diff_from_prev = sorted_vals.diff(1)
             diff_from_next = sorted_vals.diff(-1)
             diff_threshold = (pd.to_datetime(self.orig_df[col_name]).max() -
@@ -1514,8 +1521,9 @@ class NumericTestsMixin(CheckerState):
                 much_larger_pairs_arr.append([col_name_1, col_name_2])
 
         # Consolidate patterns where possible, in order to generate fewer, and more useful, patterns.
-        patterns_arr = []  # The set of unique columns in each pattern
-        patterns_pairs_arr = []  # The set of pair-wise relationships between columns in each pattern
+        patterns_arr: list[list[str]] = []  # The set of unique columns in each pattern
+        # The set of pair-wise relationships between columns in each pattern
+        patterns_pairs_arr: list[list[list[str]]] = []
         for col_name_1, col_name_2 in much_larger_pairs_arr:
             found_existing_pattern = False
             for p_idx, p in enumerate(patterns_arr):
@@ -1530,10 +1538,10 @@ class NumericTestsMixin(CheckerState):
                 patterns_arr.append([col_name_1, col_name_2])
                 patterns_pairs_arr.append([[col_name_1, col_name_2]])
 
-        for pattern_idx, cols in enumerate(patterns_arr):
+        for pattern_idx, pattern_cols in enumerate(patterns_arr):
             # Order the columns in the pattern based on their median values
-            col_medians = [self.column_medians[c] for c in cols]
-            cols = np.array(cols)[np.argsort(col_medians)]
+            col_medians = [self.column_medians[c] for c in pattern_cols]
+            cols = np.array(pattern_cols)[np.argsort(col_medians)]
 
             if len(cols) == 2:
                     desc = (f'"{patterns_pairs_arr[pattern_idx][0][0]}" is larger than '
@@ -1794,7 +1802,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('constant sum 1', [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant sum 2', 5000 - self.synth_df['constant sum 1'])
         self._add_synthetic_column('constant sum 3', 5000 - self.synth_df['constant sum 1'])
-        self.synth_df.at[999, 'constant sum 3'] = self.synth_df.at[999, 'constant sum 3'] * 2.0
+        self.synth_df.at[999, 'constant sum 3'] = cast(float, self.synth_df.at[999, 'constant sum 3']) * 2.0
 
 
     def _check_constant_sum(self, test_id):
@@ -1829,7 +1837,8 @@ class NumericTestsMixin(CheckerState):
             vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
             vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
             sample_sums = vals_arr_1 + vals_arr_2
-            nmad = np.nanmedian(np.absolute(sample_sums - np.nanmedian(sample_sums))) / np.nanmedian(sample_sums) \
+            nmad = np.nanmedian(np.absolute(sample_sums - cast(float, np.nanmedian(sample_sums)))) / \
+                np.nanmedian(sample_sums) \
                 if np.nanmedian(sample_sums) != 0 \
                 else 0.0
             if nmad > 0.01:
@@ -1840,11 +1849,12 @@ class NumericTestsMixin(CheckerState):
             sums_series = vals_arr_1 + vals_arr_2
             # Get the median absolute deviation of the differences, normalized by the median. Note, the scipy
             # implementation does not handle Null values.
-            nmad = np.nanmedian(np.absolute(sums_series - np.nanmedian(sums_series))) / np.nanmedian(sums_series) \
+            nmad = np.nanmedian(np.absolute(sums_series - cast(float, np.nanmedian(sums_series)))) / \
+                np.nanmedian(sums_series) \
                 if np.nanmedian(sums_series) != 0 \
                 else 0.0
             if nmad < 0.01:
-                test_series = abs(sums_series - np.nanmedian(sums_series)) < \
+                test_series = abs(sums_series - cast(float, np.nanmedian(sums_series))) < \
                               abs(0.01 * np.nanmedian(sums_series))
                 test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
@@ -1866,7 +1876,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('constant diff 1', [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant diff 2', 1000 + self.synth_df['constant diff 1'])
         self._add_synthetic_column('constant diff 3', 1000 + self.synth_df['constant diff 1'])
-        self.synth_df.at[999, 'constant diff 3'] = self.synth_df.at[999, 'constant diff 3'] * 2.0
+        self.synth_df.at[999, 'constant diff 3'] = cast(float, self.synth_df.at[999, 'constant diff 3']) * 2.0
 
 
     def _check_constant_diff(self, test_id):
@@ -1949,7 +1959,7 @@ class NumericTestsMixin(CheckerState):
                                     [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant product 2', 5000 / self.synth_df['constant product 1'])
         self._add_synthetic_column('constant product 3', 5000 / self.synth_df['constant product 1'])
-        self.synth_df.at[999, 'constant product 3'] = self.synth_df.at[999, 'constant product 3'] * 2.0
+        self.synth_df.at[999, 'constant product 3'] = cast(float, self.synth_df.at[999, 'constant product 3']) * 2.0
 
 
     def _check_constant_product(self, test_id):
@@ -2024,7 +2034,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('constant ratio 1', [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant ratio 2', 5000 * self.synth_df['constant ratio 1'])
         self._add_synthetic_column('constant ratio 3', 5000 * self.synth_df['constant ratio 1'])
-        self.synth_df.at[999, 'constant ratio 3'] = self.synth_df.at[999, 'constant ratio 3'] * 2.0
+        self.synth_df.at[999, 'constant ratio 3'] = cast(float, self.synth_df.at[999, 'constant ratio 3']) * 2.0
 
 
     def _check_constant_ratio(self, test_id):
@@ -2096,11 +2106,13 @@ class NumericTestsMixin(CheckerState):
             test_series_a = list(map(safe_div, vals_arr_1, vals_arr_2))
 
             # Get the median absolute deviation of the ratios, normalized by the median
-            nmad = np.nanmedian(np.absolute(test_series_a - np.nanmedian(test_series_a))) / np.nanmedian(test_series_a) \
+            nmad = np.nanmedian(np.absolute(np.asarray(test_series_a) - np.nanmedian(test_series_a))) / \
+                np.nanmedian(test_series_a) \
                 if np.nanmedian(test_series_a) != 0 \
                 else 0.0
             if abs(nmad) < 0.01:
-                test_series = abs(test_series_a - np.nanmedian(test_series_a)) < abs(0.01 * np.nanmedian(test_series_a))
+                test_series = abs(np.asarray(test_series_a) - np.nanmedian(test_series_a)) < \
+                              abs(0.01 * np.nanmedian(test_series_a))
                 test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
@@ -2124,7 +2136,8 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('even_multiple all',
                                     np.random.randint(1, 1_000, 1000) * self.synth_df['even_multiple rand'])
         self._add_synthetic_column('even_multiple most', self.synth_df['even_multiple all'])
-        self.synth_df.at[999, 'even_multiple most'] = self.synth_df.at[999, 'even_multiple most'] * 1.25 + 1
+        self.synth_df.at[999, 'even_multiple most'] = \
+            cast(float, self.synth_df.at[999, 'even_multiple most']) * 1.25 + 1
 
 
     def _check_even_multiple(self, test_id):
@@ -2342,8 +2355,8 @@ class NumericTestsMixin(CheckerState):
             "correlated rand_b" with exceptions. We do not flag the correlation between 'correlated most' and
             'correlated rand_b' as they are almost the same.
         """
-        list_a = sorted([random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
-        list_b = sorted([random.randint(1, 2_000) for _ in range(self.num_synth_rows)])
+        list_a: Sequence[int] = sorted([random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
+        list_b: Sequence[float] = sorted([random.randint(1, 2_000) for _ in range(self.num_synth_rows)])
         c = list(zip(list_a, list_b))
         random.shuffle(c)
         list_a, list_b = zip(*c)
@@ -3242,7 +3255,7 @@ class NumericTestsMixin(CheckerState):
                                     self.synth_df['larger_sum rand_b'] + self.synth_df['larger_sum rand_a'] + random.randint(1, 10))
         self._add_synthetic_column('larger_sum most',
                                     self.synth_df['larger_sum all'].astype(float))
-        self.synth_df.at[999, 'larger_sum most'] = self.synth_df.at[999, 'larger_sum most'] * 0.2
+        self.synth_df.at[999, 'larger_sum most'] = cast(float, self.synth_df.at[999, 'larger_sum most']) * 0.2
 
 
     def _check_larger_than_sum(self, test_id):
@@ -3355,7 +3368,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('larger_diff all',
                                     self.synth_df['larger_diff rand_b'] - self.synth_df['larger_diff rand_a'] + random.randint(1, 10))
         self._add_synthetic_column('larger_diff most', self.synth_df['larger_diff all'])
-        self.synth_df.at[999, 'larger_diff most'] = self.synth_df.at[999, 'larger_diff most'] * 0.2
+        self.synth_df.at[999, 'larger_diff most'] = cast(float, self.synth_df.at[999, 'larger_diff most']) * 0.2
 
 
     def _check_larger_than_abs_diff(self, test_id):
@@ -3479,7 +3492,7 @@ class NumericTestsMixin(CheckerState):
             'sum of cols rand_b',
             'sum of cols rand_c']].sum(axis=1))
         self._add_synthetic_column('sum of cols most', self.synth_df['sum of cols all'].copy())
-        self.synth_df.at[999, 'sum of cols most'] = self.synth_df.at[999, 'sum of cols most'] * 5.0
+        self.synth_df.at[999, 'sum of cols most'] = cast(float, self.synth_df.at[999, 'sum of cols most']) * 5.0
 
         # Add columns where the pattern based on cols rand_a, rand_b, and rand_c plus a constant are always, and mostly
         # true
@@ -3489,7 +3502,8 @@ class NumericTestsMixin(CheckerState):
             'sum of cols rand_c']].sum(axis=1))
         self.synth_df['sum of cols plus all'] += 67.3
         self._add_synthetic_column('sum of cols plus most', self.synth_df['sum of cols plus all'].copy())
-        self.synth_df.at[999, 'sum of cols plus most'] = self.synth_df.at[999, 'sum of cols plus most'] * 5.0
+        self.synth_df.at[999, 'sum of cols plus most'] = \
+            cast(float, self.synth_df.at[999, 'sum of cols plus most']) * 5.0
 
         # Add columns where the pattern based on cols rand_a, rand_b, and rand_c times a constant are always, and mostly
         # true
@@ -3499,7 +3513,8 @@ class NumericTestsMixin(CheckerState):
             'sum of cols rand_c']].sum(axis=1))
         self.synth_df['sum of cols times all'] *= 1.6
         self._add_synthetic_column('sum of cols times most', self.synth_df['sum of cols times all'].copy())
-        self.synth_df.at[999, 'sum of cols times most'] = self.synth_df.at[999, 'sum of cols times most'] * 5.0
+        self.synth_df.at[999, 'sum of cols times most'] = \
+            cast(float, self.synth_df.at[999, 'sum of cols times most']) * 5.0
 
 
     def _check_sum_of_columns(self, test_id):
@@ -3537,7 +3552,7 @@ class NumericTestsMixin(CheckerState):
             found_any = False
 
             # For any subsets whose sum is too small to match col_name, there is no use trying any smaller subsets.
-            know_failed_subsets = {}
+            know_failed_subsets: dict[tuple[str, ...], bool] = {}
 
             starting_size = len(similar_cols)
             if limit_subset_sizes:
@@ -3546,7 +3561,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols, subset_size))
+                subsets: list[Sequence[str]] = list(combinations(similar_cols, subset_size))
                 if self.verbose >= 3 and len(similar_cols) > 15:
                     print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
                 for subset_idx, subset in enumerate(subsets):
@@ -3564,7 +3579,7 @@ class NumericTestsMixin(CheckerState):
 
                     # Check if this set of columns summing to col_name is plausible, checking if the sum of medians is
                     # significantly smaller or larger. actually, no -- we check ading/ multiply by constant below
-                    sum_of_medians = 0
+                    sum_of_medians: float = 0
                     for c in subset:
                         sum_of_medians += self.column_medians[c]
                     if sum_of_medians > (self.column_medians[col_name] * 1.1):
@@ -3682,7 +3697,7 @@ class NumericTestsMixin(CheckerState):
             'min_of_cols rand_b',
             'min_of_cols rand_c']].min(axis=1))
         self._add_synthetic_column('min_of_cols most', self.synth_df['min_of_cols all'].copy())
-        self.synth_df.at[999, 'min_of_cols most'] = self.synth_df.at[999, 'min_of_cols most'] * 5.0
+        self.synth_df.at[999, 'min_of_cols most'] = cast(float, self.synth_df.at[999, 'min_of_cols most']) * 5.0
 
 
     def _check_min_of_columns(self, test_id):
@@ -3721,7 +3736,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols_idxs, subset_size))
+                subsets: list[Sequence[int]] = list(combinations(similar_cols_idxs, subset_size))
                 if self.verbose >= 2 and len(similar_cols) > 15:
                     if not printed_column_status:
                         print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns")
@@ -3799,7 +3814,7 @@ class NumericTestsMixin(CheckerState):
             'max_of_cols rand_b',
             'max_of_cols rand_c']].max(axis=1))
         self._add_synthetic_column('max_of_cols most', self.synth_df['max_of_cols all'].copy())
-        self.synth_df.at[999, 'max_of_cols most'] = self.synth_df.at[999, 'max_of_cols most'] * 5.0
+        self.synth_df.at[999, 'max_of_cols most'] = cast(float, self.synth_df.at[999, 'max_of_cols most']) * 5.0
 
 
     def _check_max_of_columns(self, test_id):
@@ -3839,7 +3854,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols_idxs, subset_size))
+                subsets: list[Sequence[int]] = list(combinations(similar_cols_idxs, subset_size))
                 if self.verbose >= 2 and len(similar_cols) > 15:
                     if not printed_column_status:
                         print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns")
@@ -3924,7 +3939,7 @@ class NumericTestsMixin(CheckerState):
             'mean_of_cols rand_b',
             'mean_of_cols rand_c']].mean(axis=1))
         self._add_synthetic_column('mean_of_cols most', self.synth_df['mean_of_cols all'].copy())
-        self.synth_df.at[999, 'mean_of_cols most'] = self.synth_df.at[999, 'mean_of_cols most'] * 5.0
+        self.synth_df.at[999, 'mean_of_cols most'] = cast(float, self.synth_df.at[999, 'mean_of_cols most']) * 5.0
 
 
     def _check_mean_of_columns(self, test_id):
@@ -3943,7 +3958,7 @@ class NumericTestsMixin(CheckerState):
         # We loop through the positive numeric columns and for each find the set of columns with similar values.
         # For each subset of these, we check if any is the mean of the others. We then do not need to check any of these
         # columns again, but continue through the positive numeric columns for numeric columns in other ranges.
-        skip_col_sets = []
+        skip_col_sets: list[set[str]] = []
 
         # Identify the set of similar columns for each positive numeric column
         similar_cols_dict, _, calc_size = self.get_similar_cols(
@@ -3981,7 +3996,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols, subset_size))
+                subsets: list[Sequence[str]] = list(combinations(similar_cols, subset_size))
                 if self.verbose >= 3 and len(similar_cols) > 15:
                     print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
 
@@ -4010,7 +4025,7 @@ class NumericTestsMixin(CheckerState):
                     col_mean = sample_np.mean(axis=1)
 
                     # We loop through all the columns in the subset, to avoid duplicate work later
-                    matching_column = []
+                    matching_column: str | None = None
                     for c in subset:
                         if np.allclose(self.sample_df[c][sample_non_null_arr], col_mean.astype(float)):
                             matching_column = c
@@ -4059,7 +4074,8 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('matched_pos_neg rand_b', [random.randint(-1000, 1000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('matched_pos_neg all', self.synth_df['matched_pos_neg rand_a'] * random.randint(1, 100))
         self._add_synthetic_column('matched_pos_neg most', self.synth_df['matched_pos_neg rand_a'] * random.randint(1, 100))
-        self.synth_df.at[999, 'matched_pos_neg most'] = self.synth_df.at[999, 'matched_pos_neg most'] * -1.0
+        self.synth_df.at[999, 'matched_pos_neg most'] = \
+            cast(float, self.synth_df.at[999, 'matched_pos_neg most']) * -1.0
 
 
     def check_mathed_set_pos_neg(self, test_id):
@@ -4098,7 +4114,8 @@ class NumericTestsMixin(CheckerState):
         # be skipped, but is a useful heuristic to reduce execution time.
         num_cols = len(cols)
         found_any = False
-        know_failed_subsets = {}  # dictionary of dictionaries, with and element for each subset size.
+        # dictionary of dictionaries, with and element for each subset size.
+        know_failed_subsets: dict[int, dict[tuple[str, ...], bool]] = {}
         printed_subset_size_msg = False
         for subset_size in range(num_cols, 1, -1):
             know_failed_subsets[subset_size] = {}
@@ -4232,7 +4249,7 @@ class NumericTestsMixin(CheckerState):
                 zero_dict[col_name] = self.orig_df[col_name] == 0
                 non_zero_dict[col_name] = self.orig_df[col_name] != 0
 
-        know_failed_subsets = {}
+        know_failed_subsets: dict[tuple[str, ...], bool] = {}
         printed_subset_size_msg = False
 
         # Loop through the subsets, from biggest to smallest. Consider only subsets of at least 2 columns.
@@ -4352,7 +4369,7 @@ class NumericTestsMixin(CheckerState):
         self.synth_df['dt regr. 1d'] = [random.randint(1, 100) for _ in range(self.num_synth_rows)]
         self.synth_df['dt regr. 2'] = set_y('dt regr. 1a', 'dt regr. 1b')
         self.synth_df['dt regr. 3'] = set_y('dt regr. 1c', 'dt regr. 1d')
-        self.synth_df.at[999, 'dt regr. 3'] = self.synth_df.at[999, 'dt regr. 3'] * 10.0
+        self.synth_df.at[999, 'dt regr. 3'] = cast(float, self.synth_df.at[999, 'dt regr. 3']) * 10.0
 
 
     def _check_dt_regressor(self, test_id):
@@ -4400,7 +4417,7 @@ class NumericTestsMixin(CheckerState):
             uncorrelated_cols = []
             for c in self.numeric_cols:
                 if c in x_data.columns:
-                    if abs(self.spearman_corr.loc[col_name, c]) > 0.2:
+                    if abs(cast(float, self.spearman_corr.loc[col_name, c])) > 0.2:
                         x_data[c] = self.numeric_vals_filled[c]
                     elif cols_same_bool_dict[tuple(sorted([col_name, c]))]:
                         uncorrelated_cols.append(c)  # Actually over-correlated, but will remove as well.
@@ -4512,7 +4529,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column(
             'lin regr 3',
             (40.1 * self.synth_df['lin regr 1d']) + (3.1 * self.synth_df['lin regr 1e']) + (5.1 * self.synth_df['lin regr 1f']))
-        self.synth_df.at[999, 'lin regr 3'] = self.synth_df.at[999, 'lin regr 3'] * 10.0
+        self.synth_df.at[999, 'lin regr 3'] = cast(float, self.synth_df.at[999, 'lin regr 3']) * 10.0
 
 
     def _check_lin_regressor(self, test_id):
@@ -4713,7 +4730,7 @@ class NumericTestsMixin(CheckerState):
 
         sub_df = self.orig_df[self.numeric_cols].sample(n=min(self.num_rows, 2000), random_state=0)
         corr_matrix = sub_df.corr(method='spearman')
-        correlated_sets_arr=[]
+        correlated_sets_arr: list[set[str]] = []
         pair = get_next_corr_pair(corr_matrix, correlated_sets_arr)
         while pair:
             full_set = get_rest_set(corr_matrix, pair, correlated_sets_arr)
@@ -4815,7 +4832,8 @@ class NumericTestsMixin(CheckerState):
                                     [random.randint(1, 1000) for _ in range(self.num_synth_rows)])
         self.synth_df.at[999, 'predict_null rand_b'] = 985  # Set to be known to be over 800,
         vals2 = np.random.randint(1, 1000, size=self.num_synth_rows)
-        vals2 = np.where(self.synth_df['predict_null rand_b'] > 800, None, vals2)
+        # numpy's stubs do not accept None as a where() branch; the result is an object array
+        vals2 = np.where(self.synth_df['predict_null rand_b'] > 800, None, vals2)  # type: ignore[call-overload]
         self._add_synthetic_column('predict_null all', vals2)
         self._add_synthetic_column('predict_null most', vals2)
         self.synth_df.at[999, 'predict_null most'] = 833

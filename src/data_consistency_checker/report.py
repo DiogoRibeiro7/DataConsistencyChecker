@@ -72,7 +72,8 @@ class DataConsistencyReport:
 
     def to_dict(self) -> dict[str, Any]:
         """Return a strict JSON-safe dictionary representation."""
-        return _json_safe(asdict(self))
+        result: dict[str, Any] = _json_safe(asdict(self))
+        return result
 
 
 __all__ = ["DataConsistencyReport"]

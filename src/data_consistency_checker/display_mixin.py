@@ -12,6 +12,7 @@ import os
 from collections.abc import Collection
 from itertools import product
 from textwrap import wrap
+from typing import TextIO
 
 import numpy as np
 import pandas as pd
@@ -70,7 +71,7 @@ class DisplayMixin(CheckerState):
         ]
 
     @library_call
-    def print_test_descriptions(self, long_desc: bool = False, f: object | None = None) -> None:
+    def print_test_descriptions(self, long_desc: bool = False, f: TextIO | None = None) -> None:
         """Print test descriptions.
 
         Args:
@@ -227,6 +228,7 @@ class DisplayMixin(CheckerState):
             n_rows: Maximum number of rows to show. At most 10 rows are shown when `with_results` is True.
         """
 
+        assert self.test_results_df is not None
         sorted_df = self.test_results_df.sort_values('FINAL SCORE', ascending=True)
         if with_results:
             self._display_rows_with_tests(sorted_df, n_rows)
@@ -326,6 +328,8 @@ class DisplayMixin(CheckerState):
                 ((self.exceptions_summary_df is None) or (len(self.exceptions_summary_df) == 0)):
             print("No patterns or exceptions to display.")
             return
+        # check_data_quality() sets both frames together
+        assert self.patterns_df is not None and self.exceptions_summary_df is not None
 
         # If issue_id_list or row_id_list are set, these apply only to exceptions, implying only exceptions should
         # be displayed.
@@ -365,6 +369,7 @@ class DisplayMixin(CheckerState):
                     return
 
                 # Create a dataframe representing only the specified rows
+                assert self.test_results_df is not None
                 row_id_list_df = self.test_results_df.loc[row_id_list]
 
             # Each test's results are introduced by a header, unless results for only one test can be shown
@@ -419,7 +424,7 @@ class DisplayMixin(CheckerState):
                             print_text(max_shown_msg, f)
                             return
 
-                        if row_id_list and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
+                        if row_id_list_df is not None and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
                             continue
 
                         # If columns_set_arr is specified, only report issues with some overlap of columns with
@@ -474,6 +479,7 @@ class DisplayMixin(CheckerState):
                "displayed here, specific issues, or row numbers, or setting include_examples and/or "
                "plot_results to False.")
 
+        assert self.patterns_df is not None and self.exceptions_summary_df is not None
         if show_patterns and show_exceptions and \
                 ((len(self.exceptions_summary_df) + len(self.patterns_df)) > max_shown):
             print()
@@ -532,6 +538,7 @@ class DisplayMixin(CheckerState):
             if show_short_list_only:
                 for test_id in test_id_list:
                     if test_id not in self.get_patterns_shortlist():
+                        assert self.patterns_df is not None
                         sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
                         if len(sub_patterns_test):
                             print_text((f"Not displaying patterns without exceptions for {test_id}. This test is not in "
@@ -880,7 +887,7 @@ class DisplayMixin(CheckerState):
         elif test_id in ['UNIQUE_VALUES_PER_ROW']:
             df['Number Unique Values'] = df.apply(lambda x: len(set(x)), axis=1)
         elif test_id in ['NEGATIVE_VALUES_PER_ROW']:
-            df['Number Negative Values'] = map_elements(df, lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
+            df['Number Negative Values'] = map_elements(df, lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)  # type: ignore[operator]  # Number defines no ordering
         elif test_id in ['DECISION_TREE_CLASSIFIER', 'DECISION_TREE_REGRESSOR', 'PREV_VALUES_DT', 'LINEAR_REGRESSION',
                          'PREDICT_NULL_DT']:
             df["PREDICTION"] = display_info['Pred'].loc[df.index]
@@ -1052,9 +1059,11 @@ class DisplayMixin(CheckerState):
 
         # If there are no values flagged for this test in this feature, there will not be a column in
         # test_results_df. In this case, return any values.
-        if not is_patterns and results_col_name not in self.test_results_df.columns:
-            assert False, "Should not happen"  # noqa: B011
-            return self.orig_df[col_name].sample(n=n_examples, random_state=0)
+        if not is_patterns:
+            assert self.test_results_df is not None
+            if results_col_name not in self.test_results_df.columns:
+                assert False, "Should not happen"  # noqa: B011
+                return self.orig_df[col_name].sample(n=n_examples, random_state=0)
 
         df = self._get_balanced_sample(test_id, cols, n_examples, display_info)
 
@@ -1075,6 +1084,7 @@ class DisplayMixin(CheckerState):
 
         # Remove rows that were flagged. If is_patterns is True, no rows were flagged, and we skip this check.
         if not is_patterns:
+            assert self.test_results_df is not None
             sub_df = self.test_results_df.loc[df.index]
             mask = sub_df[results_col_name] == 0
             df = df[mask]
@@ -1302,6 +1312,7 @@ class DisplayMixin(CheckerState):
         check_score: bool
             if True, only rows with scores above zero will be displayed
         """
+        assert self.test_results_df is not None and self.exceptions_summary_df is not None
 
         flagged_idx_arr = sorted_df.index[:10]
         for row_idx in flagged_idx_arr[:n_rows]:
