@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import time
 import warnings
+from collections.abc import Callable
+from typing import cast
 
 import numpy as np
 import pandas as pd
 from dataexcept import OutlierDetectionError, exception_to_dict
 from dataexcept import wrap as wrap_dataexcept
 
+from .checker_state import CheckerState
+from .checker_utils import library_call, preserve_random_state
+
+colored: Callable[..., str] | None
 try:
     from termcolor import colored
 except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
-
-from .checker_state import CheckerState
-from .checker_utils import library_call, preserve_random_state
 
 
 class ExecutionMixin(CheckerState):
@@ -59,7 +62,7 @@ class ExecutionMixin(CheckerState):
 
         if raise_on_error:
             raise structured from error
-        return structured
+        return cast(OutlierDetectionError, structured)  # wrap() returns an instance of its target class
 
     @library_call
     @preserve_random_state()

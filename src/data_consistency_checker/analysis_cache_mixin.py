@@ -461,22 +461,24 @@ class AnalysisCacheMixin(CheckerState):
             # Test first on a sample
             are_same_arr, num_different = compare(self.sample_df)
             if num_different > 1:
-                self.cols_same_bool_dict[pairs_tuple] = False
-                self.cols_same_count_dict[pairs_tuple] = (are_same_arr.count(True) / len(self.sample_df)) * self.num_rows
+                cols_same_bool_dict[pairs_tuple] = False
+                cols_same_count_dict[pairs_tuple] = (are_same_arr.count(True) / len(self.sample_df)) * self.num_rows
                 return
 
             # Test on the full columns
             are_same_arr, num_different = compare(self.orig_df)
             if num_different < self.freq_contamination_level:
-                self.cols_same_bool_dict[pairs_tuple] = True
+                cols_same_bool_dict[pairs_tuple] = True
             else:
-                self.cols_same_bool_dict[pairs_tuple] = False
-            self.cols_same_count_dict[pairs_tuple] = are_same_arr.count(True)
+                cols_same_bool_dict[pairs_tuple] = False
+            cols_same_count_dict[pairs_tuple] = are_same_arr.count(True)
 
         if self.cols_same_bool_dict:
             return self.cols_same_bool_dict
-        self.cols_same_bool_dict = {}
-        self.cols_same_count_dict = {}
+        cols_same_bool_dict: dict[tuple[str, ...], bool] = {}
+        cols_same_count_dict: dict[tuple[str, ...], float] = {}
+        self.cols_same_bool_dict = cols_same_bool_dict
+        self.cols_same_count_dict = cols_same_count_dict
 
         # Check pairs of numeric columns
         num_pairs, pairs_arr = self._get_numeric_column_pairs_unique(force=force)
