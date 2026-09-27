@@ -246,12 +246,12 @@ class BinaryTestsMixin(CheckerState):
                     test_series = np.array(~mask_ab)
                     pattern_str = f'"{col_name_1}" value: {val_1a} consistently implies "{col_name_2}" value: {val_2a}'
             elif count_ba < self.freq_contamination_level:
-                expected_count = (count_1a / self.num_rows) * (count_2b)
+                expected_count = (count_1b / self.num_rows) * (count_2a)
                 if count_ba < expected_count:
                     test_series = np.array(~mask_ba)
                     pattern_str = f'"{col_name_1}" value: {val_1b} consistently implies "{col_name_2}" value: {val_2b}'
             elif count_bb < self.freq_contamination_level:
-                expected_count = (count_1a / self.num_rows) * (count_2b)
+                expected_count = (count_1b / self.num_rows) * (count_2b)
                 if count_bb < expected_count:
                     test_series = np.array(~mask_bb)
                     pattern_str = f'"{col_name_1}" value: "{val_1b}" consistently implies "{col_name_2}" value: {val_2a}'

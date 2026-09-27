@@ -71,6 +71,32 @@ def test_binary_matches_sum_describes_the_second_value_going_with_the_smaller_su
     ]
 
 
+@pytest.mark.parametrize("swap_values", [False, True], ids=["second_value_of_a", "first_value_of_a"])
+@pytest.mark.parametrize(
+    ("counts", "expected"),
+    [
+        # Rows with (a, b) = (0, 0), (0, 1), (1, 0) and (1, 1)
+        ((50, 60, 850, 40), [('"a" AND "b"', 40)]),  # 40 rows of (1, 1), where independence predicts 89
+        ((60, 780, 40, 120), []),  # 40 rows of (1, 0), more than the 16 independence predicts
+    ],
+    ids=["rarer_than_expected", "commoner_than_expected"],
+)
+def test_binary_implies_compares_each_combination_with_its_expected_count(counts, expected, swap_values) -> None:
+    # The expected counts of the combinations with the second value of "a" were computed from the counts of the
+    # first value of "a" and the second value of "b". Swapping both columns' values tests the same data in the
+    # branches that were correct.
+    combinations = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    rows = [combination for combination, count in zip(combinations, counts) for _ in range(count)]
+    df = pd.DataFrame(rows, columns=["a", "b"]).sample(frac=1, random_state=0).reset_index(drop=True)
+    if swap_values:
+        df = 1 - df
+
+    checker = _run(df, ["BINARY_IMPLIES"], freq_contamination_level=50)
+
+    exceptions = checker.exceptions_summary_df
+    assert list(zip(exceptions["Column(s)"], exceptions["Number of Exceptions"])) == expected
+
+
 def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
     # The day of the first column was compared with itself, so only the year and month were checked.
     start = pd.Series(pd.date_range("2020-01-01", periods=1000, freq="D"))
