@@ -790,8 +790,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_number_alphanumeric_chars(self, test_id):
         """
-        Handling null values: null values are considered zero-length strings, with no alphabetic, numeric, or
-        special characters.
+        Handling null values: null values are not counted, so neither support nor violate a pattern.
         """
 
         nunique_dict = self.get_nunique_dict()
@@ -800,8 +799,8 @@ class StringTestsMixin(CheckerState):
             if nunique_dict[col_name] < 5:
                 continue
 
-            alnum_counts = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalnum()]))
-            test_series = [alnum_counts.median() if y else x for x, y in zip(alnum_counts, self.orig_df[col_name].isnull())]
+            test_series = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalnum()]))
+            test_series = test_series.mask(self.orig_df[col_name].isna())
             self._process_analysis_counts(
                 test_id,
                 [col_name],

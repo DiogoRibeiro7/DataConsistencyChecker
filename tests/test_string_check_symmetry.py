@@ -171,3 +171,34 @@ def test_prefix_and_suffix_checks_skip_columns_that_are_the_same(test_id) -> Non
 
     assert _patterns(checker) == []
     assert _exceptions(checker) == []
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# NUMBER_*_CHARS
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def _letters(i: int, n: int) -> str:
+    """A distinct string of n letters for each i."""
+    return "".join(string.ascii_lowercase[(i // 26 ** k) % 26] for k in range(n))
+
+
+@pytest.mark.parametrize(
+    ("test_id", "make_value"),
+    [
+        ("NUMBER_ALPHA_CHARS", lambda i, n: _letters(i, n)),
+        ("NUMBER_NUMERIC_CHARS", lambda i, n: "x" + f"{i:010d}"[-n:]),
+        ("NUMBER_ALPHANUMERIC_CHARS", lambda i, n: "$" + f"{i:010d}"[-n:]),
+        ("NUMBER_NON-ALPHANUMERIC_CHARS", lambda i, n: "@" * n + _letters(i, 3)),
+        ("NUMBER_CHARS", lambda i, n: _letters(i, n)),
+    ],
+)
+def test_number_of_chars_checks_do_not_flag_missing_values(test_id, make_value) -> None:
+    # NUMBER_ALPHANUMERIC_CHARS gave missing values the median count. With values of 4 and 6 characters, that is 5,
+    # which no value has, so the rows with missing values were flagged as rare.
+    counts = [4] * 496 + [6] * 500
+    df = pd.DataFrame({"code": [make_value(i, n) for i, n in enumerate(counts)] + [None] * 4})
+
+    checker = _run(df, [test_id])
+
+    assert _exceptions(checker) == []
