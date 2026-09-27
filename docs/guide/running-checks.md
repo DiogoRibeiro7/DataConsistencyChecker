@@ -62,6 +62,13 @@ sense for code or ID values, where individual characters are meaningful (`get_te
 Give a fraction of the rows (the default is 0.5%) or an integer count of rows. See
 [How it works](how-it-works.md#the-contamination-level).
 
+To choose a level, `test_contamination_level()` runs the checks once per level and plots how many issues, rows and
+columns each level flags. It works on a copy, so the checker keeps the results of its last run:
+
+```python
+issues, rows, columns = dc.test_contamination_level([0.001, 0.005, 0.01, 0.05], fast_only=True)
+```
+
 ### Limiting combinations
 
 Checks on pairs or larger sets of columns can examine a very large number of combinations. A check skips itself
