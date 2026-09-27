@@ -12,6 +12,7 @@ import datetime
 import math
 import random
 import statistics
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -201,8 +202,8 @@ class DateTestsMixin(CheckerState):
         """
         test_date = datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")
         self._add_synthetic_column('month rand', pd.date_range(test_date, periods=self.num_synth_rows, freq='3D'))
-        dates = pd.date_range(test_date, periods=self.num_synth_rows, freq='3D')
-        dates = [x if x.month != 12 else x + relativedelta(months=1) for x in dates]
+        date_range = pd.date_range(test_date, periods=self.num_synth_rows, freq='3D')
+        dates = [x if x.month != 12 else x + relativedelta(months=1) for x in date_range]
         self._add_synthetic_column('month all', dates)
         self._add_synthetic_column('month most', dates)
         self.synth_df.loc[999, 'month most'] = datetime.datetime.strptime("02-12-2022", "%d-%m-%Y")
@@ -657,7 +658,7 @@ class DateTestsMixin(CheckerState):
             col_name_1 = self.date_cols[col_name_idx_1]
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
-                test_series = [(y1 == y2) and (m1 == m2) and (d1 == d1) for y1, y2, m1, m2, d1, d2 in
+                matches_arr = [(y1 == y2) and (m1 == m2) and (d1 == d1) for y1, y2, m1, m2, d1, d2 in
                                zip(pd.to_datetime(self.orig_df[col_name_1]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.month,
@@ -665,7 +666,7 @@ class DateTestsMixin(CheckerState):
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.day,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.day,
                                 )]
-                test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(matches_arr) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -712,13 +713,13 @@ class DateTestsMixin(CheckerState):
             col_name_1 = self.date_cols[col_name_idx_1]
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
-                test_series = [(y1 == y2) and (m1 == m2) for y1, y2, m1, m2 in
+                matches_arr = [(y1 == y2) and (m1 == m2) for y1, y2, m1, m2 in
                                zip(pd.to_datetime(self.orig_df[col_name_1]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.month,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.month,
                                 )]
-                test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(matches_arr) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -860,7 +861,7 @@ class DateTestsMixin(CheckerState):
             # bin.
             for bin_id in bin_labels:
                 bin_row_idxs[bin_id] = np.where(bin_assignments == bin_id)
-                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]
+                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]  # type: ignore[index]  # pandas-stubs reject the 1-tuple from np.where()
 
             for num_col in self.numeric_cols:
 
@@ -900,7 +901,7 @@ class DateTestsMixin(CheckerState):
 
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
-                    num_vals_all = convert_to_numeric(sub_df[num_col], med)
+                    num_vals_all = convert_to_numeric(sub_df[num_col], cast(float, med))
                     sub_test_series = pd.Series([(x < threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:
@@ -962,7 +963,7 @@ class DateTestsMixin(CheckerState):
             # bin.
             for bin_id in bin_labels:
                 bin_row_idxs[bin_id] = np.where(bin_assignments == bin_id)
-                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]
+                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]  # type: ignore[index]  # pandas-stubs reject the 1-tuple from np.where()
 
             for num_col in self.numeric_cols:
 
@@ -1002,7 +1003,7 @@ class DateTestsMixin(CheckerState):
 
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
-                    num_vals_all = convert_to_numeric(sub_df[num_col], med)
+                    num_vals_all = convert_to_numeric(sub_df[num_col], cast(float, med))
                     sub_test_series = pd.Series([(x >= threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:

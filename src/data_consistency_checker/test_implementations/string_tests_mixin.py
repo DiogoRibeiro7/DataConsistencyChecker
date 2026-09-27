@@ -12,6 +12,8 @@ import math
 import random
 import statistics
 import string
+from collections.abc import Callable
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -19,11 +21,6 @@ import pandas.api.types as pandas_types
 from dateutil.relativedelta import relativedelta
 from sklearn import metrics, tree
 from sklearn.tree import DecisionTreeClassifier
-
-try:
-    from termcolor import colored
-except ImportError:  # pragma: no cover - optional presentation dependency
-    colored = None
 
 from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import (
@@ -35,6 +32,12 @@ from data_consistency_checker.checker_utils import (
     is_uppercase,
     replace_special_with_space,
 )
+
+colored: Callable[..., str] | None
+try:
+    from termcolor import colored
+except ImportError:  # pragma: no cover - optional presentation dependency
+    colored = None
 
 letters = string.ascii_letters
 digits = string.digits
@@ -104,6 +107,8 @@ class StringTestsMixin(CheckerState):
         if (ideal_same - num_same) > self.freq_contamination_level:
             return
 
+        # An array at first; with a sort column it may be replaced by a list below
+        test_series: np.ndarray | list[bool]
         test_series = np.array([1]*self.num_rows)
         groups_str = ""
         group_lengths = []
@@ -112,7 +117,7 @@ class StringTestsMixin(CheckerState):
         # We then identify the runs of each unique value and flag any short runs.
         for v in col_df[col_name].dropna().unique():
             idxs = np.where(col_df[col_name] == v)[0]
-            idx_diffs = pd.Series(idxs).shift(-1).values - idxs
+            idx_diffs = pd.Series(idxs).shift(-1).to_numpy() - idxs
             exceptions = list(np.where(idx_diffs != 1)[0])
             group_starts = [min(idxs)]
             group_ends = [max(idxs)]
@@ -145,9 +150,9 @@ class StringTestsMixin(CheckerState):
 
             # Get the index in the original (unsorted) dataframe of the flagged rows.
             if test_series.tolist().count(False) < self.freq_contamination_level:
-                idxs = list(np.where(test_series == False)[0])  # noqa: E712
+                flagged_idxs = list(np.where(test_series == False)[0])  # noqa: E712
                 test_series = [True] * self.num_rows
-                for idx in idxs:
+                for idx in flagged_idxs:
                     test_series[self.orig_df.sort_values(sort_col).index[idx]] = False
 
         sort_msg = ""
@@ -410,7 +415,7 @@ class StringTestsMixin(CheckerState):
 
             # Check if there's a small set of characters that make up the bulk of the values
             count_most_common = np.where(
-                counts_series.sort_values(ascending=False).cumsum() > (num_non_null_vals - self.freq_contamination_level))[0][0]
+                counts_series.sort_values(ascending=False).cumsum().to_numpy() > (num_non_null_vals - self.freq_contamination_level))[0][0]
             if count_most_common <= 5:
                 common_first_chars = list(counts_series.sort_values(ascending=False)[:count_most_common+1].index)
                 rare_first_chars = []
@@ -530,7 +535,7 @@ class StringTestsMixin(CheckerState):
 
             # Check if there's a small set of characters that make up the bulk of the values
             count_most_common = np.where(
-                counts_series.sort_values(ascending=False).cumsum() > (num_non_null_vals - self.freq_contamination_level))[0]
+                counts_series.sort_values(ascending=False).cumsum().to_numpy() > (num_non_null_vals - self.freq_contamination_level))[0]
             if len(count_most_common) > 0:
                 count_most_common = count_most_common[0]
             if count_most_common <= 5:
@@ -812,8 +817,8 @@ class StringTestsMixin(CheckerState):
             if nunique_dict[col_name] < 5:
                 continue
 
-            test_series = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalnum()]))
-            test_series = [test_series.median() if y else x for x, y in zip(test_series, self.orig_df[col_name].isnull())]
+            alnum_counts = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalnum()]))
+            test_series = [alnum_counts.median() if y else x for x, y in zip(alnum_counts, self.orig_df[col_name].isnull())]
             self._process_analysis_counts(
                 test_id,
                 [col_name],
@@ -1029,10 +1034,10 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Get the set of special characters in each value. Do not include space characters.
-            special_chars_list = as_str(self.orig_df[col_name]).apply(get_non_alphanumeric)
+            special_chars_per_value = as_str(self.orig_df[col_name]).apply(get_non_alphanumeric)
 
             # Remove any empty lists
-            special_chars_list = [x for x in special_chars_list if len(x)]
+            special_chars_list = [x for x in special_chars_per_value if len(x)]
 
             # Skip columns where it is not the case that all values have special characters
             if (self.orig_df[col_name].isna().sum() + len(special_chars_list)) < self.num_rows:
@@ -1057,7 +1062,7 @@ class StringTestsMixin(CheckerState):
             # Identify the common special characters which appear in a consistent location
             for c in common_special_chars_list:
                 # Get the position of the character from the beginning of the strings
-                list_1 = pd.Series(as_str(self.orig_df[col_name]).str.find(c)).replace(-1, np.nan)
+                list_1 = pd.Series(as_str(self.orig_df[col_name]).str.find(c)).replace(-1, np.nan)  # type: ignore[arg-type]  # pandas-stubs: replace() may upcast int to float
                 # Get the position of the character from the end of the strings
                 list_2 = pd.Series([x - y if y >= 0 else -1 for x, y in
                                     zip(as_str(self.orig_df[col_name].fillna("")).str.len() ,
@@ -1533,7 +1538,7 @@ class StringTestsMixin(CheckerState):
             [' '.join([word_list[np.random.randint(0, len(word_list))]] * 4) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('rare_words most',
             [' '.join([word_list[np.random.randint(0, len(word_list))]] * 4) for _ in range(self.num_synth_rows)])
-        self.synth_df.loc[999, 'rare_words most'] = self.synth_df.loc[999, 'rare_words most'] + " xxxxxxx"
+        self.synth_df.loc[999, 'rare_words most'] = cast(str, self.synth_df.loc[999, 'rare_words most']) + " xxxxxxx"
 
 
     def _check_rare_words(self, test_id):
@@ -1559,8 +1564,8 @@ class StringTestsMixin(CheckerState):
                 continue
             if len(rare_words_arr) > self.freq_contamination_level:
                 continue
-            test_series = [len(set(x).intersection(set(rare_words_arr))) == 0 for x in words_arr]
-            test_series = np.array(test_series) | self.orig_df[col_name].isna()
+            no_rare_words = [len(set(x).intersection(set(rare_words_arr))) == 0 for x in words_arr]
+            test_series = np.array(no_rare_words) | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
                 [col_name],
@@ -2040,10 +2045,10 @@ class StringTestsMixin(CheckerState):
                 if max(word_counts) > 1:
                     continue
                 chars_list_2 = [[""] if x is None else list(x) for x in col_vals]
-                test_series = [(len(set(x).union(set(y))) > 0) and
+                similar_arr = [(len(set(x).union(set(y))) > 0) and
                                    (len(set(x).intersection(set(y))) / len(set(x).union(set(y))) > 0.8)
                                for x, y in zip(chars_list_1, chars_list_2)]
-                test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(similar_arr) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -2601,14 +2606,14 @@ class StringTestsMixin(CheckerState):
         sample_digit_str_dict = {}
         digit_str_dict = {}
         for col_name in self.string_cols:
-            digits_col = as_str(self.sample_df[col_name]).apply(lambda x: "" if is_missing(x) else x)
-            digits_col = [[c for c in x if c and c.isdigit()] for x in digits_col]
-            digits_col = [''.join(x) for x in digits_col]
+            str_vals = as_str(self.sample_df[col_name]).apply(lambda x: "" if is_missing(x) else x)
+            digit_chars = [[c for c in x if c and c.isdigit()] for x in str_vals]
+            digits_col = [''.join(x) for x in digit_chars]
             sample_digit_str_dict[col_name] = digits_col
 
-            digits_col = as_str(self.orig_df[col_name]).apply(lambda x: "" if is_missing(x) else x)
-            digits_col = [[c for c in x if c and c.isdigit()] for x in digits_col]
-            digits_col = [''.join(x) for x in digits_col]
+            str_vals = as_str(self.orig_df[col_name]).apply(lambda x: "" if is_missing(x) else x)
+            digit_chars = [[c for c in x if c and c.isdigit()] for x in str_vals]
+            digits_col = [''.join(x) for x in digit_chars]
             digit_str_dict[col_name] = digits_col
 
         for _pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
@@ -2924,6 +2929,9 @@ class StringTestsMixin(CheckerState):
         Not flagged "correlated_alpha rand_b" is consistently similar, with regards to percentile, to
             "correlated_alpha most", but is not flagged as the columns are almost identical
         """
+        # Sorted lists at first, then the shuffled tuples from zip()
+        list_a: list[str] | tuple[str, ...]
+        list_b: list[str] | tuple[str, ...]
         list_a = sorted([''.join(np.random.choice(list(string.ascii_lowercase), 10))
                          for _ in range(self.num_synth_rows)])
         list_b = sorted([''.join(np.random.choice(list(string.ascii_lowercase), 10))
@@ -4041,6 +4049,11 @@ class StringTestsMixin(CheckerState):
         Patterns with exception: 'corr_given_val rand_a' and 'corr_given_val most' have almost the same relationship
             with an exception in row 499 (the last row of list_b).
         """
+        # Sorted lists at first, then the shuffled tuples from zip()
+        list_a: list[int] | tuple[int, ...]
+        list_b: list[float] | tuple[float, ...]
+        list_c: list[int] | tuple[int, ...]
+        list_d: list[int] | tuple[int, ...]
         list_a = sorted([random.randint(1, 1_000) for _ in range(500)])
         list_b = sorted([random.randint(1, 2_000) for _ in range(500)])
         c = list(zip(list_a, list_b))
@@ -4080,12 +4093,14 @@ class StringTestsMixin(CheckerState):
         nunique_dict = self.get_nunique_dict()
 
         # Create a numpy array of just the numeric columns for efficiency
-        numeric_df = None
+        numeric_df: pd.Series | pd.DataFrame | None = None
         for col_name in self.numeric_cols:
             if numeric_df is None:
                 numeric_df = self.numeric_vals_filled[col_name]
             else:
                 numeric_df = pd.concat([numeric_df, self.numeric_vals_filled[col_name]], axis=1)
+        # There are at least two numeric columns, so they were concatenated into a DataFrame
+        assert isinstance(numeric_df, pd.DataFrame)
         numeric_np = numeric_df.values
 
         # Create a sample. We do not use self.sample_df, as it may have Nulls removed, and we do not wish to remove
@@ -4093,12 +4108,13 @@ class StringTestsMixin(CheckerState):
         sample_df = self.orig_df.sample(n=50)
 
         # Create a sample array similarly
-        numeric_sample_df = None
+        numeric_sample_df: pd.Series | pd.DataFrame | None = None
         for col_name in self.numeric_cols:
             if numeric_sample_df is None:
                 numeric_sample_df = convert_to_numeric(sample_df[col_name], self.column_medians[col_name])
             else:
                 numeric_sample_df = pd.concat([numeric_sample_df, convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name])], axis=1)
+        assert isinstance(numeric_sample_df, pd.DataFrame)
         numeric_sample_df.columns = self.numeric_cols
 
         # Determine if there are too many combinations to execute
