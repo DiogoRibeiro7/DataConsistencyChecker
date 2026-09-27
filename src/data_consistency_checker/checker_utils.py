@@ -242,13 +242,6 @@ def truncate_description(x: str) -> str:
     return x
 
 
-def is_uppercase(x: str | None) -> bool:
-    """Check whether ``x`` is an uppercase ASCII character."""
-    if x is None or x == "":
-        return False
-    return (65 <= ord(x) <= 90) or (193 <= ord(x) <= 221)
-
-
 def clean_x_tick_labels(fig: Figure, n_axis: int, ax: Axes) -> None:
     """Adjust x-axis tick labels for readability."""
     plt.draw()
