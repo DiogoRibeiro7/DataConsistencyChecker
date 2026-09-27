@@ -2894,7 +2894,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Test on a sample first
-            test_series = [True if v and w else
+            test_series = [True if v or w else
                            ((not v) and (not w) and (len(x) < len(y)) and (x != y[:len(x)]) and (x != y[-len(x):]) and (x in y))
                            for v, w, x, y in zip(
                                 sample_is_missing_dict[col_name_1],
@@ -2905,7 +2905,7 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Test on the full data
-            test_series = [True if v and w else
+            test_series = [True if v or w else
                            ((not v) and (not w) and (len(x) < len(y)) and (x != y[:len(x)]) and (x != y[-len(x):]) and (x in y))
                            for v, w, x, y in zip(
                                 is_missing_dict[col_name_1],

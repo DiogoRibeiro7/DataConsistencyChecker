@@ -162,6 +162,24 @@ def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
 
 
 @pytest.mark.parametrize(
+    ("test_id", "before", "after"),
+    [("A_PREFIX_OF_B", "", "zz"), ("A_SUFFIX_OF_B", "zz", ""), ("B_CONTAINS_A", "xy", "zz")],
+)
+def test_a_within_b_checks_do_not_flag_a_row_missing_one_value(test_id, before, after) -> None:
+    # B_CONTAINS_A excused a row only when both values were missing, where A_PREFIX_OF_B and A_SUFFIX_OF_B excuse it
+    # when either is, so a row missing one value was flagged.
+    rng = np.random.default_rng(0)
+    inner = ["".join(rng.choice(list("abcdefgh"), 4)) for _ in range(300)]
+    outer = [before + value + after for value in inner]
+    inner[40] = None
+
+    checker = _run(pd.DataFrame({"a": inner, "b": outer}), [test_id])
+
+    assert checker.patterns_df["Column(s)"].tolist() == ['"a" AND "b"']
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == []
+
+
+@pytest.mark.parametrize(
     ("test_id", "low", "high", "unusual"), [("MANY_CHARS", 5, 11, 30), ("FEW_CHARS", 100, 201, 10)]
 )
 def test_many_and_few_chars_ignore_missing_values_when_finding_the_usual_lengths(test_id, low, high, unusual) -> None:
