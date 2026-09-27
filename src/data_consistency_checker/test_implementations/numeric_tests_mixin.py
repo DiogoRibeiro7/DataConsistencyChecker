@@ -218,6 +218,10 @@ class NumericTestsMixin(CheckerState):
             if self.orig_df[col_name].notna().sum() < self.freq_contamination_level:
                 continue
             vals_arr = convert_to_numeric(self.orig_df[col_name], 1)
+            # As in NEGATIVE, skip columns that are mostly not strictly positive, such as mostly zero columns
+            test_series_pos = (vals_arr > 0)
+            if test_series_pos.tolist().count(False) > (self.num_rows * 0.75):
+                continue
             test_series = (self.orig_df[col_name].isna()) | (vals_arr >= 0)
             self._process_analysis_binary(
                 test_id,
@@ -1782,9 +1786,10 @@ class NumericTestsMixin(CheckerState):
             if sample_series.count(False) > 1:
                 continue
 
+            # 0 and -0 are the negatives of each other, as in the sample test
             vals_arr_1 = convert_to_numeric(self.orig_df[col_name_1], self.column_medians[col_name_1])
             vals_arr_2 = convert_to_numeric(self.orig_df[col_name_2], self.column_medians[col_name_2])
-            test_series = np.array([math.isclose(x, -y) and x != 0
+            test_series = np.array([math.isclose(x, -y)
                                     for x, y in zip(vals_arr_1, vals_arr_2)])
             test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
@@ -3392,7 +3397,7 @@ class NumericTestsMixin(CheckerState):
             num_same = (self.orig_df[col_a] == self.orig_df[col_c]).tolist().count(True)
             if num_same > (self.num_rows * 0.9):
                 return True
-            num_same = (self.orig_df[col_a] == self.orig_df[col_c]).tolist().count(True)
+            num_same = (self.orig_df[col_b] == self.orig_df[col_c]).tolist().count(True)
             if num_same > (self.num_rows * 0.9):
                 return True
 
@@ -3823,7 +3828,7 @@ class NumericTestsMixin(CheckerState):
         """
 
         # Try all subsets where it's median is less than this column's, but more than 1/10 of it.
-        # For each target column, try all subsets whose minimum values match this column.
+        # For each target column, try all subsets whose maximum values match this column.
 
         two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
 
@@ -3896,7 +3901,7 @@ class NumericTestsMixin(CheckerState):
                         if not subset_okay:
                             continue
 
-                        # Check if this is a pattern in a trivial way. Check each column in the subset is the min at
+                        # Check if this is a pattern in a trivial way. Check each column in the subset is the max at
                         # least once.
                         subset_okay = True
                         for col in subset_names:
