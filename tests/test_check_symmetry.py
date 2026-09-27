@@ -69,3 +69,20 @@ def test_two_pairs_uses_the_sample_matches_of_a_cached_inner_pair() -> None:
     checker = _run(df, ["TWO_PAIRS"])
 
     assert _patterns(checker) == ['"a" AND "b" AND "c" AND "d"']
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# SIMILAR_TO_NEGATIVE
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def test_similar_to_negative_treats_zero_as_the_negative_of_zero() -> None:
+    # The sample test accepted rows where both values are 0, but the full test flagged them.
+    y = np.random.default_rng(0).integers(1, 1000, 1000).astype(float)
+    y[[10, 20, 30]] = 0.0
+    df = pd.DataFrame({"x": -y, "y": y})
+
+    checker = _run(df, ["SIMILAR_TO_NEGATIVE"])
+
+    assert _patterns(checker) == ['"x" AND "y"']
+    assert checker.exceptions_summary_df.empty

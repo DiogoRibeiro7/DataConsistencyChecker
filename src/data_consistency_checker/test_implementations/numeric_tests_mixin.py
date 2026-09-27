@@ -1782,9 +1782,10 @@ class NumericTestsMixin(CheckerState):
             if sample_series.count(False) > 1:
                 continue
 
+            # 0 and -0 are the negatives of each other, as in the sample test
             vals_arr_1 = convert_to_numeric(self.orig_df[col_name_1], self.column_medians[col_name_1])
             vals_arr_2 = convert_to_numeric(self.orig_df[col_name_2], self.column_medians[col_name_2])
-            test_series = np.array([math.isclose(x, -y) and x != 0
+            test_series = np.array([math.isclose(x, -y)
                                     for x, y in zip(vals_arr_1, vals_arr_2)])
             test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
