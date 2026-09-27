@@ -1635,8 +1635,9 @@ class StringTestsMixin(CheckerState):
     def _check_rare_pairs(self, test_id):
         """
         This flags pairs of values, where neither value is by itself rare, but the combination is. This is performed
-        on each pair of string columns. The test RARE_COMBINATION covers pairs of numeric columns. For pairs of
-        columns with one string and one numeric, there are the VERY_LARGE_GIVEN_VALUE and VERY_SMALL_GIVEN_VALUE tests.
+        on each pair of binary columns that have the same two values. The test RARE_COMBINATION covers pairs of
+        numeric columns. For pairs of columns with one string and one numeric, there are the LARGE_GIVEN_VALUE and
+        SMALL_GIVEN_VALUE tests.
         """
         num_pairs, pairs = self._get_binary_column_pairs_unique()
         if num_pairs > self.max_combinations:
