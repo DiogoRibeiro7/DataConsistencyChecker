@@ -110,3 +110,25 @@ def test_larger_than_abs_diff_skips_a_triple_with_any_two_columns_usually_equal(
 
     assert checker.patterns_arr == []
     assert checker.results_summary_arr == []
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# EARLY_DATES and LATE_DATES
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def test_early_and_late_dates_flag_mirror_image_dates_alike() -> None:
+    # EARLY_DATES used midpoint quartiles and LATE_DATES linear ones. The last date here is past the upper limit the
+    # midpoint quartiles give (2505 days), but not the one the linear quartiles give (2525 days), so it was flagged
+    # in the mirrored column as early, but not in this one as late.
+    offsets = pd.to_timedelta(np.append(np.arange(101) * 10, 2515), unit="D")
+    start = pd.Timestamp("2000-01-01")
+    df = pd.DataFrame({"later": start + offsets, "earlier": start - offsets})
+
+    checker = _run(df, ["EARLY_DATES", "LATE_DATES"])
+
+    exceptions = checker.exceptions_summary_df
+    assert list(zip(exceptions["Test ID"], exceptions["Column(s)"], exceptions["Number of Exceptions"])) == [
+        ("EARLY_DATES", "earlier", 1),
+        ("LATE_DATES", "later", 1),
+    ]

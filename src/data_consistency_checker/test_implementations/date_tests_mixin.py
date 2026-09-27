@@ -62,8 +62,6 @@ class DateTestsMixin(CheckerState):
 
     def _check_early_dates(self, test_id):
         for col_name in self.date_cols:
-            # todo: may need to cast back to datetime: pd.to_datetime(self.orig_df[col_name]) -- do all these methods
-            #   also add the interpolation all these methods
             q1 = pd.to_datetime(self.orig_df[col_name]).quantile(0.25, interpolation='midpoint')
             q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
@@ -96,8 +94,8 @@ class DateTestsMixin(CheckerState):
 
     def _check_late_dates(self, test_id):
         for col_name in self.date_cols:
-            q1 = pd.to_datetime(self.orig_df[col_name]).quantile(0.25)
-            q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75)
+            q1 = pd.to_datetime(self.orig_df[col_name]).quantile(0.25, interpolation='midpoint')
+            q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
                 upper_limit = q3 + (self.iqr_limit * (q3 - q1))  # Using a stricter threshold than the 2.2 normally used
             except Exception:
