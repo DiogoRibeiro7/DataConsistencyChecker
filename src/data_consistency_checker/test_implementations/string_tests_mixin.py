@@ -947,8 +947,9 @@ class StringTestsMixin(CheckerState):
     def _check_many_chars(self, test_id):
         for col_name in self.string_cols:
             val_lens = as_str(self.orig_df[col_name].fillna("")).str.len()
-            q1 = val_lens.quantile(0.25)
-            q3 = val_lens.quantile(0.75)
+            val_lens_no_null = as_str(self.orig_df[col_name].dropna()).str.len()
+            q1 = val_lens_no_null.quantile(0.25)
+            q3 = val_lens_no_null.quantile(0.75)
             upper_limit = q3 + (self.iqr_limit * (q3 - q1))
             test_series = val_lens < upper_limit
             self._process_analysis_binary(

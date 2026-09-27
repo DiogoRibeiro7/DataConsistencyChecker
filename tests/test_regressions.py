@@ -145,6 +145,24 @@ def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
     assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [7, 9]
 
 
+@pytest.mark.parametrize(
+    ("test_id", "low", "high", "unusual"), [("MANY_CHARS", 5, 11, 30), ("FEW_CHARS", 100, 201, 10)]
+)
+def test_many_and_few_chars_ignore_missing_values_when_finding_the_usual_lengths(test_id, low, high, unusual) -> None:
+    # MANY_CHARS counted missing values as empty strings in the quartiles of the lengths, so with many missing values
+    # the limit rose and unusually long values were missed. FEW_CHARS uses only the values present.
+    rng = np.random.default_rng(0)
+    values = ["a" * length for length in rng.integers(low, high, 300)]
+    values[150] = "a" * unusual
+    missing = rng.random(300) < 0.4
+    missing[150] = False
+    df = pd.DataFrame({"text": [None if is_missing else value for value, is_missing in zip(values, missing)]})
+
+    checker = _run(df, [test_id])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [150]
+
+
 def test_same_first_chars_reports_the_shared_prefix_length() -> None:
     rng = np.random.default_rng(0)
     letters = np.array(list("abcdefghijklmnopqrstuvwxyz"))
