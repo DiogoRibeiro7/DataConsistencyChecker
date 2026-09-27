@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import math
 import os
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,13 +20,21 @@ from IPython.display import Markdown, display
 from matplotlib.patches import Rectangle
 
 from .checker_state import CheckerState
-from .checker_utils import as_str, clean_x_tick_labels, is_notebook, print_text, replace_special_with_space
+from .checker_utils import (
+    as_str,
+    clean_x_tick_labels,
+    is_notebook,
+    library_call,
+    print_text,
+    replace_special_with_space,
+)
 
 
 class PlotsMixin(CheckerState):
     """Mixin providing plotting utilities for :class:`DataConsistencyChecker`."""
 
 
+    @library_call
     def check_data_quality_by_feature_pairs(self, max_features_shown: int = 30) -> None:
         """
         Show how often simple relationships hold between each pair of numeric columns.
@@ -113,6 +122,7 @@ class PlotsMixin(CheckerState):
     # Public methods to output the results of the analysis in various ways
     ##################################################################################################################
 
+    @library_call
     def plot_final_scores_distribution_by_row(self):
         """
         Display a probability plot and histogram representing the distribution of final scores by row.
@@ -140,6 +150,7 @@ class PlotsMixin(CheckerState):
             s.set_title("Distribution of Scores per Row (Excluding Scores of 0)")
             plt.show()
 
+    @library_call
     def plot_final_scores_distribution_by_feature(self):
         """
         Display a bar plot representing the distribution of final scores by feature.
@@ -153,6 +164,7 @@ class PlotsMixin(CheckerState):
         s.set_title("Distribution of Total Scores per Column")
         plt.show()
 
+    @library_call
     def plot_final_scores_distribution_by_test(self):
         """
         Display a bar plot representing the distribution of final scores by test.
@@ -170,6 +182,7 @@ class PlotsMixin(CheckerState):
         s.set_title("Distribution of Scores per Test")
         plt.show()
 
+    @library_call
     def quick_report(self):
         """
         Display an overview of the results in one call.
@@ -206,6 +219,7 @@ class PlotsMixin(CheckerState):
         display_plot(self.plot_final_scores_distribution_by_test, "Final Scores by Test")
 
 
+    @library_call
     def plot_columns_vs_final_scores(self):
         """
         Used to determine if there are any relationships between column values and the final scores of the rows. This
@@ -451,7 +465,9 @@ class PlotsMixin(CheckerState):
             s.set_title(f'Distribution of "{x_col}" and "{y_col}"')
             s.legend().remove()
             s.set_xlim(xlim)
-            s.set_ylim(ylim)
+            with warnings.catch_warnings():  # Constant values give equal limits, which matplotlib widens
+                warnings.simplefilter('ignore', UserWarning)
+                s.set_ylim(ylim)
             apply_gridlines(ax)
             draw_diagonal(ax)
             clean_x_tick_labels(fig, 1, ax)
@@ -476,7 +492,9 @@ class PlotsMixin(CheckerState):
             s.set_title(f'Distribution of \n"{x_col}" \nand \n"{y_col}" \n(excluding flagged values)')
             s.legend().remove()
             s.set_xlim(xlim)
-            s.set_ylim(ylim)
+            with warnings.catch_warnings():  # Constant values give equal limits, which matplotlib widens
+                warnings.simplefilter('ignore', UserWarning)
+                s.set_ylim(ylim)
             apply_gridlines(ax[0])
             draw_diagonal(ax[0])
             clean_x_tick_labels(fig, 2, ax[0])
@@ -506,7 +524,9 @@ class PlotsMixin(CheckerState):
             s.legend().remove()
             apply_gridlines(ax[1])
             s.set_xlim(xlim)
-            s.set_ylim(ylim)
+            with warnings.catch_warnings():  # Constant values give equal limits, which matplotlib widens
+                warnings.simplefilter('ignore', UserWarning)
+                s.set_ylim(ylim)
             clean_x_tick_labels(fig, 2, ax[1])
 
         plt.tight_layout()

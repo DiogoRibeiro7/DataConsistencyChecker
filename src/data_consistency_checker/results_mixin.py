@@ -11,7 +11,7 @@ import pandas as pd
 import seaborn as sns
 
 from .checker_state import CheckerState
-from .checker_utils import print_text, truncate_description
+from .checker_utils import library_call, print_text, truncate_description
 from .report import DataConsistencyReport
 
 
@@ -128,6 +128,7 @@ class ResultsMixin(CheckerState):
             self.single_test_summary_df = self.single_test_summary_df.fillna("-")
         return self.single_test_summary_df
 
+    @library_call
     def get_patterns_list(
         self,
         test_exclude_list: list[str] | None = None,
@@ -224,6 +225,7 @@ class ResultsMixin(CheckerState):
 
         return pd.DataFrame(self.test_results_by_column_np, columns=self.orig_df.columns)
 
+    @library_call
     def summarize_patterns_by_test_and_feature(self, all_tests: bool = False, heatmap: bool = False):
         """
         Return a table of the patterns found without exceptions, by check and column.
@@ -276,6 +278,7 @@ class ResultsMixin(CheckerState):
         return df.replace(0, '')
 
 
+    @library_call
     def summarize_exceptions_by_test_and_feature(
             self, all_tests: bool = False, heatmap: bool = False):
         """
@@ -327,6 +330,7 @@ class ResultsMixin(CheckerState):
         return df.replace(0, '')
 
 
+    @library_call
     def summarize_patterns_by_test(self, heatmap: bool = False):
         """
         Return, for each check that found patterns without exceptions, how many columns or column sets have one.
@@ -359,6 +363,7 @@ class ResultsMixin(CheckerState):
             plt.show()
         return df
 
+    @library_call
     def summarize_exceptions_by_test(self, heatmap: bool = False):
         """
         Return, for each check that found exceptions, how many columns and rows it flagged.
@@ -404,6 +409,7 @@ class ResultsMixin(CheckerState):
             plt.show()
         return df
 
+    @library_call
     def summarize_patterns_and_exceptions(self, all_tests: bool = False, heatmap: bool = False) -> pd.DataFrame:
         """Summarize patterns and exceptions for each test.
 
@@ -486,6 +492,7 @@ class ResultsMixin(CheckerState):
             ["FINAL SCORE", "NORMALIZED SCORE"]
         ].copy()
 
+    @library_call
     def get_results_by_row_id(self, row_num: int) -> list[tuple[str, str]]:
         """
         Return the exceptions that flag one row.
@@ -749,6 +756,7 @@ class ResultsMixin(CheckerState):
             print(f"Flagged {(self.test_results_by_column_np.sum(axis=0) > 0).sum()} column(s) with at least one exception.")
 
 
+    @library_call
     def clear_results(
             self,
             test_id_list: list[str] | None = None,
