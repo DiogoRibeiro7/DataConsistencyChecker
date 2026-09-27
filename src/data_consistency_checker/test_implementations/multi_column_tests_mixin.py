@@ -362,6 +362,7 @@ class MultiColumnTestsMixin(CheckerState):
 
         # To avoid calculating the matching for pairs of columns multiple times, we cache their matching.
         sample_pairs_match_bool_dict: dict[tuple[str, str], bool] = {}
+        sample_pairs_match_arr_dict: dict[tuple[str, str], list[bool]] = {}
         pairs_match_arr_dict: dict[tuple[str, str], list[bool]] = {}
 
         num_combinations_tested = 0
@@ -389,7 +390,8 @@ class MultiColumnTestsMixin(CheckerState):
                         (match_1_2_sample_arr.count(False) < match_sample_okay_limit):
                     sample_pairs_match_bool_dict[(col_name_1, col_name_2)] = False
                     continue
-                sample_pairs_match_bool_dict[(col_name_1, col_name_2)] = False
+                sample_pairs_match_bool_dict[(col_name_1, col_name_2)] = True
+                sample_pairs_match_arr_dict[(col_name_1, col_name_2)] = match_1_2_sample_arr
 
                 if (col_name_1, col_name_2) in pairs_match_arr_dict:
                     if not pairs_match_arr_dict[(col_name_1, col_name_2)]:
@@ -420,6 +422,7 @@ class MultiColumnTestsMixin(CheckerState):
                         if (col_name_3, col_name_4) in sample_pairs_match_bool_dict:
                             if not sample_pairs_match_bool_dict[(col_name_3, col_name_4)]:
                                 continue
+                            match_3_4_sample_arr = sample_pairs_match_arr_dict[(col_name_3, col_name_4)]
                         else:
                             match_3_4_sample_arr = [(x == y) or (w and z) for x, y, w, z in
                                                     zip(self.sample_df[col_name_3],
@@ -431,6 +434,7 @@ class MultiColumnTestsMixin(CheckerState):
                                 sample_pairs_match_bool_dict[(col_name_3, col_name_4)] = False
                                 continue
                             sample_pairs_match_bool_dict[(col_name_3, col_name_4)] = True
+                            sample_pairs_match_arr_dict[(col_name_3, col_name_4)] = match_3_4_sample_arr
 
                         # With this test, it is not possible to determine a priori how many combinations it will
                         # check. The theoretical limit may be calculated, where all columns of the same type pair

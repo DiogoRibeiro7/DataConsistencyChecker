@@ -51,3 +51,21 @@ def test_binary_matches_sum_skips_only_the_pairs_with_a_near_constant_column() -
     checker = _run(df, ["BINARY_MATCHES_SUM"])
 
     assert _patterns(checker) == ['"a" AND "b" AND "label"']
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# TWO_PAIRS
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def test_two_pairs_uses_the_sample_matches_of_a_cached_inner_pair() -> None:
+    # "c" and "d" are first tested as an inner pair for the outer pair ("a", "x"). For the outer pair ("a", "b"),
+    # the cached pair ("c", "d") was then compared using the sample matches of the previous inner pair, ("x", "d").
+    rng = np.random.default_rng(0)
+    a, x, b, c = (rng.integers(0, 5, 1000) for _ in range(4))
+    d = np.where(a == b, c, c + 1)
+    df = pd.DataFrame({"a": a, "x": x, "b": b, "c": c, "d": d})
+
+    checker = _run(df, ["TWO_PAIRS"])
+
+    assert _patterns(checker) == ['"a" AND "b" AND "c" AND "d"']
