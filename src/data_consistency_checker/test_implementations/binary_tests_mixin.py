@@ -12,6 +12,7 @@ import math
 import random
 import statistics
 from itertools import combinations
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -277,7 +278,7 @@ class BinaryTestsMixin(CheckerState):
         self._add_synthetic_column('bin_and rand_2', [random.choice([0, 1]) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('bin_and all', self.synth_df['bin_and rand_1'] & self.synth_df['bin_and rand_2'])
         self._add_synthetic_column('bin_and most', self.synth_df['bin_and rand_1'] & self.synth_df['bin_and rand_2'])
-        self.synth_df.loc[999, 'bin_and most'] = (self.synth_df.loc[999, 'bin_and most'] + 1) % 2
+        self.synth_df.loc[999, 'bin_and most'] = (cast(np.int64, self.synth_df.loc[999, 'bin_and most']) + 1) % 2
 
 
     def _check_binary_and(self, test_id):
@@ -307,11 +308,11 @@ class BinaryTestsMixin(CheckerState):
                 if val0 == val0:
                     num_val0 = self.orig_df[col_name_other].dropna().tolist().count(val0)
                 else:
-                    num_val0 = self.orig_df[col_name_other].isna().sum()
+                    num_val0 = cast(int, self.orig_df[col_name_other].isna().sum())
                 if val1 == val1:
                     num_val1 = self.orig_df[col_name_other].dropna().tolist().count(val1)
                 else:
-                    num_val1 = self.orig_df[col_name_other].isna().sum()
+                    num_val1 = cast(int, self.orig_df[col_name_other].isna().sum())
                 if num_val0 < count_min:
                     continue
                 if num_val1 < count_min:
@@ -390,7 +391,7 @@ class BinaryTestsMixin(CheckerState):
         self._add_synthetic_column('bin_or rand_2', [random.choice([0, 1]) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('bin_or all', self.synth_df['bin_or rand_1'] | self.synth_df['bin_or rand_2'])
         self._add_synthetic_column('bin_or most', self.synth_df['bin_or rand_1'] | self.synth_df['bin_or rand_2'])
-        self.synth_df.loc[999, 'bin_or most'] = (self.synth_df.loc[999, 'bin_or most'] + 1) % 2
+        self.synth_df.loc[999, 'bin_or most'] = (cast(np.int64, self.synth_df.loc[999, 'bin_or most']) + 1) % 2
 
 
     def _check_binary_or(self, test_id):
@@ -416,11 +417,11 @@ class BinaryTestsMixin(CheckerState):
                 if val0 == val0:
                     num_val0 = self.orig_df[col_name_other].dropna().tolist().count(val0)
                 else:
-                    num_val0 = self.orig_df[col_name_other].isna().sum()
+                    num_val0 = cast(int, self.orig_df[col_name_other].isna().sum())
                 if val1 == val1:
                     num_val1 = self.orig_df[col_name_other].dropna().tolist().count(val1)
                 else:
-                    num_val1 = self.orig_df[col_name_other].isna().sum()
+                    num_val1 = cast(int, self.orig_df[col_name_other].isna().sum())
                 if num_val0 < count_min:
                     continue
                 if num_val1 < count_min:
@@ -495,7 +496,7 @@ class BinaryTestsMixin(CheckerState):
         self._add_synthetic_column('bin_xor rand_2', [random.choice([0, 1]) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('bin_xor all', self.synth_df['bin_xor rand_1'] ^ self.synth_df['bin_xor rand_2'])
         self._add_synthetic_column('bin_xor most', self.synth_df['bin_xor rand_1'] ^ self.synth_df['bin_xor rand_2'])
-        self.synth_df.loc[999, 'bin_xor most'] = (self.synth_df.loc[999, 'bin_xor most'] + 1) % 2
+        self.synth_df.loc[999, 'bin_xor most'] = (cast(np.int64, self.synth_df.loc[999, 'bin_xor most']) + 1) % 2
 
 
     def _check_binary_xor(self, test_id):
@@ -730,7 +731,7 @@ class BinaryTestsMixin(CheckerState):
             cols_df[col_name] = cols_df[col_name].fillna(cols_df[col_name].mode()[0])
 
         cols_np = cols_df.values
-        skipped_subsets = {}
+        skipped_subsets: dict[tuple[int, ...], bool] = {}
 
         # Determine the upper limit on the number of distinct combinations that would allow any rows to be flagged.
         # We only flag a combination if its count is less than 1/50 what we would expect if all unique values
@@ -788,8 +789,8 @@ class BinaryTestsMixin(CheckerState):
                         if count_val < flagged_limit and count_val < ((self.num_rows / len(counts_info[1])) / 50):
                             rare_vals = counts_info[0][count_idx]
                             sub_df = cols_df
-                            for col_idx, col_name in enumerate(subset):
-                                sub_df = sub_df[sub_df[cols[col_name]] == rare_vals[col_idx]]
+                            for col_idx, col_pos in enumerate(subset):
+                                sub_df = sub_df[sub_df[cols[col_pos]] == rare_vals[col_idx]]
                             for i in sub_df.index:
                                 test_series[i] = False
 
@@ -863,10 +864,13 @@ class BinaryTestsMixin(CheckerState):
                 set_0_max = set_0_numeric_vals.max()
                 set_1_min = set_1_numeric_vals.min()
                 set_1_max = set_1_numeric_vals.max()
-                set_0_01_percentile = set_0_numeric_vals.quantile(0.01)
-                set_0_99_percentile = set_0_numeric_vals.quantile(0.99)
-                set_1_01_percentile = set_1_numeric_vals.quantile(0.01)
-                set_1_99_percentile = set_1_numeric_vals.quantile(0.99)
+                set_0_01_percentile = cast(float, set_0_numeric_vals.quantile(0.01))
+                set_0_99_percentile = cast(float, set_0_numeric_vals.quantile(0.99))
+                set_1_01_percentile = cast(float, set_1_numeric_vals.quantile(0.01))
+                set_1_99_percentile = cast(float, set_1_numeric_vals.quantile(0.99))
+
+                # np.array(...) | Series is a Series at runtime; the numpy stubs type it as an ndarray
+                test_series: list[bool] | np.ndarray | pd.Series
 
                 # Test if the numeric values are strictly larger for value 0
                 if set_0_min > set_1_max:
@@ -964,6 +968,9 @@ class BinaryTestsMixin(CheckerState):
         both, is Null. Rows where the binary column is Null do not count for or against the pattern.
         """
 
+        sub_df_0: pd.DataFrame | None
+        sub_df_1: pd.DataFrame | None
+
         def test_set(bin_col, col_name_2, col_name_3):
             nonlocal sub_df_0, sub_df_1
 
@@ -1020,6 +1027,7 @@ class BinaryTestsMixin(CheckerState):
             if sub_df_0 is None:
                 sub_df_0 = self.orig_df[self.orig_df[bin_col] == val0]
                 sub_df_1 = self.orig_df[self.orig_df[bin_col] == val1]
+            assert sub_df_1 is not None  # set together with sub_df_0
 
             # Todo: this handles when the dtype is 'category', but it may be faster to treat as category
             if sub_df_0[col_name_2].dtype.name == 'category' or sub_df_0[col_name_3].dtype.name == 'category':
@@ -1293,14 +1301,14 @@ class BinaryTestsMixin(CheckerState):
                 # array corresponding to the number of instances of val_0
                 val_at_frac_0 = sorted_sum_arr[num_non_null_val_0]
                 idxs_below_threshold_0 = np.where((sum_arr[:50] < val_at_frac_0) & non_null[:50])
-                sub_df_0 = self.orig_df[bin_col].loc[idxs_below_threshold_0]
+                sub_df_0 = self.orig_df[bin_col].loc[idxs_below_threshold_0]  # type: ignore[index]  # stubs reject np.where()'s tuple as a key
                 if sub_df_0.tolist().count(val1) < self.freq_contamination_level:
                     val_0_for_smaller = True
 
                 if not val_0_for_smaller:
                     val_at_frac_1 = sorted_sum_arr[num_non_null_val_1]
                     idxs_below_threshold_1 = np.where((sum_arr[:50] < val_at_frac_1) & non_null[:50])
-                    sub_df_1 = self.orig_df[bin_col].loc[idxs_below_threshold_1]
+                    sub_df_1 = self.orig_df[bin_col].loc[idxs_below_threshold_1]  # type: ignore[index]  # stubs reject np.where()'s tuple as a key
                     if sub_df_1.tolist().count(val0) < self.freq_contamination_level:
                         val_1_for_smaller = True
 
