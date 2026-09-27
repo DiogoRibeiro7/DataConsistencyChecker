@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from data_consistency_checker import DataConsistencyChecker
-from data_consistency_checker.checker_utils import library_call
+from data_consistency_checker import DataConsistencyChecker, checker_utils
+from data_consistency_checker.checker_utils import display_options, library_call
 
 PANDAS_OPTIONS = ["display.width", "display.max_columns", "display.max_colwidth", "display.max_rows",
                   "display.float_format"]
@@ -71,3 +71,16 @@ def test_library_call_restores_the_callers_state_when_the_call_fails() -> None:
     with pytest.raises(ValueError, match="boom"):
         failing()
     assert list(warnings.filters) == filters
+
+
+def test_display_options_widen_tables_outside_notebooks_only(monkeypatch) -> None:
+    width = pd.get_option("display.width")
+
+    monkeypatch.setattr(checker_utils, "is_notebook", lambda: False)
+    with display_options():
+        assert pd.get_option("display.width") == 32000
+    assert pd.get_option("display.width") == width
+
+    monkeypatch.setattr(checker_utils, "is_notebook", lambda: True)  # wide tables slow Jupyter down
+    with display_options():
+        assert pd.get_option("display.width") == width
