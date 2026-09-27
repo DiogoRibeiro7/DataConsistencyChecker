@@ -71,6 +71,7 @@ class ExportMixin(CheckerState):
 
             f.write("<h2 id='Patterns'>Patterns</h2>" + "\n")
             for test_id in test_id_list:
+                assert self.patterns_df is not None
                 sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
 
                 for columns_set in sub_patterns_test['Column(s)'].values:
@@ -84,6 +85,7 @@ class ExportMixin(CheckerState):
 
             f.write("<h2 id='Exceptions'>Exceptions</h2>")
             for test_id in test_id_list:
+                assert self.exceptions_summary_df is not None
                 sub_results_summary_test = self.exceptions_summary_df[self.exceptions_summary_df['Test ID'] == test_id]
                 if len(sub_results_summary_test) == 0:
                     continue
