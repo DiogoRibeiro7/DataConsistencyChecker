@@ -16,7 +16,7 @@ import random
 import string
 import warnings
 from collections.abc import Callable, Iterable, Iterator
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, SupportsFloat, TypeVar, cast
 
 import numpy as np
 import pandas as pd
@@ -208,7 +208,7 @@ def is_missing(x: Any) -> bool:
     if "missing" in str(type(x)):
         return True
     if isinstance(x, numbers.Number):
-        return math.isnan(x)
+        return math.isnan(cast(SupportsFloat, x))
     if x != x:
         return True
     if type(x) in [str, np.str_]:
@@ -228,7 +228,7 @@ def replace_special_with_space(x: str | None) -> str:
     """Replace special characters in ``x`` with spaces."""
     if x is None:
         return ""
-    if x in [np.inf, -np.inf, np.nan]:
+    if not isinstance(x, str) and x in [np.inf, -np.inf, np.nan]:
         return ""
     return "".join(
         [c if ((c in string.ascii_letters) or (c in string.digits)) else " " for c in x]
@@ -263,7 +263,7 @@ def clean_x_tick_labels(fig: Figure, n_axis: int, ax: Axes) -> None:
     num_chars = 0
     for label in ax.xaxis.get_ticklabels():
         if label.get_visible():
-            num_chars += len(label._text)
+            num_chars += len(label.get_text())
 
     if (num_chars > (fig.get_figwidth() * 10 / n_axis)) or (num_chars == 0):
         fig.autofmt_xdate()
@@ -368,7 +368,7 @@ def map_elements(df: pd.DataFrame, func: Callable[[Any], Any]) -> pd.DataFrame:
     Returns:
         A DataFrame of the results, with the same shape as ``df``.
     """
-    return df.map(func) if hasattr(df, "map") else df.applymap(func)
+    return df.map(func) if hasattr(df, "map") else df.applymap(func)  # type: ignore[operator, no-any-return]  # applymap is not in the pandas 3 stubs
 
 
 def column_from_values(values: list[Any], index: pd.Index) -> pd.Series:
@@ -406,7 +406,7 @@ def normalise_dtypes(df: pd.DataFrame) -> pd.DataFrame:
         col = df.iloc[:, col_idx]
         if isinstance(col.dtype, pd.StringDtype):
             values = col.to_numpy(dtype=object, na_value=np.nan)
-            df.isetitem(col_idx, pd.Series(values, index=df.index, dtype=object))
+            df.isetitem(col_idx, pd.Series(values, index=df.index, dtype=object))  # type: ignore[arg-type]  # the stubs omit Series
         elif pd.api.types.is_datetime64_any_dtype(col.dtype) and col.dt.unit != "ns":
             df.isetitem(col_idx, col.dt.as_unit("ns"))
     return df

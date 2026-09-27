@@ -12,6 +12,7 @@ import numbers
 import random
 import statistics
 from itertools import combinations
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -329,7 +330,7 @@ class MultiColumnTestsMixin(CheckerState):
         self._add_synthetic_column('two_pairs_rand_d',
                                     [x if y else x + 1 for x, y in zip(self.synth_df['two_pairs_rand_c'], a_b_match_arr)])
         self.synth_df.loc[999, 'two_pairs_rand_d'] = \
-            self.synth_df.loc[999, 'two_pairs_rand_c'] + 1 if a_b_match_arr[999] \
+            cast(int, self.synth_df.loc[999, 'two_pairs_rand_c']) + 1 if a_b_match_arr[999] \
                 else self.synth_df.loc[999, 'two_pairs_rand_c']
 
 
@@ -360,8 +361,8 @@ class MultiColumnTestsMixin(CheckerState):
         match_okay_limit = self.num_rows / 10.0
 
         # To avoid calculating the matching for pairs of columns multiple times, we cache their matching.
-        sample_pairs_match_bool_dict = {}
-        pairs_match_arr_dict = {}
+        sample_pairs_match_bool_dict: dict[tuple[str, str], bool] = {}
+        pairs_match_arr_dict: dict[tuple[str, str], list[bool]] = {}
 
         num_combinations_tested = 0
 
@@ -742,7 +743,7 @@ class MultiColumnTestsMixin(CheckerState):
         if len(self.numeric_cols) < 2:
             return
 
-        test_series = map_elements(self.orig_df, lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
+        test_series = map_elements(self.orig_df, lambda x: isinstance(x, numbers.Number) and cast(float, x) < 0).sum(axis=1)
         # Missing values may or may not be negative, so rows with missing values do not have a count
         test_series = test_series.where(self.orig_df.notna().all(axis=1))
         self._process_analysis_counts(
