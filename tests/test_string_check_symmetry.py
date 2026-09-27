@@ -202,3 +202,73 @@ def test_number_of_chars_checks_do_not_flag_missing_values(test_id, make_value) 
     checker = _run(df, [test_id])
 
     assert _exceptions(checker) == []
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# LARGE_GIVEN_* and SMALL_GIVEN_*
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def _given_data(test_id: str, distinct_numbers: bool) -> pd.DataFrame:
+    """Numbers that are small (for LARGE_*) or large (for SMALL_*) given label "A", with one outlier there, row 50."""
+    rng = np.random.default_rng(0)
+    label_idx = np.repeat([0, 1, 2], [200, 400, 400])
+    low, high = rng.uniform(0, 3, N_ROWS), rng.uniform(10, 30, N_ROWS)
+    if not distinct_numbers:
+        low, high = low.round(), high.round()
+    numbers = np.where(label_idx == 0, low, high)
+    numbers[50] = 20.0
+    if test_id.startswith("SMALL"):
+        numbers = 33.0 - numbers
+    return pd.DataFrame({"label": ["ABC"[i] for i in label_idx], "number": numbers})
+
+
+@pytest.mark.parametrize("distinct_numbers", [True, False], ids=["many_values", "few_values"])
+@pytest.mark.parametrize("test_id", ["LARGE_GIVEN_VALUE", "SMALL_GIVEN_VALUE"])
+def test_given_value_checks_skip_numeric_columns_with_few_values(test_id, distinct_numbers) -> None:
+    # SMALL_GIVEN_VALUE skipped numeric columns with fewer than sqrt(N) distinct values; LARGE_GIVEN_VALUE did not.
+    checker = _run(_given_data(test_id, distinct_numbers), [test_id])
+
+    if distinct_numbers:
+        assert _flagged_rows(checker, test_id, '"label" AND "number"') == [50]
+    else:
+        assert _exceptions(checker) == []
+
+
+@pytest.mark.parametrize("distinct_values", [True, False], ids=["many_values", "one_value"])
+@pytest.mark.parametrize("test_id", ["LARGE_GIVEN_PREFIX", "SMALL_GIVEN_PREFIX"])
+def test_given_prefix_checks_skip_columns_whose_prefix_is_the_value(test_id, distinct_values) -> None:
+    # LARGE_GIVEN_PREFIX skipped columns with almost as many distinct first words as distinct values, where the first
+    # word says nothing the value does not; SMALL_GIVEN_PREFIX did not.
+    df = _given_data(test_id, distinct_numbers=True)
+    suffixes = np.random.default_rng(1).choice(list(string.ascii_letters), N_ROWS) if distinct_values else "x" * N_ROWS
+    df["label"] = [f"{label}-{suffix}" for label, suffix in zip(df["label"], suffixes)]
+
+    checker = _run(df, [test_id])
+
+    if distinct_values:
+        assert _flagged_rows(checker, test_id, '"label" AND "number"') == [50]
+    else:
+        assert _exceptions(checker) == []
+
+
+@pytest.mark.parametrize("test_id", ["LARGE_GIVEN_PREFIX", "SMALL_GIVEN_PREFIX"])
+def test_given_prefix_checks_use_the_same_limits_for_dates(test_id) -> None:
+    # LARGE_GIVEN_PREFIX sets the limit for dates at 1.5 times the subset's IQR, as dates vary less than numbers.
+    # SMALL_GIVEN_PREFIX used iqr_limit (3.5 by default), so missed this date 2.5 IQRs before the first quartile.
+    rng = np.random.default_rng(0)
+    label_idx = np.repeat([0, 1, 2], [200, 400, 400])
+    days = rng.integers(0, 101, N_ROWS)
+    days[50] = 200
+    large = test_id.startswith("LARGE")
+    starts = np.where(label_idx == 0, np.datetime64("2000-06-01" if large else "2020-06-01"),
+                      np.datetime64("2020-06-01" if large else "2000-06-01"))
+    suffixes = rng.choice(list(string.ascii_letters), N_ROWS)
+    df = pd.DataFrame({
+        "label": [f"{'ABC'[i]}-{suffix}" for i, suffix in zip(label_idx, suffixes)],
+        "when": pd.to_datetime(starts) + pd.to_timedelta(days if large else -days, unit="D"),
+    })
+
+    checker = _run(df, [test_id])
+
+    assert _flagged_rows(checker, test_id, '"label" AND "when"') == [50]

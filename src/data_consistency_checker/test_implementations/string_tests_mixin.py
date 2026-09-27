@@ -3089,6 +3089,10 @@ class StringTestsMixin(CheckerState):
                     sub_dfs_dict[v] = self.orig_df[self.orig_df[col_name_1] == v]
 
             for col_name_2 in self.numeric_cols + self.date_cols:
+
+                if self.orig_df[col_name_2].nunique() < math.sqrt(self.num_rows):
+                    continue
+
                 test_series = [True] * self.num_rows
                 for v in common_values:
                     sub_df = sub_dfs_dict[v]
@@ -3427,7 +3431,7 @@ class StringTestsMixin(CheckerState):
                         q1 = pd.to_datetime(sub_df[col_name_2]).quantile(0.25, interpolation='midpoint')
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
-                            # Use a coeffiecient of 1.5 for dates, which tend to vary much less than numeric values.
+                            # Use a coefficient of 1.5 for dates, which tend to vary much less than numeric values.
                             upper_limit_subset = q3 + (1.5 * (q3 - q1))
                         except Exception:
                             continue
@@ -3462,9 +3466,9 @@ class StringTestsMixin(CheckerState):
         Patterns with exception:
         """
         self._add_synthetic_column('small_given_prefix rand',
-                                    ['A-' + np.random.choice(list(string.ascii_letters))]*100 +
-                                    ['B-' + np.random.choice(list(string.ascii_letters))]*100 +
-                                    ['C-' + np.random.choice(list(string.ascii_letters))]*(self.num_synth_rows - 200))
+                                    ['A-' + np.random.choice(list(string.ascii_letters)) for _ in range(100)] +
+                                    ['B-' + np.random.choice(list(string.ascii_letters)) for _ in range(100)] +
+                                    ['C-' + np.random.choice(list(string.ascii_letters)) for _ in range(self.num_synth_rows - 200)])
         self._add_synthetic_column('small_given_prefix all', np.concatenate([
             np.random.randint(0, 100, 100),
             np.random.randint(100, 200, 100),
@@ -3508,6 +3512,11 @@ class StringTestsMixin(CheckerState):
             first_words = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
             first_words = first_words.mask(self.orig_df[col_name_1].isna().to_numpy())
             if first_words.nunique() > 10:
+                continue
+
+            # Skip columns where the set of unique first words is almost as large as the set of unique strings. In
+            # this case, the first word is not meaningful.
+            if first_words.nunique() > (col_vals[self.orig_df[col_name_1].notna()].nunique() / 2):
                 continue
             vc = first_words.value_counts()
             common_values = []
@@ -3565,7 +3574,8 @@ class StringTestsMixin(CheckerState):
                         q1 = pd.to_datetime(sub_df[col_name_2]).quantile(0.25, interpolation='midpoint')
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
-                            lower_limit_subset = q1 - (self.iqr_limit * (q3 - q1))
+                            # Use a coefficient of 1.5 for dates, which tend to vary much less than numeric values.
+                            lower_limit_subset = q1 - (1.5 * (q3 - q1))
                         except Exception:
                             continue
 
