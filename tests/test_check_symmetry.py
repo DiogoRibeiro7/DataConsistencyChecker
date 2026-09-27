@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from data_consistency_checker import DataConsistencyChecker
 
@@ -190,4 +191,25 @@ def test_positive_and_negative_skip_mirror_image_mostly_zero_columns_alike() -> 
     assert list(zip(patterns["Test ID"], patterns["Column(s)"])) == [
         ("POSITIVE", "all_positive"),
         ("NEGATIVE", "all_negative"),
+    ]
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# BINARY_IMPLIES
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("rare", [(0, 0), (0, 1), (1, 0), (1, 1)])
+def test_binary_implies_describes_each_rare_combination_alike(rare) -> None:
+    # The description for a rare (second value, second value) combination put quotes around the first column's value,
+    # unlike the other three.
+    i, j = rare
+    counts = {(i, j): 40, (i, 1 - j): 850, (1 - i, j): 60, (1 - i, 1 - j): 50}
+    rows = [combination for combination, count in counts.items() for _ in range(count)]
+    df = pd.DataFrame(rows, columns=["a", "b"]).sample(frac=1, random_state=0).reset_index(drop=True)
+
+    checker = _run(df, ["BINARY_IMPLIES"], freq_contamination_level=50)
+
+    assert checker.exceptions_summary_df["Description of Pattern"].tolist() == [
+        f'"a" value: {i} consistently implies "b" value: {1 - j}, with exceptions.'
     ]

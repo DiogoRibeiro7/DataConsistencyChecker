@@ -3828,7 +3828,7 @@ class NumericTestsMixin(CheckerState):
         """
 
         # Try all subsets where it's median is less than this column's, but more than 1/10 of it.
-        # For each target column, try all subsets whose minimum values match this column.
+        # For each target column, try all subsets whose maximum values match this column.
 
         two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
 
@@ -3901,7 +3901,7 @@ class NumericTestsMixin(CheckerState):
                         if not subset_okay:
                             continue
 
-                        # Check if this is a pattern in a trivial way. Check each column in the subset is the min at
+                        # Check if this is a pattern in a trivial way. Check each column in the subset is the max at
                         # least once.
                         subset_okay = True
                         for col in subset_names:

@@ -254,7 +254,7 @@ class BinaryTestsMixin(CheckerState):
                 expected_count = (count_1b / self.num_rows) * (count_2b)
                 if count_bb < expected_count:
                     test_series = np.array(~mask_bb)
-                    pattern_str = f'"{col_name_1}" value: "{val_1b}" consistently implies "{col_name_2}" value: {val_2a}'
+                    pattern_str = f'"{col_name_1}" value: {val_1b} consistently implies "{col_name_2}" value: {val_2a}'
 
             if test_series is not None:
                 self._process_analysis_binary(
