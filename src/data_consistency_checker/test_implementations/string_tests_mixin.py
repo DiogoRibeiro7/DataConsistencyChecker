@@ -221,7 +221,7 @@ class StringTestsMixin(CheckerState):
                 f'Column "{col_name}" consistently contains values without leading spaces'
             )
 
-            # Test if there are a normal number of trailing spaces
+            # Test if there are a normal number of leading spaces
             median_num_spaces = test_series_non_null_counts.median()
             test_series = self.orig_df[col_name].apply(is_missing) | \
                           ((test_series_counts > (median_num_spaces / 2)) & \
@@ -3902,7 +3902,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_small_given_pair(self, test_id):
         """
-        As this test examines many subsets, it sets the threshold for large values based on 2.0 * self.idr_limit.
+        As this test examines many subsets, it sets the threshold for small values based on 2.0 * self.iqr_limit.
 
         This considers only subsets that have larger values than normal for the column.
 
