@@ -542,7 +542,7 @@ class BinaryTestsMixin(CheckerState):
 
                 col_vals_3 = self.column_unique_vals[col_name_3]
                 if self.orig_df[col_name_3].tolist().count(col_vals_3[0]) < (self.num_rows * 0.1) or \
-                        self.orig_df[col_name_3].tolist().count(col_vals_1[1]) < (self.num_rows * 0.1):
+                        self.orig_df[col_name_3].tolist().count(col_vals_3[1]) < (self.num_rows * 0.1):
                     continue
 
                 # Test on sample first

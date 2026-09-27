@@ -97,6 +97,21 @@ def test_binary_implies_compares_each_combination_with_its_expected_count(counts
     assert list(zip(exceptions["Column(s)"], exceptions["Number of Exceptions"])) == expected
 
 
+@pytest.mark.parametrize("input_values", [(0, 1), ("n", "y")], ids=["same_as_result", "other_than_result"])
+def test_binary_xor_checks_inputs_with_other_values_than_the_result(input_values) -> None:
+    # The second input's values were counted using the result column's values, as the first input's were not, so
+    # inputs with other values than the result were skipped.
+    rng = np.random.default_rng(0)
+    x = rng.integers(0, 2, 300)
+    y = rng.integers(0, 2, 300)
+    low, high = input_values
+    df = pd.DataFrame({"out": x ^ y, "in_a": np.where(x == 1, high, low), "in_b": np.where(y == 1, high, low)})
+
+    checker = _run(df, ["BINARY_XOR"])
+
+    assert checker.patterns_df["Column(s)"].tolist() == ['"in_a" AND "in_b" AND "out"']
+
+
 def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
     # The day of the first column was compared with itself, so only the year and month were checked.
     start = pd.Series(pd.date_range("2020-01-01", periods=1000, freq="D"))
