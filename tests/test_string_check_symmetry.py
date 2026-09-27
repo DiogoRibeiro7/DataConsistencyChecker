@@ -137,3 +137,37 @@ def test_first_and_last_char_checks_look_past_whitespace(test_id, chars) -> None
 
     assert (test_id, "varied") in [finding[:2] for finding in expected]
     assert _findings(_run(padded, [test_id])) == expected
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# A_PREFIX_OF_B and A_SUFFIX_OF_B
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("test_id", ["A_PREFIX_OF_B", "A_SUFFIX_OF_B"])
+def test_prefix_and_suffix_checks_look_past_whitespace(test_id) -> None:
+    # A_PREFIX_OF_B stripped the values when testing the full columns but not the sample, and A_SUFFIX_OF_B never did.
+    rng = np.random.default_rng(0)
+    a = ["".join(rng.choice(list(string.ascii_lowercase), 8)) for _ in range(N_ROWS)]
+    b = [f"{x}-tail" if test_id == "A_PREFIX_OF_B" else f"head-{x}" for x in a]
+    padded_a = [f"  {x}  " if i % 5 == 0 else x for i, x in enumerate(a)]
+
+    checker = _run(pd.DataFrame({"a": padded_a, "b": b}), [test_id])
+
+    assert _patterns(checker) == ['"a" AND "b"']
+    assert _exceptions(checker) == []
+
+
+@pytest.mark.parametrize("test_id", ["A_PREFIX_OF_B", "A_SUFFIX_OF_B"])
+def test_prefix_and_suffix_checks_skip_columns_that_are_the_same(test_id) -> None:
+    # Only A_PREFIX_OF_B skipped pairs of columns that are the same wherever both have values. Equal values are not a
+    # strict prefix or suffix of each other, so such pairs can only support a pattern through their missing values.
+    # Here the columns never both have values, and A_SUFFIX_OF_B reported that every row supported one.
+    values = [f"v{i:04d}" for i in range(N_ROWS)]
+    half = N_ROWS // 2
+    df = pd.DataFrame({"a": values[:half] + [None] * half, "b": [None] * half + values[half:]})
+
+    checker = _run(df, [test_id])
+
+    assert _patterns(checker) == []
+    assert _exceptions(checker) == []

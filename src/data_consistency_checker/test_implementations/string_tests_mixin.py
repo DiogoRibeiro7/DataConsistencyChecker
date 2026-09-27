@@ -2767,8 +2767,8 @@ class StringTestsMixin(CheckerState):
                            for w, x, y, z in zip(
                     sample_is_missing_dict[col_name_1],
                     sample_is_missing_dict[col_name_2],
-                    as_str(self.sample_df[col_name_1]),
-                    as_str(self.sample_df[col_name_2])
+                    as_str(self.sample_df[col_name_1]).str.strip(),
+                    as_str(self.sample_df[col_name_2]).str.strip()
                 )]
             if test_series.count(False) > 1:
                 continue
@@ -2804,6 +2804,11 @@ class StringTestsMixin(CheckerState):
 
 
     def _check_a_suffix_of_b(self, test_id):
+        """
+        Handling null values: This test skips columns that are primarily null. Any patterns are not considered violated
+        in a given row if either cell is null.
+        """
+
         is_missing_dict = self.get_is_missing_dict()
         sample_is_missing_dict = self.get_sample_is_missing_dict()
 
@@ -2813,6 +2818,8 @@ class StringTestsMixin(CheckerState):
                 print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
                        f"max_combinations is currently set to {self.max_combinations:,}.")
             return
+
+        cols_same_bool_dict = self.get_cols_same_bool_dict()
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 500 == 0:
@@ -2824,13 +2831,17 @@ class StringTestsMixin(CheckerState):
             if is_missing_dict[col_name_2].tolist().count(True) > (self.num_rows / 2):
                 continue
 
+            # Skip if the two columns are largely the same
+            if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
+                continue
+
             # Test first on a sample
             test_series = [True if (w or x) else ((len(y) < len(z)) and (y == z[-len(y):]))
                            for w, x, y, z in zip(
                     sample_is_missing_dict[col_name_1],
                     sample_is_missing_dict[col_name_2],
-                    as_str(self.sample_df[col_name_1]),
-                    as_str(self.sample_df[col_name_2])
+                    as_str(self.sample_df[col_name_1]).str.strip(),
+                    as_str(self.sample_df[col_name_2]).str.strip()
                 )]
             if test_series.count(False) > 1:
                 continue
@@ -2839,8 +2850,8 @@ class StringTestsMixin(CheckerState):
                            for w, x, y, z in zip(
                     is_missing_dict[col_name_1],
                     is_missing_dict[col_name_2],
-                    as_str(self.orig_df[col_name_1]),
-                    as_str(self.orig_df[col_name_2])
+                    as_str(self.orig_df[col_name_1]).str.strip(),
+                    as_str(self.orig_df[col_name_2]).str.strip()
                 )]
             self._process_analysis_binary(
                 test_id,
