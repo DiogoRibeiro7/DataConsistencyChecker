@@ -150,6 +150,11 @@ class ExecutionMixin(CheckerState):
                     return
                 self.freq_contamination_level = 1
 
+        # Several cached analyses depend on the contamination level, so they are recomputed when it changes
+        if self.freq_contamination_level != self.cache_contamination_level:
+            self._init_variables()
+            self.cache_contamination_level = self.freq_contamination_level
+
         # Adjust the test_start_id to 0 if necessary. 0 is the lowest valid value.
         if test_start_id < 0:
             test_start_id = 0
