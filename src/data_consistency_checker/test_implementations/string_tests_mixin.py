@@ -12,7 +12,6 @@ import math
 import random
 import statistics
 import string
-from collections.abc import Callable
 from typing import cast
 
 import numpy as np
@@ -32,12 +31,6 @@ from data_consistency_checker.checker_utils import (
     is_uppercase,
     replace_special_with_space,
 )
-
-colored: Callable[..., str] | None
-try:
-    from termcolor import colored
-except ImportError:  # pragma: no cover - optional presentation dependency
-    colored = None
 
 letters = string.ascii_letters
 digits = string.digits
@@ -4104,20 +4097,6 @@ class StringTestsMixin(CheckerState):
         assert isinstance(numeric_df, pd.DataFrame)
         numeric_np = numeric_df.values
 
-        # Create a sample. We do not use self.sample_df, as it may have Nulls removed, and we do not wish to remove
-        # rows where the conditioning column has Null values
-        sample_df = self.orig_df.sample(n=50)
-
-        # Create a sample array similarly
-        numeric_sample_df: pd.Series | pd.DataFrame | None = None
-        for col_name in self.numeric_cols:
-            if numeric_sample_df is None:
-                numeric_sample_df = convert_to_numeric(sample_df[col_name], self.column_medians[col_name])
-            else:
-                numeric_sample_df = pd.concat([numeric_sample_df, convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name])], axis=1)
-        assert isinstance(numeric_sample_df, pd.DataFrame)
-        numeric_sample_df.columns = self.numeric_cols
-
         # Determine if there are too many combinations to execute
         num_pairs, numeric_pairs = self._get_numeric_column_pairs_unique()
         total_combinations = num_pairs * (len(self.string_cols) + len(self.binary_cols))
@@ -4165,17 +4144,9 @@ class StringTestsMixin(CheckerState):
                 col_idx_1 = self.numeric_cols.index(col_name_1)
                 col_idx_2 = self.numeric_cols.index(col_name_2)
 
-                # Skip any pairs of columns that are correlated even if not conditioning on another column
-                try:
-                    corr = pairwise_correlation(numeric_sample_df[col_name_1], numeric_sample_df[col_name_2])
-                except Exception as e:
-                    if self.DEBUG_MSG:
-                        if colored:
-                            print(colored(f"Error calculating correlation in {test_id}: {e}", 'red'))
-                        else:
-                            print(f"Error calculating correlation in {test_id}: {e}")
-                    continue
-                if abs(corr) >= 0.75:
+                # Skip any pairs of columns that are correlated even if not conditioning on another column. This is
+                # the Pearson correlation of the full columns, over the rows where both values are present.
+                if abs(self.pearson_corr.loc[col_name_1, col_name_2]) >= 0.75:
                     continue
 
                 # We ensure at least one subset was large enough to test and was correlated, and that there aren't
