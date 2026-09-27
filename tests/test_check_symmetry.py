@@ -19,6 +19,15 @@ def _patterns(checker: DataConsistencyChecker) -> list[str]:
     return checker.patterns_df["Column(s)"].tolist()
 
 
+def _flagged_rows(checker: DataConsistencyChecker) -> dict[tuple[str, str], list[int]]:
+    """Map each (test ID, column set) with exceptions to the rows it flagged."""
+    exceptions = checker.exceptions_summary_df
+    return {
+        (test_id, columns): np.flatnonzero(checker.test_results_df[checker.get_results_col_name(test_id, columns)]).tolist()
+        for test_id, columns in zip(exceptions["Test ID"], exceptions["Column(s)"])
+    }
+
+
 def _near_constant(num_rows: int) -> np.ndarray:
     """A numeric column with one value in all but 3 rows: fewer than the default contamination level of 0.5%."""
     values = np.zeros(num_rows)
@@ -132,3 +141,27 @@ def test_early_and_late_dates_flag_mirror_image_dates_alike() -> None:
         ("EARLY_DATES", "earlier", 1),
         ("LATE_DATES", "later", 1),
     ]
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# LARGE_GIVEN_DATE and SMALL_GIVEN_DATE
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def test_large_and_small_given_date_flag_mirror_image_values_alike() -> None:
+    # "neg_v" mirrors "v", so each check should flag in one column what the other flags in the other. LARGE_GIVEN_DATE
+    # also flagged a value equal to its threshold, which SMALL_GIVEN_DATE does not. And SMALL_GIVEN_DATE examined any
+    # bin whose first quartile is above the column's first decile, where LARGE_GIVEN_DATE only examines bins whose
+    # median and third quartile are below the column's.
+    v = np.arange(1000.0)  # Increases with the date, so each of the 10 bins of dates has 100 rows
+    v[150] = 440.375  # In bin 1, exactly LARGE_GIVEN_DATE's threshold: Q3 175.25 + 1.5 * 3.5 * IQR 50.5
+    v[250] = 700.0  # In bin 2, large for its bin
+    v[450] = 100.0  # In bin 4, small for its bin, but the bin's values are not larger than the column's
+    df = pd.DataFrame({"when": pd.date_range("2020-01-01", periods=1000, freq="D"), "v": v, "neg_v": -v})
+
+    checker = _run(df, ["LARGE_GIVEN_DATE", "SMALL_GIVEN_DATE"])
+
+    assert _flagged_rows(checker) == {
+        ("LARGE_GIVEN_DATE", '"when" AND "v"'): [250],
+        ("SMALL_GIVEN_DATE", '"when" AND "neg_v"'): [250],
+    }

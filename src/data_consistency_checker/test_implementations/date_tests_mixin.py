@@ -900,7 +900,7 @@ class DateTestsMixin(CheckerState):
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
                     num_vals_all = convert_to_numeric(sub_df[num_col], cast(float, med))
-                    sub_test_series = pd.Series([(x < threshold) or (x!=x) or (x is None) for x in num_vals_all])
+                    sub_test_series = pd.Series([(x <= threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:
                         index_of_large = \
@@ -970,8 +970,9 @@ class DateTestsMixin(CheckerState):
 
                 test_series = [True] * self.num_rows
                 for bin_id in bin_labels:
-                    # Get the lower limit (based on IQR), given the full column
-                    lower_limit, col_q1, col_q3 = lower_limits_dict[num_col]
+                    # Get the lower limit (based on the IDR), the median and q1, given the full column
+                    lower_limit, _, col_q1 = lower_limits_dict[num_col]
+                    col_q2 = self.column_medians[num_col]
 
                     # Get the stats for the numeric column for the subset
                     sub_df = sub_dfs_arr_dict[bin_id]
@@ -985,7 +986,7 @@ class DateTestsMixin(CheckerState):
                     # values, though smaller than in LARGE_GIVEN_PAIRS, which looks at still more subsets.
                     threshold = q1 - (iqr * 1.5 * self.iqr_limit)
 
-                    if q1 is None or med is None or q3 is None or lower_limit is None or col_q1 is None or col_q3 is None:
+                    if q1 is None or med is None or q3 is None or lower_limit is None or col_q1 is None or col_q2 is None:
                         continue
 
                     # We are only concerned in this test with subsets that tend to have larger values in the
@@ -995,8 +996,8 @@ class DateTestsMixin(CheckerState):
                     if res_1.tolist().count(True) > 0:
                         continue
 
-                    # Check this subset is small compared to the full column
-                    if q1 <= col_q1:
+                    # Check this subset is large compared to the full column
+                    if (med <= col_q2) or (q1 <= col_q1):
                         continue
 
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
