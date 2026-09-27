@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from data_consistency_checker import DataConsistencyChecker
 
@@ -27,6 +28,10 @@ def _patterns(checker: DataConsistencyChecker) -> list[str]:
 def _exceptions(checker: DataConsistencyChecker) -> list[tuple[str, int]]:
     exceptions = checker.exceptions_summary_df
     return list(zip(exceptions["Column(s)"], exceptions["Number of Exceptions"]))
+
+
+def _flagged_rows(checker: DataConsistencyChecker, test_id: str, column_set: str) -> list[int]:
+    return np.flatnonzero(checker.results_dict[checker.get_results_col_name(test_id, column_set)]).tolist()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,3 +59,41 @@ def test_correlated_given_value_skips_pairs_correlated_without_conditioning() ->
 
     assert _patterns(checker) == ['"group" AND "u" AND "v"']
     assert _exceptions(checker) == []
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# FIRST_CHAR_* and LAST_CHAR_*
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def _codes(chars, rng: np.random.Generator, at_end: bool = False) -> list[str]:
+    """Distinct values starting (or, with at_end, ending) with characters drawn from chars."""
+    picks = rng.choice(list(chars), N_ROWS)
+    return [f"q{i:04d}{c}" if at_end else f"{c}q{i:04d}" for i, c in enumerate(picks)]
+
+
+@pytest.mark.parametrize(
+    ("test_id", "chars", "odd_value", "odd_breaks_pattern"),
+    [
+        ("FIRST_CHAR_UPPERCASE", "ABC", "Àgua", False),
+        ("FIRST_CHAR_UPPERCASE", "ABC", "Ωmega", False),
+        ("FIRST_CHAR_UPPERCASE", "ABC", "×2", True),
+        ("FIRST_CHAR_LOWERCASE", "abc", "école", False),
+        ("FIRST_CHAR_LOWERCASE", "abc", "ñandú", False),
+        ("FIRST_CHAR_LOWERCASE", "abc", "×2", True),
+    ],
+)
+def test_first_char_case_checks_use_unicode_case(test_id, chars, odd_value, odd_breaks_pattern) -> None:
+    # FIRST_CHAR_LOWERCASE accepted only a-z, and FIRST_CHAR_UPPERCASE A-Z plus code points 193-221, which leave out
+    # "À" and take in "×".
+    values = _codes(chars, np.random.default_rng(0))
+    values[10] = values[20] = odd_value
+
+    checker = _run(pd.DataFrame({"code": values}), [test_id])
+
+    if odd_breaks_pattern:
+        assert _patterns(checker) == []
+        assert _flagged_rows(checker, test_id, "code") == [10, 20]
+    else:
+        assert _patterns(checker) == ["code"]
+        assert _exceptions(checker) == []

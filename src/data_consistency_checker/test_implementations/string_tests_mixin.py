@@ -28,7 +28,6 @@ from data_consistency_checker.checker_utils import (
     convert_to_numeric,
     get_non_alphanumeric,
     is_missing,
-    is_uppercase,
     replace_special_with_space,
 )
 
@@ -452,7 +451,7 @@ class StringTestsMixin(CheckerState):
             if value_lens_arr.quantile(0.9) <= 1:
                 continue
 
-            test_series = as_str(self.orig_df[col_name]).str[:1].apply(is_uppercase)
+            test_series = as_str(self.orig_df[col_name]).str[:1].str.isupper()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
@@ -486,7 +485,7 @@ class StringTestsMixin(CheckerState):
             if value_lens_arr.quantile(0.9) <= 1:
                 continue
 
-            test_series = as_str(self.orig_df[col_name]).str[:1].isin(list(string.ascii_lowercase))
+            test_series = as_str(self.orig_df[col_name]).str[:1].str.islower()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
