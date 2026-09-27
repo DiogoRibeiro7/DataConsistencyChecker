@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - optional presentation dependency
     colored = None
 
 from .checker_state import CheckerState
+from .checker_utils import library_call, preserve_random_state
 
 
 class ExecutionMixin(CheckerState):
@@ -60,6 +61,8 @@ class ExecutionMixin(CheckerState):
             raise structured from error
         return structured
 
+    @library_call
+    @preserve_random_state()
     def check_data_quality(
         self,
         append_results: bool = False,

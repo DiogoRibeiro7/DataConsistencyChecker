@@ -24,6 +24,7 @@ from .checker_utils import (
     get_num_decimal_digits,
     is_missing,
     is_notebook,
+    library_call,
     map_elements,
     print_line,
     print_text,
@@ -68,6 +69,7 @@ class DisplayMixin(CheckerState):
             if definition.implemented
         ]
 
+    @library_call
     def print_test_descriptions(self, long_desc: bool = False, f: object | None = None) -> None:
         """Print test descriptions.
 
@@ -115,6 +117,7 @@ class DisplayMixin(CheckerState):
         """
         return [test_id for test_id, definition in self.test_dict.items() if definition.code]
 
+    @library_call
     def demo_test(self, test_id: str, include_nulls: bool = False) -> None:
         """Demonstrate a single test on synthetic data.
 
@@ -182,6 +185,7 @@ class DisplayMixin(CheckerState):
             print(f"Executing test {test_num:3}: {test_id} \n  {desc}")
 
 
+    @library_call
     def display_next(self):
         """
         Display the detailed results of the next check that found something.
@@ -209,6 +213,7 @@ class DisplayMixin(CheckerState):
         self.display_detailed_results(test_id_list=[test_id], max_shown=25)
         self.current_display_test += 1
 
+    @library_call
     def display_least_flagged_rows(self, with_results: bool = True, n_rows: int = 10) -> None:
         """
         Display the rows with the lowest outlier scores.
@@ -233,6 +238,7 @@ class DisplayMixin(CheckerState):
             else:
                 print(df)
 
+    @library_call
     def display_most_flagged_rows(self, with_results: bool = True, n_rows: int = 10) -> None:
         """
         Display the rows with the highest outlier scores.
@@ -265,6 +271,7 @@ class DisplayMixin(CheckerState):
             else:
                 print(df)
 
+    @library_call
     def display_detailed_results(
             self,
             test_id_list: list[str] | None = None,
@@ -930,14 +937,14 @@ class DisplayMixin(CheckerState):
         # Set the row order
         df = df.sort_values(df.columns[-1]) if test_id in ['SMALL_GIVEN_DATE', 'LARGE_GIVEN_DATE'] else df.sort_index()
 
-        pd.options.display.float_format = '{:f}'.format
-        if f:
-            f.write(df.to_html())
-            f.write("<br><br>")
-        elif is_notebook():
-            display(df)
-        else:
-            print(df)
+        with pd.option_context('display.float_format', '{:f}'.format):
+            if f:
+                f.write(df.to_html())
+                f.write("<br><br>")
+            elif is_notebook():
+                display(df)
+            else:
+                print(df)
 
     def _draw_rows_around_flagged_row(self, df, test_id, cols, display_info, f):
         """
@@ -1343,6 +1350,7 @@ class DisplayMixin(CheckerState):
     # ------------------------------------------------------------------
     # Dataset statistics helpers
     # ------------------------------------------------------------------
+    @library_call
     def display_columns_types_list(self) -> None:
         """Display lists of columns for each inferred type."""
         print()
@@ -1373,6 +1381,7 @@ class DisplayMixin(CheckerState):
         else:
             print_text("None")
 
+    @library_call
     def display_columns_types_table(self) -> None:
         """Display the inferred types along with sample data."""
         var_types = []

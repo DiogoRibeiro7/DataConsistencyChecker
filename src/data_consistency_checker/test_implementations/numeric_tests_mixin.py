@@ -14,6 +14,7 @@ import random
 import statistics
 import string
 import sys
+import warnings
 from itertools import combinations
 
 import numpy as np
@@ -4590,7 +4591,10 @@ class NumericTestsMixin(CheckerState):
             y = scaler.fit_transform(y.values.reshape(-1, 1)).reshape(1, -1)[0]
 
             try:
-                regr.fit(train_x_data, train_y)
+                # Lasso with alpha=0 is an unregularised fit, as intended; scikit-learn warns about it
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    regr.fit(train_x_data, train_y)
             except Exception as e:
                 if self.DEBUG_MSG:
                     if colored:

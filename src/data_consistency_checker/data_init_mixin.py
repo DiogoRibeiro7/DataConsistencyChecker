@@ -16,9 +16,8 @@ from .checker_utils import (
     column_from_values,
     convert_to_numeric,
     is_missing,
-    is_notebook,
+    library_call,
     normalise_dtypes,
-    set_warnings_levels,
 )
 from .tests_definitions import get_all_test_definitions
 
@@ -49,8 +48,6 @@ class DataInitMixin(CheckerState):
                  1: Display test names during execution
                  2: Display test descriptions and progress updates
         """
-
-        set_warnings_levels()
 
         # Set class variables from the parameters
         # iqr_limit indicates how many multiples of the IQR below the 1st quartile or above the 3rd quartile are
@@ -150,15 +147,6 @@ class DataInitMixin(CheckerState):
         self.single_test_summary_dict = {}
         self.single_test_summary_df = None
 
-        # Display options. There are relevant only when running this in a debugger or notebook.
-        # Note: these can significantly slow down Jupyter in some environments, and so is set only for debugger
-        # environments.
-        if not is_notebook():
-            pd.set_option('display.width', 32000)
-            pd.set_option('display.max_columns', 3000)
-            pd.set_option('display.max_colwidth', 3000)
-            pd.set_option('display.max_rows', 5000)
-
         # A dictionary describing each test. For each, we have the ID, description, method to test for the pattern
         # and exceptions, a method to generate synthetic data to demonstrate the test, and in indicator if the
         # pattern is in the patterns short list (ie, the patterns listed by default in a call to get_patterns()),
@@ -175,6 +163,7 @@ class DataInitMixin(CheckerState):
 
 
 
+    @library_call
     def init_data(
         self,
         df: pd.DataFrame,
@@ -263,7 +252,7 @@ class DataInitMixin(CheckerState):
         # necessary for this tool, so will only add this if necessary.
 
         # As we cannot define the format for the date columns, attempts to cast values to datetime may present
-        # warnings, which we ignore, but only during this process.
+        # warnings, which we ignore until init_data() returns (see library_call()).
         warnings.filterwarnings(action='ignore', category=UserWarning)
         if known_date_cols is None:
             new_date_cols = []
@@ -346,7 +335,6 @@ class DataInitMixin(CheckerState):
                     self.numeric_cols.remove(datecol)
                 if datecol in self.binary_cols:
                     self.binary_cols.remove(datecol)
-        set_warnings_levels()
         self.orig_df = normalise_dtypes(self.orig_df)  # pd.to_datetime() may have used another resolution
 
         # For any columns flagged as string columns, the dtype may be category.  Convert the columns to string to

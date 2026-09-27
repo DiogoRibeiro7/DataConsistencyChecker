@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .checker_state import CheckerState
-from .checker_utils import normalise_dtypes, print_text
+from .checker_utils import library_call, normalise_dtypes, preserve_random_state, print_text
 
 
 def _with_missing(values: pd.Series, positions: list[int]) -> pd.Series:
@@ -31,6 +31,8 @@ def _with_missing(values: pd.Series, positions: list[int]) -> pd.Series:
 class SynthDataMixin(CheckerState):
     """Provide synthetic data utilities to :class:`DataConsistencyChecker`."""
 
+    @library_call
+    @preserve_random_state()
     def generate_synth_data(
         self,
         all_cols: bool = False,
@@ -110,6 +112,7 @@ class SynthDataMixin(CheckerState):
             axis=1)
 
 
+    @library_call
     def modify_real_data(
         self, df: pd.DataFrame, num_modifications: int = 5
     ) -> tuple[pd.DataFrame, list[tuple[int, str]]]:

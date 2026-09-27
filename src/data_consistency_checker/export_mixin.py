@@ -5,16 +5,19 @@ from __future__ import annotations
 import os
 
 from .checker_state import CheckerState
+from .checker_utils import library_call
 
 
 class ExportMixin(CheckerState):
     """Mixin providing HTML export helpers."""
 
+    @library_call
     def gpt_export_html(self):
         """Retained compatibility stub for the unsupported legacy exporter."""
         print("get_export_html() not supported in this version")
         return
 
+    @library_call
     def export_html(self, test_id_list=None, output_file: str = "Data_consistency.html"):
         """Export patterns and exceptions to an HTML report.
 

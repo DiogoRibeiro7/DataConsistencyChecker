@@ -9,12 +9,14 @@ package to keep the main module more maintainable.
 from __future__ import annotations
 
 import contextlib
+import functools
 import math
 import numbers
+import random
 import string
 import warnings
-from collections.abc import Callable, Iterable
-from typing import Any
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any, ParamSpec, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -267,8 +269,16 @@ def clean_x_tick_labels(fig: Figure, n_axis: int, ax: Axes) -> None:
         fig.autofmt_xdate()
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
 def set_warnings_levels() -> None:
-    """Suppress third-party library warnings."""
+    """Suppress the third-party warnings the checks trigger routinely.
+
+    Only call this inside ``warnings.catch_warnings()``, as ``library_call`` does, so the caller's filters are
+    restored afterwards.
+    """
     warnings.filterwarnings(action="ignore", category=ConvergenceWarning)
     warnings.filterwarnings(action="ignore", category=FutureWarning)
     with contextlib.suppress(Exception):
@@ -279,6 +289,48 @@ def set_warnings_levels() -> None:
         warnings.filterwarnings(action="ignore", category=scipy_stats.ConstantInputWarning)
     with contextlib.suppress(Exception):
         warnings.filterwarnings(action="ignore", category=scipy_stats.NearConstantInputWarning)
+
+
+def display_options() -> contextlib.AbstractContextManager[Any]:
+    """Return a context that widens pandas' display, so printed tables are not truncated.
+
+    Notebooks are left alone: wide tables can slow Jupyter down noticeably.
+    """
+    if is_notebook():
+        return contextlib.nullcontext()
+    return pd.option_context(
+        "display.width", 32000, "display.max_columns", 3000, "display.max_colwidth", 3000, "display.max_rows", 5000
+    )
+
+
+def library_call(func: Callable[P, R]) -> Callable[P, R]:
+    """Run a public method with the library's warning filters and display options, restoring the caller's.
+
+    The checks routinely trigger third-party warnings (model convergence, constant input, deprecations) that say
+    nothing about the data, and printed tables need a wide display. Neither setting outlives the call.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        with warnings.catch_warnings(), display_options():
+            set_warnings_levels()
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
+@contextlib.contextmanager
+def preserve_random_state() -> Iterator[None]:
+    """Restore the global ``random`` and ``numpy.random`` states on exit.
+
+    Some methods seed the global generators to give reproducible results; the caller's state is put back afterwards.
+    """
+    random_state, np_random_state = random.getstate(), np.random.get_state()
+    try:
+        yield
+    finally:
+        random.setstate(random_state)
+        np.random.set_state(np_random_state)
 
 
 # ---------------------------------------------------------------------------
