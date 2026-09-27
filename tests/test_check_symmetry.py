@@ -165,3 +165,29 @@ def test_large_and_small_given_date_flag_mirror_image_values_alike() -> None:
         ("LARGE_GIVEN_DATE", '"when" AND "v"'): [250],
         ("SMALL_GIVEN_DATE", '"when" AND "neg_v"'): [250],
     }
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# POSITIVE and NEGATIVE
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+def test_positive_and_negative_skip_mirror_image_mostly_zero_columns_alike() -> None:
+    # NEGATIVE skips columns where over 75% of the values are not negative, so a mostly zero column is not reported
+    # as consistently zero or negative. POSITIVE had no such filter, so the mirror image column was reported as
+    # consistently positive.
+    rng = np.random.default_rng(0)
+    mostly_zero = np.where(rng.random(1000) < 0.8, 0.0, rng.integers(1, 100, 1000).astype(float))
+    all_positive = rng.integers(1, 100, 1000).astype(float)
+    df = pd.DataFrame(
+        {"mostly_zero": mostly_zero, "all_positive": all_positive, "mostly_zero_neg": -mostly_zero,
+         "all_negative": -all_positive}
+    )
+
+    checker = _run(df, ["POSITIVE", "NEGATIVE"])
+
+    patterns = checker.patterns_df
+    assert list(zip(patterns["Test ID"], patterns["Column(s)"])) == [
+        ("POSITIVE", "all_positive"),
+        ("NEGATIVE", "all_negative"),
+    ]

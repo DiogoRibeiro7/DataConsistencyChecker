@@ -218,6 +218,10 @@ class NumericTestsMixin(CheckerState):
             if self.orig_df[col_name].notna().sum() < self.freq_contamination_level:
                 continue
             vals_arr = convert_to_numeric(self.orig_df[col_name], 1)
+            # As in NEGATIVE, skip columns that are mostly not strictly positive, such as mostly zero columns
+            test_series_pos = (vals_arr > 0)
+            if test_series_pos.tolist().count(False) > (self.num_rows * 0.75):
+                continue
             test_series = (self.orig_df[col_name].isna()) | (vals_arr >= 0)
             self._process_analysis_binary(
                 test_id,
