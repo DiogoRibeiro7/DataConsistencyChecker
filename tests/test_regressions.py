@@ -71,6 +71,18 @@ def test_binary_matches_sum_describes_the_second_value_going_with_the_smaller_su
     ]
 
 
+def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
+    # The day of the first column was compared with itself, so only the year and month were checked.
+    start = pd.Series(pd.date_range("2020-01-01", periods=1000, freq="D"))
+    end = start.copy()
+    end[7] = pd.Timestamp("2020-01-28")  # the same year and month as 2020-01-08
+    end[9] = pd.Timestamp("2020-02-10")  # the same year and day as 2020-01-10
+
+    checker = _run(pd.DataFrame({"start": start, "end": end}), ["SAME_DATE"])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [7, 9]
+
+
 def test_same_first_chars_reports_the_shared_prefix_length() -> None:
     rng = np.random.default_rng(0)
     letters = np.array(list("abcdefghijklmnopqrstuvwxyz"))
