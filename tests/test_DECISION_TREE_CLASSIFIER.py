@@ -106,7 +106,9 @@ def test_synthetic_no_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_one_row_nulls():
-    synth_test(test_id, "one-row", 0, 2)  # The pattern is now an exception
+    # Row 0 is null in every column, and missing values neither support nor violate the pattern, so the results are
+    # those found without nulls.
+    synth_test(test_id, "one-row", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones

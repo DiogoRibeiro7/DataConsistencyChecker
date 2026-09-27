@@ -247,7 +247,7 @@ class DataInitMixin(CheckerState):
             elif self.orig_df[col_name].dtype in [np.datetime64, 'datetime64[ns]']:
                 self.date_cols.append(col_name)
             elif pandas_types.is_numeric_dtype(self.orig_df[col_name]) or \
-                    as_str(self.orig_df[col_name]).str.replace('-', '', regex=False).str.\
+                    as_str(self.orig_df[col_name].dropna()).str.replace('-', '', regex=False).str.\
                             replace('.', '', regex=False).str.isdigit().tolist().count(False) < default_contamination_level:
                 self.numeric_cols.append(col_name)
             else:
@@ -268,15 +268,17 @@ class DataInitMixin(CheckerState):
         if known_date_cols is None:
             new_date_cols = []
             for col_name in self.string_cols + self.numeric_cols:
-                avg_num_chars = statistics.median(as_str(self.orig_df[col_name]).str.len())
-                num_rows_all_digits = as_str(self.orig_df[col_name]).str.isdigit().tolist().count(True)
+                # Judge the format on the values present: missing values would read as 'nan' or 'None'
+                col_vals = as_str(self.orig_df[col_name].dropna())
+                avg_num_chars = statistics.median(col_vals.str.len())
+                num_rows_all_digits = col_vals.str.isdigit().tolist().count(True)
 
                 # Do not convert to date if the strings are too short. They must be at least yyyymm (6 characters)
                 if avg_num_chars < 6:
                     continue
 
                 # Do not convert to date if the strings are almost all digits and are too long
-                if num_rows_all_digits > (self.num_rows / 2) and avg_num_chars > 8:
+                if num_rows_all_digits > (len(col_vals) / 2) and avg_num_chars > 8:
                     continue
 
                 # Try some known formats before letting pandas attempt to determine the format
@@ -385,13 +387,12 @@ class DataInitMixin(CheckerState):
 
         trimmed_orig_df = self.orig_df.copy()
         if len(self.numeric_cols) > 0:
-            # Calculate and cache the pairwise correlations between each numeric column
-            numeric_df = None
-            for col_name in self.numeric_cols:
-                if numeric_df is None:
-                    numeric_df = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])
-                else:
-                    numeric_df = pd.concat([numeric_df, convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])], axis=1)
+            # Calculate and cache the pairwise correlations between each numeric column. Missing values stay missing,
+            # so each correlation uses the rows where both columns have values.
+            numeric_df = pd.concat([
+                convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name]).where(
+                    self.orig_df[col_name].notna().to_numpy())
+                for col_name in self.numeric_cols], axis=1)
             numeric_df.columns = self.numeric_cols
 
             # Calculate the correlations between the numeric columns

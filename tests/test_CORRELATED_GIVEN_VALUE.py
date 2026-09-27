@@ -38,12 +38,21 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # Null is one of the values conditioned on (rows 0 to 499). The nulls added to the rows with value "B" join that
+    # subset, which then mixes the positive and negative relationships, so no pattern can be found.
+    synth_test(test_id, "random", [], [])
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # Fewer than the 100 rows needed to test a subset remain in the Null subset (rows 0 to 499, including the exception
+    # in row 499) with both numeric values. The "B" subset alone shows both relationships as patterns.
+    synth_test(
+        test_id,
+        "80-percent",
+        synth_patterns_cols + ['"corr_given_val rand_a" AND "corr_given_val most" AND "corr_given_val rand_string"'],
+        [],
+    )
 
 
 @requires_synthetic_all_columns

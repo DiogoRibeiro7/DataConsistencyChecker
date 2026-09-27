@@ -450,25 +450,24 @@ class AnalysisCacheMixin(CheckerState):
         def check_match(col_name_a, col_name_b):
             pairs_tuple = tuple(sorted([col_name_a, col_name_b]))
 
+            def compare(df):
+                # Rows with a missing value in either column are neither the same nor different
+                both_present = df[col_name_a].notna() & df[col_name_b].notna()
+                are_same_arr = [bool(present and x == y)
+                                for x, y, present in zip(df[col_name_a], df[col_name_b], both_present)]
+                num_different = [present and not same for same, present in zip(are_same_arr, both_present)].count(True)
+                return are_same_arr, num_different
+
             # Test first on a sample
-            are_same_arr = [(x == y) or (n1 and n2)
-                            for x, y, n1, n2 in zip(
-                                    self.sample_df[col_name_a],
-                                    self.sample_df[col_name_b],
-                                    self.sample_df[col_name_a].isna(),
-                                    self.sample_df[col_name_b].isna())]
-            if are_same_arr.count(False) > 1:
+            are_same_arr, num_different = compare(self.sample_df)
+            if num_different > 1:
                 self.cols_same_bool_dict[pairs_tuple] = False
                 self.cols_same_count_dict[pairs_tuple] = (are_same_arr.count(True) / len(self.sample_df)) * self.num_rows
                 return
 
             # Test on the full columns
-            are_same_arr = [(x == y) or (n1 and n2)
-                            for x, y, n1, n2 in zip(self.orig_df[col_name_a],
-                                                    self.orig_df[col_name_b],
-                                                    self.orig_df[col_name_a].isna(),
-                                                    self.orig_df[col_name_b].isna())]
-            if are_same_arr.count(True) > (self.num_rows - self.freq_contamination_level):
+            are_same_arr, num_different = compare(self.orig_df)
+            if num_different < self.freq_contamination_level:
                 self.cols_same_bool_dict[pairs_tuple] = True
             else:
                 self.cols_same_bool_dict[pairs_tuple] = False
@@ -568,8 +567,8 @@ class AnalysisCacheMixin(CheckerState):
     def get_col_triples_any_null_bool_dict(self):
         """
         Similar to get_col_pairs_either_null_bool_dict(), but checks triples of numeric columns and triples where one
-        is binary and two are numeric. Each element contains a single boolean value for each pair of columns indicating
-        True if there are at least 10% of the rows having no nulls.
+        is binary and two are numeric. Each element contains a single boolean value for each triple of columns,
+        True if over 90% of the rows have a null in at least one of the three columns.
         """
         if self.col_triples_all_null_bool_dict:
             return self.col_triples_all_null_bool_dict
@@ -591,7 +590,7 @@ class AnalysisCacheMixin(CheckerState):
         for triple in triples_arr:
             triple = list(triple)
             self.col_triples_all_null_bool_dict[tuple(sorted(triple))] = \
-                self.orig_df[triple].isna().sum(axis=1).tolist().count(True) > threshold
+                self.orig_df[triple].isna().any(axis=1).sum() > threshold
 
         return self.col_triples_all_null_bool_dict
 

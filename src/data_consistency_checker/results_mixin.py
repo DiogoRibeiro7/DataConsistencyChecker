@@ -657,11 +657,17 @@ class ResultsMixin(CheckerState):
         values are much less common than the others.
         """
 
+        def value_to_str(x):
+            # Missing values (NaN) make a series of whole numbers float: show those without the '.0'
+            if has_missing and isinstance(x, float) and x.is_integer():
+                return str(int(x))
+            return str(x)
+
         def arr_to_str(arr):
             s = ""
             sorted_arr = sorted(arr)
             for x_ix, x in enumerate(sorted_arr):
-                s += str(x)
+                s += value_to_str(x)
                 if x_ix == len(sorted_arr)-1:
                     break
                 if len(sorted_arr) == 2 and x_ix == 0:
@@ -674,6 +680,7 @@ class ResultsMixin(CheckerState):
             return s
 
         test_series = pd.Series(test_series)
+        has_missing = test_series.isna().any()
 
         col_name = original_cols[0] if len(original_cols) == 1 else self.get_col_set_name(original_cols)
 
@@ -681,7 +688,7 @@ class ResultsMixin(CheckerState):
             if allow_patterns:
                 self.patterns_arr.append([test_id,
                                           col_name,
-                                          f'{pattern_string_1} {test_series[0]} {pattern_string_2}',
+                                          f'{pattern_string_1} {value_to_str(test_series.dropna().iloc[0])} {pattern_string_2}',
                                           display_info])
                 self.col_to_original_cols_dict[col_name] = original_cols
         elif test_series.nunique() <= 5:

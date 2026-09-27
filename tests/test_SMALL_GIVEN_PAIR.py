@@ -40,17 +40,23 @@ def test_synthetic_one_row_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_in_sync_nulls():
-    synth_test(test_id, "in-sync", synth_patterns_cols, synth_exceptions_cols)
+    # With this many nulls, each pair of values in the two string columns has fewer than the 200 rows the check
+    # needs, so it does not execute (as its docstring notes).
+    synth_test(test_id, "in-sync", synth_patterns_cols, [])
 
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # With this many nulls, each pair of values in the two string columns has fewer than the 200 rows the check
+    # needs, so it does not execute (as its docstring notes).
+    synth_test(test_id, "random", synth_patterns_cols, [])
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # With this many nulls, each pair of values in the two string columns has fewer than the 200 rows the check
+    # needs, so it does not execute (as its docstring notes).
+    synth_test(test_id, "80-percent", synth_patterns_cols, [])
 
 
 @requires_synthetic_all_columns

@@ -41,12 +41,13 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # As documented by the check, a Null value in only one of the two compared columns is not a match.
+    synth_test(test_id, "random", 0, 0)
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", 0, 0)
+    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_all_columns

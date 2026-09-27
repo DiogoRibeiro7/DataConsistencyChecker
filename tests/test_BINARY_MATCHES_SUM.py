@@ -113,12 +113,12 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", 0, 2)  # The pattern is now an exception
+    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", 0, 0)
+    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_all_columns

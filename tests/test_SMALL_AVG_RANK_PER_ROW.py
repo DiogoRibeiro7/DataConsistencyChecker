@@ -45,7 +45,9 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # Rows now average about 5 percentiles rather than 10, which widens their spread: the limit falls below 0 and
+    # row 999 is no longer flagged.
+    synth_test(test_id, "random", synth_patterns_cols, 0)
 
 
 @requires_synthetic_nones

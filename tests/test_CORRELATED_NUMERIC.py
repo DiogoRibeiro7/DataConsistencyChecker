@@ -83,12 +83,16 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
+    # Only about 240 rows have values in both "correlated rand_a" and "correlated most", and with so few rows the one
+    # exception (row 999) lowers their Spearman correlation to 0.9948, below the 0.995 the check requires
+    synth_test(test_id, "random", synth_patterns_cols, [])
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
+    # Only 200 rows have values, and with so few rows the one exception (row 999) lowers the Spearman correlation of
+    # "correlated rand_a" and "correlated most" to 0.9944, below the 0.995 the check requires
+    synth_test(test_id, "80-percent", synth_patterns_cols, [])
 
 
 @requires_synthetic_all_columns

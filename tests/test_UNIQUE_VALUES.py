@@ -30,12 +30,8 @@ def test_synthetic_no_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_one_row_nulls():
-    synth_test(
-        test_id,
-        "one-row",
-        [],  # This test does not cover columns with Nulls
-        [],
-    )
+    # As documented by the check, a column with one Null value may still have consistently unique values.
+    synth_test(test_id, "one-row", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones

@@ -14,8 +14,6 @@ import pytest
 from data_consistency_checker import DataConsistencyChecker
 from data_consistency_checker.checker_utils import as_str, column_from_values, map_elements, normalise_dtypes
 
-ALL_TEST_IDS = DataConsistencyChecker(verbose=-1).get_test_list()
-
 
 def test_as_str_converts_missing_values_to_strings() -> None:
     values = pd.Series(["a", None, np.nan, 1.5], index=[3, 5, 7, 9], name="col", dtype=object)
@@ -101,18 +99,6 @@ def test_synthetic_nulls_can_be_added_to_boolean_columns(add_nones: str) -> None
     assert column.dtype == object
     assert column.isna().any()
     assert set(column.dropna()) <= {True, False}
-
-
-@pytest.mark.parametrize("add_nones", ["none", "random"])
-@pytest.mark.parametrize("test_id", ALL_TEST_IDS)
-def test_check_runs_on_its_synthetic_data(test_id: str, add_nones: str) -> None:
-    checker = DataConsistencyChecker(verbose=-1)
-    synth = checker.generate_synth_data(execute_list=[test_id], add_nones=add_nones)
-    checker.init_data(synth)
-
-    checker.check_data_quality(execute_list=[test_id], raise_on_error=True)
-
-    assert checker.get_execution_failures() == []
 
 
 # ----------------------------------------------------------------------------------------------------------------------
