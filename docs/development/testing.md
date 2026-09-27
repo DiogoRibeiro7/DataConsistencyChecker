@@ -37,6 +37,6 @@ that ran. `TEST_SYNTHETIC_NONES` (on by default) turns off the variants with mis
 
 ## Continuous integration
 
-Every pull request to `main` runs Ruff, mypy (not blocking), the tests with coverage on Python 3.10–3.14, a
-package build with smoke tests of the imports and the CLI, and a strict documentation build. Codecov reports the
-coverage of the changed lines.
+Every pull request to `main` runs Ruff, mypy (on Python 3.12, with pandas-stubs), the tests with coverage on
+Python 3.10–3.14 and with the newest release of each dependency, a package build with smoke tests of the imports
+and the CLI, and a strict documentation build. Codecov reports the coverage of the changed lines.

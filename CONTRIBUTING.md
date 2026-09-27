@@ -25,13 +25,14 @@ These are the checks CI runs. Run them locally before opening a pull request:
 poetry check --lock                                        # pyproject.toml and poetry.lock agree
 poetry run ruff check src                                  # full rule set on the package
 poetry run ruff check tests --select E9,F63,F7,F82         # correctness rules on the tests
+poetry run mypy src                                        # type checks (Python 3.11+ for pandas-stubs)
 poetry run pytest --cov=data_consistency_checker --cov-report=term-missing
 poetry build                                               # the package builds
 ```
 
 CI runs the tests on Python 3.10, 3.11, 3.12, 3.13 and 3.14, and Codecov reports the coverage of the lines each
 pull request changes (*patch coverage*): new and changed code should be covered by tests. `poetry run mypy src`
-also runs in CI; it is not yet blocking, but should not get worse.
+must pass as well: CI runs it on Python 3.12, with pandas-stubs (a dev dependency on Python 3.11 and later).
 
 If you change the documentation, also build it (see [Documentation](#documentation)).
 
