@@ -1354,7 +1354,7 @@ class BinaryTestsMixin(CheckerState):
                     threshold = val_at_frac_1
 
                     # Test on a sample of rows
-                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
+                    test_series = [bool(x == val1 and y <= threshold or x == val0 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col].head(sample_size), sum_arr.head(sample_size))]
                     test_series = np.array(test_series) | \
                                   self.orig_df[bin_col].head(sample_size).isna() | \
@@ -1364,7 +1364,7 @@ class BinaryTestsMixin(CheckerState):
                         continue
 
                     # Test on the full columns
-                    test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
+                    test_series = [bool(x == val1 and y <= threshold or x == val0 and y >= threshold)
                                    for x, y in zip(self.orig_df[bin_col], sum_arr)]
                     if not check_nulls_matching(bin_col, num_col_1, num_col_2):
                         continue
@@ -1378,7 +1378,7 @@ class BinaryTestsMixin(CheckerState):
                         [num_col_1, num_col_2, bin_col],
                         test_series,
                         (f'Column "{bin_col}" is consistently {val1} when the sum of columns "{num_col_1}" and '
-                         f'"{num_col_2}" is over {threshold} and {val0} when the sum is under'),
+                         f'"{num_col_2}" is under {threshold} and {val0} when the sum is over.'),
                     )
 
     ##################################################################################################################

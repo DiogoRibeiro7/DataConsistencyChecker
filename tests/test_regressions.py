@@ -57,6 +57,20 @@ def test_column_tends_desc_evaluates_date_columns() -> None:
     assert ("COLUMN_TENDS_DESC", "when") in set(zip(checker.patterns_df["Test ID"], checker.patterns_df["Column(s)"]))
 
 
+def test_binary_matches_sum_describes_the_second_value_going_with_the_smaller_sums() -> None:
+    # The branch for the second binary value going with the smaller sums tested and described the opposite direction.
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({"a": rng.integers(0, 100, 200).astype(float), "b": rng.integers(0, 100, 200).astype(float)})
+    df["label"] = np.where(df["a"] + df["b"] < 101, 1, 0)
+
+    checker = _run(df, ["BINARY_MATCHES_SUM"])
+
+    assert checker.patterns_df["Description of Pattern"].tolist() == [
+        'Column "label" is consistently 1 when the sum of columns "a" and "b" is under 101.0 and 0 when the sum is '
+        "over."
+    ]
+
+
 def test_same_first_chars_reports_the_shared_prefix_length() -> None:
     rng = np.random.default_rng(0)
     letters = np.array(list("abcdefghijklmnopqrstuvwxyz"))
