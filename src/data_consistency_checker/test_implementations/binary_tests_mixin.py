@@ -399,7 +399,8 @@ class BinaryTestsMixin(CheckerState):
             def get_or(x):
                 or_v = 0
                 for v in x:
-                    or_v = or_v | (is_missing(v) | v)
+                    # Missing values are filled with -1 below. As in get_and(), they leave the result unchanged.
+                    or_v = or_v | (is_missing(v) | max(v, 0))
                 return or_v
 
             # Determine which other columns may potentially be OR'd to match col_name.

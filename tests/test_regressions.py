@@ -97,6 +97,22 @@ def test_binary_implies_compares_each_combination_with_its_expected_count(counts
     assert list(zip(exceptions["Column(s)"], exceptions["Number of Exceptions"])) == expected
 
 
+@pytest.mark.parametrize(("test_id", "func"), [("BINARY_AND", np.minimum), ("BINARY_OR", np.maximum)])
+def test_binary_and_or_ignore_missing_inputs_in_the_first_rows(test_id, func) -> None:
+    # Both checks first test the first 10 rows. A missing input left BINARY_AND's result unchanged, but set
+    # BINARY_OR's to -1, so two missing inputs among those rows hid the pattern.
+    rng = np.random.default_rng(0)
+    a = rng.integers(0, 2, 300).astype(float)
+    b = rng.integers(0, 2, 300).astype(float)
+    df = pd.DataFrame({"a": a, "b": b, "out": func(a, b)})
+    rows = [i for i in range(10) if df.loc[i, "b"] == df.loc[i, "out"]][:2]  # "a" does not decide these results
+    df.loc[rows, "a"] = np.nan
+
+    checker = _run(df, [test_id])
+
+    assert checker.patterns_df["Column(s)"].tolist() == ['"a" AND "b" AND "out"']
+
+
 @pytest.mark.parametrize("input_values", [(0, 1), ("n", "y")], ids=["same_as_result", "other_than_result"])
 def test_binary_xor_checks_inputs_with_other_values_than_the_result(input_values) -> None:
     # The second input's values were counted using the result column's values, as the first input's were not, so
