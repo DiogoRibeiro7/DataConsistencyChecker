@@ -91,3 +91,12 @@ suits CI jobs where any failure should stop the run.
     `run_parallel=True` is not supported: checks store their results on the checker, so checks run in other
     processes could not report them back. Passing it issues a `RuntimeWarning` and runs the checks
     sequentially.
+
+### Warnings, display options and random state
+
+The checks routinely trigger warnings from pandas, SciPy and scikit-learn (deprecations, model convergence,
+constant input) that say nothing about your data, so the checker hides them while its methods run. Outside
+notebooks it also widens pandas' display while it prints tables. Both last only for the duration of each call:
+your own warning filters and pandas options are left as they were. `check_data_quality()` and
+`generate_synth_data()` seed the `random` and `numpy.random` generators for reproducible results, and put back
+their previous state when they return.
