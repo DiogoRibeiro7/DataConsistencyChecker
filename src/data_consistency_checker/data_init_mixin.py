@@ -463,6 +463,7 @@ class DataInitMixin(CheckerState):
             print()
 
     def _init_variables(self):
+        self.cache_contamination_level = None
         self.lower_limits_dict = None
         self.upper_limits_dict = None
         self.larger_pairs_dict = None

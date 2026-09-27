@@ -55,6 +55,8 @@ class CheckerState:
 
     # Contamination levels. freq_contamination_level is a number of rows once check_data_quality() has set it.
     freq_contamination_level: float
+    # The freq_contamination_level the cached analyses were computed with (None when nothing is cached).
+    cache_contamination_level: float | None
     rare_contamination_level: float
 
     # Synthetic data, built by generate_synth_data()
@@ -181,6 +183,7 @@ class CheckerState:
 
         # Implemented by DataInitMixin (data_init_mixin.py)
         def init_data(self, df: pd.DataFrame, known_date_cols: list[str] | None = None) -> None: ...
+        def _init_variables(self) -> None: ...
 
         # Implemented by DisplayMixin (display_mixin.py)
         def get_test_list(self) -> list[str]: ...
