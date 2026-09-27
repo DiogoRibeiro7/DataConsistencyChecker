@@ -63,7 +63,8 @@ class StringTestsMixin(CheckerState):
         col_values: The values in col_name, either in the original order of the data, or sorted by sort_col if there
             is a sort_col
 
-        Handling null values: this does not currently support many null values.
+        Handling null values: this does not currently support many null values. Null values are treated as any other
+        value, so if interspersed through the column will negate any grouping.
         """
 
         # Skip if there are any rare values
@@ -77,24 +78,14 @@ class StringTestsMixin(CheckerState):
         if self.orig_df[col_name].nunique() < 3:
             return
 
-        # First test if a pattern holds when removing all null values
+        # Null values are kept in place, which keeps the actual row numbers. They break any run of the same value.
         col_df = pd.DataFrame({col_name: col_values})
-        col_df.dropna()
         col_df['Next'] = col_df[col_name].shift(1)
         col_df['Same'] = col_df[col_name] == col_df['Next']
         num_same = col_df['Same'].tolist().count(True)
         # There will always be rows not like the next: where the list moves from one value to the next. So ideally,
         # the number of rows that are the same as the next is the total number of rows - (number values -1). As well,
         # the last row is always unlike the next, as the next is undefined.
-        ideal_same = self.num_valid_rows[col_name] - self.orig_df[col_name].nunique()
-        if (ideal_same - num_same) > self.freq_contamination_level:
-            return
-
-        # Test with the null values. This is necessary to maintain the actual row numbers
-        col_df = pd.DataFrame({col_name: col_values})
-        col_df['Next'] = col_df[col_name].shift(1)
-        col_df['Same'] = col_df[col_name] == col_df['Next']
-        num_same = col_df['Same'].tolist().count(True)
         ideal_same = self.num_valid_rows[col_name] - self.orig_df[col_name].nunique()
         if (ideal_same - num_same) > self.freq_contamination_level:
             return
@@ -1588,6 +1579,9 @@ class StringTestsMixin(CheckerState):
     def _check_grouped_strings(self, test_id):
         """
         This is similar to GROUPED_STRINGS_BY_NUMERIC, but uses the row order the data is received in.
+
+        Handling null values: as in GROUPED_STRINGS_BY_NUMERIC, null values are treated as any other value and so if
+        interspersed through the column will negate any grouping.
         """
         for col_name in self.string_cols + self.binary_cols:
             if self.orig_df[col_name].nunique() > math.sqrt(self.num_rows):
