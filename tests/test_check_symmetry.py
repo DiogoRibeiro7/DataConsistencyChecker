@@ -98,6 +98,19 @@ def test_similar_to_negative_treats_zero_as_the_negative_of_zero() -> None:
     assert checker.exceptions_summary_df.empty
 
 
+def test_similar_to_negative_skips_columns_that_are_mostly_zero_together() -> None:
+    # With zero counting as its own negative, two mostly zero columns would otherwise be reported.
+    rng = np.random.default_rng(0)
+    x, y = np.zeros(1000), np.zeros(1000)
+    x[:4], y[:4] = rng.integers(1, 100, 4), rng.integers(1, 100, 4)
+    df = pd.DataFrame({"x": x, "y": y, "noise": rng.normal(size=1000)})
+
+    checker = _run(df, ["SIMILAR_TO_NEGATIVE"])
+
+    assert checker.patterns_df.empty
+    assert checker.exceptions_summary_df.empty
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # LARGER_THAN_ABS_DIFF
 # ----------------------------------------------------------------------------------------------------------------------
