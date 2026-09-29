@@ -2597,6 +2597,50 @@ class NumericTestsMixin(CheckerState):
         cols_same_bool_dict = self.get_cols_same_bool_dict()
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
+        # Values depending on a single column, computed once rather than once per pair
+        nunique_dict: dict[str, int] = {}
+        isna_dict: dict[str, np.ndarray] = {}
+        numeric_np_dict: dict[str, np.ndarray | None] = {}
+
+        # Most pairs are far from a running sum. For these, the rows where the test below passes are counted with
+        # numpy, and the pandas code, which produces the results, runs only where the count can give a pattern or
+        # exceptions. The count is the same as with pandas where the index is 0 to n-1 (as numeric_vals_filled's is)
+        # and the running sum is compared to a numpy numeric column.
+        use_fast_count = self.orig_df.columns.is_unique and (self.num_rows >= 1) and \
+            self.orig_df.index.equals(pd.RangeIndex(self.num_rows))
+
+        def get_nunique(col_name):
+            if col_name not in nunique_dict:
+                nunique_dict[col_name] = self.orig_df[col_name].nunique()
+            return nunique_dict[col_name]
+
+        def get_isna(col_name):
+            if col_name not in isna_dict:
+                isna_dict[col_name] = self.orig_df[col_name].isna().to_numpy()
+            return isna_dict[col_name]
+
+        def get_numeric_np(col_name):
+            # The column's values, if it is a numpy numeric column, else None
+            if col_name not in numeric_np_dict:
+                col = self.orig_df[col_name]
+                is_numeric = isinstance(col.dtype, np.dtype) and (col.dtype.kind in 'iuf')
+                numeric_np_dict[col_name] = col.to_numpy() if is_numeric else None
+            return numeric_np_dict[col_name]
+
+        def count_running_sum_rows(col_name_1, col_name_2, vals_np_1):
+            # The number of True values in test_series below
+            vals_arr_1 = self.numeric_vals_filled[col_name_1].to_numpy()
+            vals_arr_2 = self.numeric_vals_filled[col_name_2].to_numpy()
+            test_arr_a = np.full(self.num_rows, np.nan)
+            with np.errstate(all='ignore'):
+                test_arr_a[1:] = vals_arr_1[:-1] + vals_arr_2[1:]
+                test_arr = vals_np_1 == test_arr_a
+            test_arr[0] = True
+            isna_arr_1 = get_isna(col_name_1)
+            test_arr |= isna_arr_1 | get_isna(col_name_2)
+            test_arr[1:] |= isna_arr_1[:-1]
+            return int(np.count_nonzero(test_arr))
+
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                 print(f"  Examining pair {pair_idx:,} of {len(numeric_pairs_list):,} pairs of numeric columns")
@@ -2607,14 +2651,22 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             # Skip where the columns have few unique values
-            if self.orig_df[col_name_1].nunique() < 10:
+            if get_nunique(col_name_1) < 10:
                 continue
-            if self.orig_df[col_name_2].nunique() < 10:
+            if get_nunique(col_name_2) < 10:
                 continue
 
             # Skip where the two columns are very similar (suggesting a different relationship than a running sum)
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
+
+            # Skip where _process_analysis_binary() would record neither a pattern nor exceptions
+            vals_np_1 = get_numeric_np(col_name_1) if use_fast_count else None
+            if vals_np_1 is not None:
+                num_true = count_running_sum_rows(col_name_1, col_name_2, vals_np_1)
+                if not ((num_true == self.num_rows) or
+                        ((self.num_rows - self.freq_contamination_level) <= num_true < self.num_rows)):
+                    continue
 
             # This is more robust than checking the cumulative sum, which can be thrown off by missing or
             # inaccurate values.
@@ -3549,6 +3601,92 @@ class NumericTestsMixin(CheckerState):
         if not can_process:
             return
 
+        # The sample's values, per column, for test_on_sample(), computed once rather than once per subset
+        sample_notna_dict: dict[str, np.ndarray] = {}
+        sample_float_dict: dict[str, np.ndarray | None] = {}
+
+        def get_sample_notna(col_name):
+            if col_name not in sample_notna_dict:
+                sample_notna_dict[col_name] = self.sample_df[col_name].notna().to_numpy()
+            return sample_notna_dict[col_name]
+
+        def get_sample_float(col_name):
+            # The column's values as float. This is None where they can not be converted, or where converting gives
+            # NaN values in rows that are not missing (pandas skips these when summing).
+            if col_name not in sample_float_dict:
+                try:
+                    vals_arr = self.sample_df[col_name].astype(float).to_numpy()
+                except Exception:
+                    vals_arr = None
+                if (vals_arr is not None) and np.isnan(vals_arr[get_sample_notna(col_name)]).any():
+                    vals_arr = None
+                sample_float_dict[col_name] = vals_arr
+            return sample_float_dict[col_name]
+
+        def get_median(values_arr):
+            # The same as pd.Series(values_arr).median(): the median of the values other than NaN, which np.sort()
+            # puts last
+            sorted_list = np.sort(values_arr).tolist()
+            num_values = len(sorted_list) - int(np.count_nonzero(np.isnan(values_arr)))
+            if num_values == 0:
+                return math.nan
+            if num_values % 2 == 1:
+                return sorted_list[num_values // 2]
+            return (sorted_list[(num_values // 2) - 1] + sorted_list[num_values // 2]) / 2
+
+        def all_but_one_close(values_list, target):
+            # The same as [math.isclose(x, target) for x in values_list].count(False) <= 1
+            num_false = 0
+            for x in values_list:
+                if not math.isclose(x, target):
+                    num_false += 1
+                    if num_false > 1:
+                        return False
+            return True
+
+        def test_on_sample(subset, col_name):
+            """
+            Check the 3 sub-tests below on the sample with numpy, which is much faster than with pandas. Where none
+            passes, this returns the number of rows where col_name is larger than the sum of subset. It returns None
+            where any passes, and where the results may differ from those of the pandas code: where pandas skips NaN
+            values, or where the sums may round differently.
+            """
+            vals_arrs = []
+            for c in [*subset, col_name]:
+                vals_arr = get_sample_float(c)
+                if vals_arr is None:
+                    return None
+                vals_arrs.append(vals_arr)
+
+            # Skip rows with missing values
+            rows_arr = np.logical_and.reduce([get_sample_notna(c) for c in [*subset, col_name]])
+            if not rows_arr.all():
+                vals_arrs = [vals_arr[rows_arr] for vals_arr in vals_arrs]
+
+            with np.errstate(all='ignore'):
+                # Sum the columns in order, as pandas does where the frame stores its values column by column, as it
+                # does here. Where it stores them row by row, numpy sums each row pairwise. This gives the same sums
+                # for fewer than 8 columns, but may round differently for more, so these are compared, and where they
+                # differ, the pandas code is used.
+                col_sums = 0.0 + vals_arrs[0]
+                for vals_arr in vals_arrs[1:-1]:
+                    col_sums = col_sums + vals_arr
+                if len(subset) >= 8:
+                    pairwise_sums = np.column_stack(vals_arrs[:-1]).sum(axis=1)
+                    if not np.array_equal(col_sums.view(np.int64), pairwise_sums.view(np.int64)):
+                        return None
+
+                col_vals = vals_arrs[-1]
+                diffs_arr = col_vals - col_sums
+                if (len(diffs_arr) - np.count_nonzero(diffs_arr == 0)) <= 1:
+                    return None
+                if all_but_one_close(diffs_arr.tolist(), get_median(diffs_arr)):
+                    return None
+                ratios_arr = col_vals / col_sums
+                if all_but_one_close(ratios_arr.tolist(), get_median(ratios_arr)):
+                    return None
+            return int(np.count_nonzero(col_vals > col_sums))
+
         for col_idx, col_name in enumerate(column_pos_arr):
             if (self.verbose == 2 and col_idx > 0 and col_idx % 10 == 0) or (self.verbose >= 3):
                 print(f"  Examining column: {col_idx} of {len(column_pos_arr)} positive numeric columns)")
@@ -3560,7 +3698,9 @@ class NumericTestsMixin(CheckerState):
             found_any = False
 
             # For any subsets whose sum is too small to match col_name, there is no use trying any smaller subsets.
-            know_failed_subsets: dict[tuple[str, ...], bool] = {}
+            # These are held as bit masks over similar_cols, which are much faster to compare than sets.
+            know_failed_masks: list[int] = []
+            col_bits = {c: 1 << c_idx for c_idx, c in enumerate(similar_cols)}
 
             starting_size = len(similar_cols)
             if limit_subset_sizes:
@@ -3576,24 +3716,36 @@ class NumericTestsMixin(CheckerState):
                     if self.verbose >= 3 and len(similar_cols) > 15 and subset_idx > 0 and subset_idx % 10_000 == 0:
                         print(f"    Examining subset {subset_idx:,}")
 
-                    # Check if this subset is a subset of any subsets previously tried which were too small.
-                    subset_matches = True
-                    for kfs in know_failed_subsets:
-                        if set(kfs).issuperset(set(subset)):
-                            subset_matches = False
-                            break
-                    if not subset_matches:
-                        continue
-
                     # Check if this set of columns summing to col_name is plausible, checking if the sum of medians is
                     # significantly smaller or larger. actually, no -- we check ading/ multiply by constant below
+                    # This is checked first, as it is faster and excludes more subsets than the next check.
                     sum_of_medians: float = 0
                     for c in subset:
                         sum_of_medians += self.column_medians[c]
                     if sum_of_medians > (self.column_medians[col_name] * 1.1):
                         continue
 
+                    # Check if this subset is a subset of any subsets previously tried which were too small.
+                    subset_mask = 0
+                    for c in subset:
+                        subset_mask |= col_bits[c]
+                    subset_matches = True
+                    for failed_mask in know_failed_masks:
+                        if (failed_mask & subset_mask) == subset_mask:
+                            subset_matches = False
+                            break
+                    if not subset_matches:
+                        continue
+
                     subset = list(subset)
+
+                    # Where none of the 3 sub-tests pass on the sample, which is by far the most common case, the
+                    # pandas code below would only record whether the subset's sum is too small
+                    num_too_small = test_on_sample(subset, col_name)
+                    if num_too_small is not None:
+                        if num_too_small > 1:
+                            know_failed_masks.append(subset_mask)
+                        continue
 
                     # Check all 3 sub-tests on a sample first, skipping rows with missing values
                     sample_df = self.sample_df[[*subset, col_name]].dropna().astype(float)
@@ -3636,11 +3788,11 @@ class NumericTestsMixin(CheckerState):
                             break
                         too_small_arr = self.orig_df[col_name].astype(float) > col_sums
                         if too_small_arr.tolist().count(True) > self.freq_contamination_level:
-                            know_failed_subsets[tuple(subset)] = True
+                            know_failed_masks.append(subset_mask)
                     else:
                         too_small_arr = sample_df[col_name] > col_sums
                         if too_small_arr.tolist().count(True) > 1:
-                            know_failed_subsets[tuple(subset)] = True
+                            know_failed_masks.append(subset_mask)
 
                     # Check if there is a constant difference between the column sums and the values in col_name. If so,
                     # column col_name is the sum of the columns plus a constant. We determine if the median value in
@@ -3717,6 +3869,21 @@ class NumericTestsMixin(CheckerState):
 
         two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
 
+        def filter_on_two_rows(subsets, col_idx):
+            """
+            Yield the subsets that pass the test on just 2 rows below. Where the rows hold numpy numbers, this tests
+            many subsets at once, which is much faster, and gives the same minimums. Otherwise, all subsets are yielded.
+            """
+            if two_rows_np.dtype.kind not in 'iuf':
+                yield from subsets
+                return
+            for chunk_start in range(0, len(subsets), 10_000):
+                chunk_subsets = subsets[chunk_start: chunk_start + 10_000]
+                chunk_mins = two_rows_np[:, np.array(chunk_subsets, dtype=np.intp)].min(axis=2)
+                chunk_num_false = (~(two_rows_np[:, [col_idx]] == chunk_mins)).sum(axis=0)
+                for subset_idx in np.flatnonzero(chunk_num_false <= 1).tolist():
+                    yield chunk_subsets[subset_idx]
+
         # Identify the set of similar columns for each positive numeric column
         similar_cols_dict, similar_cols_idxs_dict, calc_size = self.get_similar_cols(
             self.numeric_cols, include_self=False, lower_divisor=1.0, upper_multiplier=10.0, check_larger_false=True)
@@ -3751,7 +3918,7 @@ class NumericTestsMixin(CheckerState):
                         printed_column_status = True
                     print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
 
-                for subset in subsets:
+                for subset in filter_on_two_rows(subsets, col_idx):
                     subset = list(subset)
 
                     # Test on just 2 rows
@@ -3835,6 +4002,21 @@ class NumericTestsMixin(CheckerState):
 
         two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
 
+        def filter_on_two_rows(subsets, col_idx):
+            """
+            Yield the subsets that pass the test on just 2 rows below. Where the rows hold numpy numbers, this tests
+            many subsets at once, which is much faster, and gives the same maximums. Otherwise, all subsets are yielded.
+            """
+            if two_rows_np.dtype.kind not in 'iuf':
+                yield from subsets
+                return
+            for chunk_start in range(0, len(subsets), 10_000):
+                chunk_subsets = subsets[chunk_start: chunk_start + 10_000]
+                chunk_maxs = two_rows_np[:, np.array(chunk_subsets, dtype=np.intp)].max(axis=2)
+                chunk_num_false = (~(two_rows_np[:, [col_idx]] == chunk_maxs)).sum(axis=0)
+                for subset_idx in np.flatnonzero(chunk_num_false <= 1).tolist():
+                    yield chunk_subsets[subset_idx]
+
         # Identify the set of similar columns for each positive numeric column
         similar_cols_dict, similar_cols_idxs_dict, calc_size = self.get_similar_cols(
             self.numeric_cols, include_self=False, lower_divisor=10.0, upper_multiplier=1.0, check_larger_true=True)
@@ -3869,7 +4051,7 @@ class NumericTestsMixin(CheckerState):
                         printed_column_status = True
                     print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
 
-                for subset in subsets:
+                for subset in filter_on_two_rows(subsets, col_idx):
                     subset = list(subset)
 
                     # Test on just 2 rows
@@ -3978,6 +4160,89 @@ class NumericTestsMixin(CheckerState):
         if not can_process:
             return
 
+        # Values used for each subset, computed once rather than once per subset
+        orig_col_positions: dict[str, int] = {}
+        for c_idx, c in enumerate(self.orig_df.columns.tolist()):
+            orig_col_positions.setdefault(c, c_idx)
+        sample_values_np = self.sample_df.values
+        sample_notna_dict: dict[str, np.ndarray] = {}
+        sample_col_dict: dict[str, np.ndarray | None] = {}
+
+        def get_sample_notna(col_name):
+            if col_name not in sample_notna_dict:
+                sample_notna_dict[col_name] = self.sample_df[col_name].notna().to_numpy()
+            return sample_notna_dict[col_name]
+
+        def get_sample_col(col_name, rows_arr):
+            # The same values as self.sample_df[col_name][rows_arr], as np.allclose() uses them
+            if col_name not in sample_col_dict:
+                col = self.sample_df[col_name]
+                sample_col_dict[col_name] = col.to_numpy() if isinstance(col.dtype, np.dtype) else None
+            col_np = sample_col_dict[col_name]
+            return self.sample_df[col_name][rows_arr] if col_np is None else col_np[rows_arr]
+
+        # The sample's numeric columns, as float64, in a 2d array, so all the columns in a subset can be compared at
+        # once. This includes the columns whose values are the same as float64: float columns, and integer columns
+        # whose values are exactly represented as float64.
+        def is_same_as_float64(col_np):
+            if col_np.dtype.kind == 'f':
+                return col_np.dtype.itemsize <= 8
+            if col_np.dtype.kind == 'i':
+                return bool(((col_np >= -(2 ** 53)) & (col_np <= 2 ** 53)).all())
+            if col_np.dtype.kind == 'u':
+                return bool((col_np <= 2 ** 53).all())
+            return False
+
+        sample_float64_cols: dict[str, int] = {}
+        sample_float64_arrs = []
+        if self.sample_df.columns.is_unique:
+            for sample_col_name in self.sample_df.columns.tolist():
+                col_np = self.sample_df[sample_col_name].to_numpy()
+                if is_same_as_float64(col_np):
+                    sample_float64_cols[sample_col_name] = len(sample_float64_cols)
+                    sample_float64_arrs.append(col_np.astype(np.float64))
+        sample_float64_np = np.column_stack(sample_float64_arrs) if sample_float64_arrs else None
+
+        def find_matching_column(subset, rows_arr, col_mean_float):
+            """
+            Return the first column in subset whose values, in the rows of the sample, np.allclose() finds close to
+            col_mean_float, or None. Where the columns' values are all the same as float64, they are compared at once.
+            """
+            if (sample_float64_np is not None) and all(c in sample_float64_cols for c in subset):
+                vals_np = sample_float64_np[rows_arr][:, [sample_float64_cols[c] for c in subset]]
+                all_close_list = np.isclose(vals_np, col_mean_float[:, np.newaxis]).all(axis=0).tolist()
+                for c, all_close in zip(subset, all_close_list):
+                    if all_close:
+                        return c
+                return None
+            for c in subset:
+                if np.allclose(get_sample_col(c, rows_arr), col_mean_float):
+                    return c
+            return None
+
+        def mean_of_medians_out_of_range(subset, col_name):
+            """
+            Return True where statistics.mean() of the medians of subset is less than 0.9, or more than 1.1, times the
+            median of col_name. statistics.mean() is exact, but slow. math.fsum() divided by the number of values is
+            within a few units in the last place of it, so statistics.mean() is called only where this is too close
+            to either limit to be sure of the result.
+            """
+            medians_arr = [self.column_medians[c] for c in subset]
+            lower_limit = self.column_medians[col_name] * 0.9
+            upper_limit = self.column_medians[col_name] * 1.1
+            try:
+                approx_mean = math.fsum(medians_arr) / len(medians_arr)
+            except (OverflowError, ValueError):
+                approx_mean = math.nan
+            if math.isfinite(approx_mean) and math.isfinite(lower_limit) and math.isfinite(upper_limit):
+                margin = (1e-12 * abs(approx_mean)) + 1e-300
+                if (approx_mean < (lower_limit - margin)) or (approx_mean > (upper_limit + margin)):
+                    return True
+                if ((lower_limit + margin) <= approx_mean) and (approx_mean <= (upper_limit - margin)):
+                    return False
+            mean_of_medians = statistics.mean(medians_arr)
+            return (mean_of_medians < lower_limit) or (mean_of_medians > upper_limit)
+
         for col_idx, col_name in enumerate(column_pos_arr):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
                 print(f'  Examining column: {col_idx} of {len(column_pos_arr)} positive numeric columns (and all '
@@ -4014,30 +4279,21 @@ class NumericTestsMixin(CheckerState):
 
                     # Check if this set of columns summing to col_name is plausible, checking if the mean of medians is
                     # significantly smaller or larger.
-                    medians_arr = []
-                    for c in subset:
-                        medians_arr.append(self.column_medians[c])
-                    mean_of_medians = statistics.mean(medians_arr)
-                    if mean_of_medians < (self.column_medians[col_name] * 0.9):
-                        continue
-                    if mean_of_medians > (self.column_medians[col_name] * 1.1):
+                    if mean_of_medians_out_of_range(subset, col_name):
                         continue
 
                     subset = list(subset)
 
                     # Test on a sample of the rows in the columns, skipping rows with missing values. Using numpy works
                     # faster in this case.
-                    cols_idxs = [self.orig_df.columns.tolist().index(x) for x in subset]
-                    sample_non_null_arr = self.sample_df[subset].notna().all(axis=1).values
-                    sample_np = self.sample_df.values[sample_non_null_arr][:, cols_idxs]
+                    cols_idxs = [orig_col_positions[x] for x in subset]
+                    sample_non_null_arr = np.logical_and.reduce([get_sample_notna(c) for c in subset])
+                    sample_np = sample_values_np[sample_non_null_arr][:, cols_idxs]
                     col_mean = sample_np.mean(axis=1)
+                    col_mean_float = col_mean.astype(float)
 
                     # We loop through all the columns in the subset, to avoid duplicate work later
-                    matching_column: str | None = None
-                    for c in subset:
-                        if np.allclose(self.sample_df[c][sample_non_null_arr], col_mean.astype(float)):
-                            matching_column = c
-                            break
+                    matching_column: str | None = find_matching_column(subset, sample_non_null_arr, col_mean_float)
                     if not matching_column:
                         continue
 
