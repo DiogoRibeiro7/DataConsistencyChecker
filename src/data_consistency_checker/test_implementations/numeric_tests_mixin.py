@@ -2532,6 +2532,13 @@ class NumericTestsMixin(CheckerState):
                 col_info_dict[col_name] = (is_na, self.numeric_vals_filled[col_name].to_numpy(), [None])
             return col_info_dict[col_name]
 
+        has_inf_dict = {}
+
+        def has_inf(col_name):
+            if col_name not in has_inf_dict:
+                has_inf_dict[col_name] = bool(np.isinf(self.numeric_vals_filled[col_name].to_numpy()).any())
+            return has_inf_dict[col_name]
+
         def get_nunique_non_null(col_info, vals_arr, all_non_null):
             if not all_non_null:
                 return vals_arr.nunique()
@@ -2571,6 +2578,15 @@ class NumericTestsMixin(CheckerState):
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
             num_same = cols_same_count_dict[tuple(sorted([col_name_1, col_name_2]))]
+
+            # Only pairs with an absolute Spearman correlation of at least 0.995 are reported. self.spearman_corr, found
+            # when the data was loaded, has the Spearman correlation of the same values on the same rows (those with
+            # values in both columns), unless a column has infinite values, which it leaves out. It differs from the
+            # value calculated here only by rounding error, so pairs where it is well under 0.995 are skipped without
+            # calculating the correlation again.
+            if (not has_inf(col_name_1)) and (not has_inf(col_name_2)) and \
+                    (abs(self.spearman_corr[col_name_1][col_name_2]) < 0.99):
+                continue
 
             spearman_corr = abs(val_arr_1.corr(val_arr_2, method='spearman'))
             if spearman_corr >= 0.995:
