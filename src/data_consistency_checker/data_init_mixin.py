@@ -230,14 +230,20 @@ class DataInitMixin(CheckerState):
         # default value in order to determine numeric columns with some non-numeric values.
         default_contamination_level = self.num_rows * 0.005
 
+        def is_mostly_numbers(col_vals):
+            # Numbers, with few other values: fewer than the contamination level, and fewer than the numbers. The
+            # second condition matters where most values are missing.
+            is_number_list = as_str(col_vals.dropna()).str.replace('-', '', regex=False).str.\
+                replace('.', '', regex=False).str.isdigit().tolist()
+            num_other = is_number_list.count(False)
+            return (num_other < default_contamination_level) and (num_other < is_number_list.count(True))
+
         for col_name in self.orig_df.columns:
             if self.orig_df[col_name].nunique() == 2:
                 self.binary_cols.append(col_name)
             elif self.orig_df[col_name].dtype in [np.datetime64, 'datetime64[ns]']:
                 self.date_cols.append(col_name)
-            elif pandas_types.is_numeric_dtype(self.orig_df[col_name]) or \
-                    as_str(self.orig_df[col_name].dropna()).str.replace('-', '', regex=False).str.\
-                            replace('.', '', regex=False).str.isdigit().tolist().count(False) < default_contamination_level:
+            elif pandas_types.is_numeric_dtype(self.orig_df[col_name]) or is_mostly_numbers(self.orig_df[col_name]):
                 self.numeric_cols.append(col_name)
             else:
                 try:
@@ -348,7 +354,11 @@ class DataInitMixin(CheckerState):
                 try:
                     self.orig_df[col_name] = self.orig_df[col_name].astype(float)
                 except Exception:
-                    self.orig_df[col_name] = self.orig_df[col_name].astype(str).astype(float)
+                    try:
+                        self.orig_df[col_name] = self.orig_df[col_name].astype(str).astype(float)
+                    except Exception:
+                        # A few values are not numbers: keep the values, as for other numeric columns with such values
+                        self.orig_df[col_name] = self.orig_df[col_name].astype(object)
 
         # For binary columns, find and cache the set of unique values per column
         for col_name in self.binary_cols:
