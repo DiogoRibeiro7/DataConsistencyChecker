@@ -12,6 +12,7 @@ import contextlib
 import functools
 import math
 import numbers
+import os
 import random
 import string
 import warnings
@@ -22,6 +23,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as scipy_stats
 from IPython import get_ipython
+from IPython.display import Markdown, display
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -182,19 +184,31 @@ def print_line(f: Any) -> None:
 
 
 def print_text(s: str, f: Any | None = None) -> None:
-    """Print text either to a file handle or the console.
+    """Print text to an HTML file, as Markdown in a notebook, or as plain text on the console.
 
-    The function strips markdown-like tags when printing to the console so the
-    output remains readable.
+    The text may use ``**bold**``, ``#`` headings and ``<br>`` line breaks. The HTML file and the notebook keep its
+    formatting, spacing and line breaks; the console drops the formatting.
 
     Args:
         s: String to print.
-        f: Optional file handle.
+        f: Optional handle of the HTML file being written.
     """
     if f:
-        s = s.replace("**", "<b>", 1)
-        # Remaining formatting removed for brevity when writing to file
-        f.write(s + "\n")
+        s = s.replace("**", "<b>", 1).replace("**", "</b>", 1)
+        for marker, tag in (("###", "H2"), ("##", "H1")):
+            if s.startswith(marker):
+                s = f"<{tag}>{s[len(marker):].strip()}</{tag}>"
+                break
+        f.write(s.replace(" ", "&nbsp;").replace("\n", "<br>") + "<br><br>" + os.linesep)
+    elif is_notebook():
+        if "decision tree" in s:
+            # A decision tree is drawn with indentation, which Markdown would lose
+            print(s)
+        else:
+            # Keep the spacing and line breaks, which Markdown would collapse, but not the space after a heading's
+            # hashes, which Markdown needs to see the heading
+            head, sep, body = s.partition(" ") if s.startswith("#") else ("", "", s)
+            display(Markdown(head + sep + body.replace(" ", "&nbsp;").replace("\n", "<br>")))
     else:
         print(s.replace("**", "").replace("#", "").replace("<br>", "\n"))
 

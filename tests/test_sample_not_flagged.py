@@ -281,5 +281,5 @@ def test_display_examples_not_flagged_writes_sample_table(positive_run) -> None:
     checker._display_examples_not_flagged("POSITIVE", ["amount"], "amount", False, display_info, output)
 
     html = output.getvalue()
-    assert "Examples of values NOT flagged" in html
+    assert "<b>Examples&nbsp;of&nbsp;values&nbsp;NOT&nbsp;flagged</b>" in html
     assert "<table" in html
