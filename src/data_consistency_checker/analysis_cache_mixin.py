@@ -11,6 +11,24 @@ from .checker_state import CheckerState
 from .checker_utils import as_str, is_missing, replace_special_with_space
 
 
+class _EitherNullPairs(dict):
+    """For a sorted pair of columns, whether over the threshold number of rows have a null in either column.
+
+    Values are computed when first looked up, from each column's null mask.
+    """
+
+    def __init__(self, null_masks: dict[str, np.ndarray], threshold: float) -> None:
+        super().__init__()
+        self.null_masks = null_masks
+        self.threshold = threshold
+
+    def __missing__(self, key: tuple[str, ...]) -> bool:
+        col_name_a, col_name_b = key
+        value = bool(np.count_nonzero(self.null_masks[col_name_a] | self.null_masks[col_name_b]) > self.threshold)
+        self[key] = value
+        return value
+
+
 class AnalysisCacheMixin(CheckerState):
     """Mixin providing cached statistics and reusable column-set helpers."""
 
@@ -492,18 +510,21 @@ class AnalysisCacheMixin(CheckerState):
 
         # Check pairs of string columns
         num_pairs, pairs_arr = self._get_string_column_pairs_unique(force=force)
-        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
-            check_match(col_name_a, col_name_b)
+        if pairs_arr is not None:
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                check_match(col_name_a, col_name_b)
 
         # Check pairs of binary columns
         num_pairs, pairs_arr = self._get_binary_column_pairs_unique(force=force)
-        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
-            check_match(col_name_a, col_name_b)
+        if pairs_arr is not None:
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                check_match(col_name_a, col_name_b)
 
         # Check pairs of date columns
         num_pairs, pairs_arr = self._get_date_column_pairs_unique(force=force)
-        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
-            check_match(col_name_a, col_name_b)
+        if pairs_arr is not None:
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                check_match(col_name_a, col_name_b)
 
         return self.cols_same_bool_dict
 
@@ -550,24 +571,17 @@ class AnalysisCacheMixin(CheckerState):
             self.sample_cols_pairs_both_null_dict[pairs_tuple] = match_arr
         return self.sample_cols_pairs_both_null_dict
 
-    def get_col_pairs_either_null_bool_dict(self, force=False):
+    def get_col_pairs_either_null_bool_dict(self, force=False):  # noqa: ARG002 - kept for compatibility
         """
         Similar to get_col_pair_both_null_dict(), but checks if either are null, not if both are, and contains a single
         boolean value for each pair of columns indicating True if there are at least 90% of the rows having either null.
 
-        Set force=True if the results will not be used to loop through tests, only to create a dictionary for reference.
+        Each pair's value is computed the first time it is looked up, so this also works where there are more pairs
+        of columns than max_combinations; force is kept for compatibility.
         """
-        if self.col_pairs_either_null_bool_dict:
-            return self.col_pairs_either_null_bool_dict
-        self.col_pairs_either_null_bool_dict = {}
-        threshold = self.num_rows * 0.9
-        _, pairs = self._get_column_pairs_unique(force=force)
-        if pairs is None:
-            return None
-        for col_name_a, col_name_b in pairs:
-            pairs_tuple = tuple(sorted([col_name_a, col_name_b]))
-            match_arr = (self.orig_df[col_name_a].isna() | self.orig_df[col_name_b].isna())
-            self.col_pairs_either_null_bool_dict[pairs_tuple] = match_arr.tolist().count(True) > threshold
+        if self.col_pairs_either_null_bool_dict is None:
+            self.col_pairs_either_null_bool_dict = _EitherNullPairs(
+                {c: self.orig_df[c].isna().to_numpy() for c in self.orig_df.columns}, self.num_rows * 0.9)
         return self.col_pairs_either_null_bool_dict
 
     def get_col_triples_any_null_bool_dict(self):

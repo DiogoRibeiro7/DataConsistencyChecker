@@ -373,3 +373,19 @@ def test_clear_results_reports_when_patterns_are_missing(capsys) -> None:
     checker.clear_results(test_id_list=["NEGATIVE"])
 
     assert "There are no results to clear" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("test_id", ["RUNNING_SUM", "CONSTANT_SUM", "SIMILAR_TO_DIFF", "EVEN_MULTIPLE"])
+def test_numeric_checks_run_when_other_column_pairs_exceed_max_combinations(test_id) -> None:
+    # Caches over all pairs of columns (or of string columns) used to be None past max_combinations, which crashed
+    # checks whose own numeric pairs were well within it.
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({f"s{i}": rng.choice(["a", "b", "c", "d"], 100) for i in range(12)})
+    for col_name in ["x", "y", "z"]:
+        df[col_name] = rng.integers(1, 100, 100).astype(float)
+    checker = DataConsistencyChecker(verbose=-1, max_combinations=50)
+    checker.init_data(df)
+
+    checker.check_data_quality(execute_list=[test_id])
+
+    assert checker.get_execution_failures() == []
