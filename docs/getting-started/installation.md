@@ -3,6 +3,9 @@
 DataConsistencyChecker supports **Python 3.10 to 3.14**. Its main dependencies are pandas, NumPy,
 scikit-learn, SciPy, matplotlib, seaborn and IPython.
 
+Both pandas 2 and pandas 3 are supported. CI runs the tests both with the locked dependency versions and
+with the newest release of each dependency.
+
 The package is not published on PyPI. Install it from GitHub, or from a clone.
 
 ## From GitHub

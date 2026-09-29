@@ -34,7 +34,7 @@ from data_consistency_checker import DataConsistencyChecker
 # Settings. Adjust these before running the tests to run a reduced set of tests.
 TEST_REAL = False
 TEST_SYNTHETIC = True
-TEST_SYNTHETIC_NONES = False
+TEST_SYNTHETIC_NONES = True
 TEST_SYNTHETIC_ALL_COLUMNS = False
 
 PRINT_OUTPUT = True
@@ -92,12 +92,17 @@ def _assert_column_sets_found(found_df: pd.DataFrame, expected: list[str], kind:
         assert found, f"{kind}: no result for {col}"
 
 
-def _assert_expected(found_df: pd.DataFrame, expected: int | list[str], kind: str, length_check: str | None) -> None:
+def _assert_expected(
+    found_df: pd.DataFrame | None, expected: int | list[str], kind: str, length_check: str | None
+) -> None:
     """Compare the patterns or exceptions found by a synthetic run with the expected result.
 
     For a list, ``length_check`` is ``"exact"`` (no other rows found), ``"at_least"``
-    (other rows allowed) or ``None`` (number of rows not checked).
+    (other rows allowed) or ``None`` (number of rows not checked). ``found_df`` is None
+    when nothing was found.
     """
+    if found_df is None:
+        found_df = pd.DataFrame(columns=["Test ID", "Column(s)"])
     if PRINT_OUTPUT:
         print(f"len({kind}_df)", len(found_df))
     if isinstance(expected, int):

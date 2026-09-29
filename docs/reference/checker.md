@@ -19,6 +19,10 @@ use the methods below to examine the results.
     options:
       heading_level: 3
 
+::: data_consistency_checker.DataConsistencyChecker.test_contamination_level
+    options:
+      heading_level: 3
+
 ## Lists and summaries
 
 ::: data_consistency_checker.results_mixin.ResultsMixin

@@ -34,6 +34,14 @@ exceptions; if it fails in 1 to 50 rows, a pattern with those rows as exceptions
 nothing. Tuning this one parameter is usually all the tuning needed: raise it to see more patterns (and more
 noise), lower it to keep only strong ones.
 
+## Missing values
+
+Missing values (`None`, `NaN`, `NaT`) neither support nor break a pattern. A check judges each row on the
+columns it examines, and a row with a missing value in any of them is not counted against the pattern and is not
+flagged. So a pattern that holds on every row that has values is still reported, as long as enough rows have
+values to establish it. The checks about missing values themselves, such as `MISSING_VALUES`,
+`MATCHED_MISSING` and `PREDICT_NULL_DT`, are the exception: for them, which values are missing is the data.
+
 ## The short list
 
 Some patterns are interesting in themselves, even without exceptions, such as one column being the sum of

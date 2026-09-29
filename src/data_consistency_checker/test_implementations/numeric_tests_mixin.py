@@ -14,7 +14,10 @@ import random
 import statistics
 import string
 import sys
+import warnings
+from collections.abc import Callable, Sequence
 from itertools import combinations
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -25,19 +28,21 @@ from sklearn.linear_model import Lasso
 from sklearn.preprocessing import RobustScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
-try:
-    from termcolor import colored
-except ImportError:  # pragma: no cover - optional presentation dependency
-    colored = None
-
 from data_consistency_checker.checker_state import CheckerState
 from data_consistency_checker.checker_utils import (
     array_to_str,
+    as_str,
     convert_to_numeric,
     get_num_decimal_digits,
     is_missing,
     safe_div,
 )
+
+colored: Callable[..., str] | None
+try:
+    from termcolor import colored
+except ImportError:  # pragma: no cover - optional presentation dependency
+    colored = None
 
 digits = string.digits
 
@@ -158,8 +163,9 @@ class NumericTestsMixin(CheckerState):
             else:
                 larger_pairs_arr.append([col_name_1, col_name_2])
 
-        patterns_arr = []  # The set of unique columns in each pattern
-        patterns_pairs_arr = []  # The set of pair-wise relationships between columns in each pattern
+        patterns_arr: list[list[str]] = []  # The set of unique columns in each pattern
+        # The set of pair-wise relationships between columns in each pattern
+        patterns_pairs_arr: list[list[list[str]]] = []
         for col_name_1, col_name_2 in larger_pairs_arr:
             found_existing_pattern = False
             for p_idx, p in enumerate(patterns_arr):
@@ -174,11 +180,11 @@ class NumericTestsMixin(CheckerState):
                 patterns_arr.append([col_name_1, col_name_2])
                 patterns_pairs_arr.append([[col_name_1, col_name_2]])
 
-        for pattern_idx, cols in enumerate(patterns_arr):
+        for pattern_idx, pattern_cols in enumerate(patterns_arr):
 
             # Order the columns in the pattern based on their median values
-            col_medians = [self.column_medians[c] for c in cols]
-            cols = np.array(cols)[np.argsort(col_medians)]
+            col_medians = [self.column_medians[c] for c in pattern_cols]
+            cols = np.array(pattern_cols)[np.argsort(col_medians)]
 
             if len(cols) == 2:
                 desc = (f'"{patterns_pairs_arr[pattern_idx][0][0]}" is consistently larger than '
@@ -212,6 +218,10 @@ class NumericTestsMixin(CheckerState):
             if self.orig_df[col_name].notna().sum() < self.freq_contamination_level:
                 continue
             vals_arr = convert_to_numeric(self.orig_df[col_name], 1)
+            # As in NEGATIVE, skip columns that are mostly not strictly positive, such as mostly zero columns
+            test_series_pos = (vals_arr > 0)
+            if test_series_pos.tolist().count(False) > (self.num_rows * 0.75):
+                continue
             test_series = (self.orig_df[col_name].isna()) | (vals_arr >= 0)
             self._process_analysis_binary(
                 test_id,
@@ -267,7 +277,8 @@ class NumericTestsMixin(CheckerState):
             if self.sample_df[col_name].isna().sum() < len(self.sample_df):
                 vals_arr = convert_to_numeric(self.sample_df[col_name], 1)
                 num_digits_series = vals_arr.apply(get_num_decimal_digits)
-                num_digits_non_null_series = pd.Series([get_num_decimal_digits(x) for x in vals_arr if not is_missing(x)])
+                # convert_to_numeric() fills the missing values, so these are removed using the original values
+                num_digits_non_null_series = num_digits_series[self.sample_df[col_name].notna().to_numpy()]
 
                 counts_series = num_digits_non_null_series.value_counts(normalize=False)
                 most_common_num_digits = counts_series.sort_values().index[-1]
@@ -282,9 +293,11 @@ class NumericTestsMixin(CheckerState):
             # Test on the full column
             vals_arr = convert_to_numeric(self.orig_df[col_name], 1)
             num_digits_series = vals_arr.apply(get_num_decimal_digits)
-            num_digits_non_null_series = pd.Series([get_num_decimal_digits(x) for x in vals_arr if not is_missing(x)])
+            num_digits_non_null_series = num_digits_series[self.orig_df[col_name].notna().to_numpy()]
 
             counts_series = num_digits_non_null_series.value_counts(normalize=False)
+            if len(counts_series) == 0:
+                continue
             most_common_num_digits = counts_series.sort_values().index[-1]
             rare_num_digits = [x for x in counts_series.index if (x > (most_common_num_digits * 1.2)) and (x >= (most_common_num_digits + 2))]
 
@@ -332,7 +345,7 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             # The format_float_positional function ensures the strings are not in scientific notation
-            vals_arr = pd.Series([x[1] for x in vals_arr.apply(np.format_float_positional).astype(str).str.split('.')])
+            vals_arr = pd.Series([x[1] for x in as_str(vals_arr.apply(np.format_float_positional)).str.split('.')])
             vc = vals_arr.value_counts()
             common_values = [x for x, y in zip(vc.index, vc.values) if y > (self.num_rows * 0.01)]
             if len(common_values) > 10:
@@ -345,7 +358,7 @@ class NumericTestsMixin(CheckerState):
                 continue
             test_series = [
                 True if y else x[1] in common_values
-                for x, y in zip(self.numeric_vals_filled[col_name].apply(np.format_float_positional).astype(str).str.split('.'),
+                for x, y in zip(as_str(self.numeric_vals_filled[col_name].apply(np.format_float_positional)).str.split('.'),
                 self.orig_df[col_name].isna())]
             if len(common_values) == 1:
                 common_values_str = str(common_values)[1:-1].replace("\'\'", '0')
@@ -384,43 +397,48 @@ class NumericTestsMixin(CheckerState):
                 if len(self.numeric_vals[col_name]) < self.num_rows:
                     continue
 
+                # Compare each value to the previous non-missing value. Rows with missing values have no difference.
+                diff_series = self.orig_df[col_name].astype(float).dropna().diff().reindex(self.orig_df.index)
+
                 # Check there are few decreasing values
-                decr_series = self.orig_df[col_name].astype(float).diff() < 0
+                decr_series = diff_series < 0
                 num_decr = decr_series.tolist().count(True)
                 if num_decr > self.freq_contamination_level:
                     continue
 
                 # Check the number of increases is significantly more than the number of decreases
-                incr_series = self.orig_df[col_name].astype(float).diff() > 0
+                incr_series = diff_series > 0
                 num_incr = incr_series.tolist().count(True)
                 if num_decr > (num_incr / 10.0):
                     continue
 
                 # Check there are a decent number increasing
-                if num_incr < (self.num_rows / 20):
+                if num_incr < (self.num_valid_rows[col_name] / 20):
                     continue
 
-                test_series = (self.orig_df[col_name].astype(float).diff() >= 0) | \
-                              [is_missing(x) for x in self.orig_df[col_name].astype(float).diff()]
+                test_series = (diff_series >= 0) | \
+                              np.array([is_missing(x) for x in diff_series])
             else:
+                # Compare each value to the previous non-missing value. Rows with missing values have no difference.
+                gap_series = pd.to_datetime(self.orig_df[col_name]).dropna().diff().reindex(self.orig_df.index)
+
                 # Check there are few decreasing values
-                decr_series = self.orig_df[col_name].diff().dt.total_seconds() < 0
+                decr_series = gap_series.dt.total_seconds() < 0
                 num_decr = decr_series.tolist().count(True)
                 if num_decr > self.freq_contamination_level:
                     continue
 
                 # Check the number of increases is significantly more than the number of decreases
-                incr_series = self.orig_df[col_name].diff().dt.total_seconds() > 0
+                incr_series = gap_series.dt.total_seconds() > 0
                 num_incr = incr_series.tolist().count(True)
                 if num_decr > (num_incr / 10.0):
                     continue
 
                 # Check there are a decent number increasing
-                if num_incr < (self.num_rows / 20):
+                if num_incr < (self.num_valid_rows[col_name] / 20):
                     continue
 
-                test_series = np.array([x.total_seconds() for x in (pd.to_datetime(self.orig_df[col_name]) - pd.to_datetime(self.orig_df[col_name]).shift())]) >= 0
-                test_series = test_series | pd.to_datetime(self.orig_df[col_name]).diff().isna()
+                test_series = (gap_series.dt.total_seconds() >= 0) | gap_series.isna()
             # The shift operation is undefined for the first row, which results in a NaN that we fill here.
             test_series[0] = True
             self._process_analysis_binary(
@@ -457,43 +475,48 @@ class NumericTestsMixin(CheckerState):
                 if len(self.numeric_vals[col_name]) < self.num_rows:
                     continue
 
+                # Compare each value to the previous non-missing value. Rows with missing values have no difference.
+                diff_series = self.orig_df[col_name].astype(float).dropna().diff().reindex(self.orig_df.index)
+
                 # Check there are few increasing values
-                incr_series = self.orig_df[col_name].astype(float).diff() > 0
+                incr_series = diff_series > 0
                 num_incr = incr_series.tolist().count(True)
                 if num_incr > self.freq_contamination_level:
                     continue
 
                 # Check the number of decreases is significantly more than the number of increases
-                decr_series = self.orig_df[col_name].astype(float).diff() < 0
+                decr_series = diff_series < 0
                 num_decr = decr_series.tolist().count(True)
                 if num_incr > (num_decr / 10.0):
                     continue
 
                 # Check there are a decent number decreasing
-                if num_decr < (self.num_rows / 20):
+                if num_decr < (self.num_valid_rows[col_name] / 20):
                     continue
 
-                test_series = (self.orig_df[col_name].astype(float).diff() <= 0) | \
-                              [is_missing(x) for x in self.orig_df[col_name].astype(float).diff()]
+                test_series = (diff_series <= 0) | \
+                              np.array([is_missing(x) for x in diff_series])
             else:
+                # Compare each value to the previous non-missing value. Rows with missing values have no difference.
+                gap_series = pd.to_datetime(self.orig_df[col_name]).dropna().diff().reindex(self.orig_df.index)
+
                 # Check there are few increasing values
-                incr_series = self.orig_df[col_name].diff().dt.total_seconds() > 0
+                incr_series = gap_series.dt.total_seconds() > 0
                 num_incr = incr_series.tolist().count(True)
                 if num_incr > self.freq_contamination_level:
                     continue
 
                 # Check the number of decreases is significantly more than the number of increases
-                decr_series = self.orig_df[col_name].diff().dt.total_seconds() < 0
+                decr_series = gap_series.dt.total_seconds() < 0
                 num_decr = decr_series.tolist().count(True)
                 if num_incr > (num_decr / 10.0):
                     continue
 
                 # Check there are a decent number decreasing
-                if num_decr < (self.num_rows / 20):
+                if num_decr < (self.num_valid_rows[col_name] / 20):
                     continue
 
-                test_series = np.array([x.total_seconds() for x in (pd.to_datetime(self.orig_df[col_name]) - pd.to_datetime(self.orig_df[col_name]).shift())]) <= 0
-                test_series = test_series | pd.to_datetime(self.orig_df[col_name]).diff().isna()
+                test_series = (gap_series.dt.total_seconds() <= 0) | gap_series.isna()
             # The shift operation is undefined for the first row, which results in a NaN we fill here.
             test_series[0] = True
             self._process_analysis_binary(
@@ -616,15 +639,15 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('sim_prev rand', [random.random() for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('sim_prev all', random_walk)
         self._add_synthetic_column('sim_prev most', random_walk)
-        self.synth_df.loc[999, 'sim_prev most'] += 15
+        self.synth_df.loc[999, 'sim_prev most'] = cast(float, self.synth_df.loc[999, 'sim_prev most']) + 15
 
-        random_walk = [datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")]
-        prev_val = random_walk[0]
+        date_walk = [datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")]
+        prev_date = date_walk[0]
         for _i in range(self.num_synth_rows-1):
-            new_val = prev_val + relativedelta(days=np.random.randint(-10, 10))
-            random_walk.append(new_val)
-            prev_val = new_val
-        self._add_synthetic_column('sim_prev date_most', random_walk)
+            new_date = prev_date + relativedelta(days=np.random.randint(-10, 10))
+            date_walk.append(new_date)
+            prev_date = new_date
+        self._add_synthetic_column('sim_prev date_most', date_walk)
         self.synth_df.loc[999, 'sim_prev date_most'] = datetime.datetime.strptime("01-7-2025", "%d-%m-%Y")
 
 
@@ -640,21 +663,26 @@ class NumericTestsMixin(CheckerState):
         for col_name in self.numeric_cols + self.date_cols:
             if self.orig_df[col_name].nunique(dropna=True) <= 2:
                 continue
+            # Missing values are skipped: each value is compared to the previous non-missing value
+            non_null_arr = self.orig_df[col_name].notna()
             if col_name in self.numeric_cols:
-                num_vals = self.numeric_vals_filled[col_name]
+                num_vals = self.numeric_vals_filled[col_name][non_null_arr]
                 diff_to_prev_arr = abs(num_vals.diff())
-                col_med = self.column_medians[col_name]
+                col_med: float | pd.Timestamp = self.column_medians[col_name]
                 diff_to_median_arr = abs(num_vals - self.column_medians[col_name])
             else:
-                diff_to_prev_arr = abs(pd.to_datetime(self.orig_df[col_name]).diff())
-                col_med = pd.to_datetime(self.orig_df[col_name]).quantile(0.5, interpolation='midpoint')
-                diff_to_median_arr = abs(pd.to_datetime(self.orig_df[col_name]) - col_med)
+                date_vals = pd.to_datetime(self.orig_df[col_name])[non_null_arr]
+                diff_to_prev_arr = abs(date_vals.diff())
+                # pandas-stubs types the quantile of a datetime Series as a float
+                col_med = cast(pd.Timestamp,
+                               pd.to_datetime(self.orig_df[col_name]).quantile(0.5, interpolation='midpoint'))
+                diff_to_median_arr = abs(date_vals - col_med)
             test_series = diff_to_prev_arr < diff_to_median_arr
-            test_series[0] = True  # Row 0 has no difference from the previous, so can not be tested
+            test_series.iloc[0] = True  # The first value has no difference from the previous, so can not be tested
 
             # Test a reasonable number of values are closer to the previous value than to the median. It does not
             # have to be almost all, as many values may be close to the median as well.
-            if test_series.tolist().count(True) < (self.num_rows * 0.75):
+            if test_series.tolist().count(True) < (len(test_series) * 0.75):
                 continue
 
             # Test that those values not closer to the previous value, are still close
@@ -667,11 +695,8 @@ class NumericTestsMixin(CheckerState):
 
             iqr = abs(q3 - q1)
             test_series = diff_to_prev_arr < iqr
-            test_series[0] = True
-            if col_name in self.numeric_cols:
-                test_series = test_series | self.orig_df[col_name].isna() | self.orig_df[col_name].astype(float).diff().isna()
-            else:
-                test_series = test_series | self.orig_df[col_name].isna() | pd.to_datetime(self.orig_df[col_name]).diff().isna()
+            test_series.iloc[0] = True
+            test_series = test_series.reindex(self.orig_df.index, fill_value=True)  # Missing values are not flagged
 
             self._process_analysis_binary(
                 test_id,
@@ -761,13 +786,9 @@ class NumericTestsMixin(CheckerState):
             if len(self.numeric_vals[col_name]) < self.num_rows:
                 continue
 
-            # Skip columns with many null values
-            if self.orig_df[col_name].isna().sum() > (self.num_rows / 2):
-                continue
-
-            sorted_vals = copy.copy(self.orig_df[col_name].astype(float).values)
-            sorted_vals.sort()
-            sorted_vals = pd.Series(sorted_vals)
+            sorted_arr = copy.copy(self.orig_df[col_name].astype(float).to_numpy())
+            sorted_arr.sort()
+            sorted_vals = pd.Series(sorted_arr)
             diff_from_prev = sorted_vals.diff(1)
             diff_from_next = sorted_vals.diff(-1)
             diff_threshold = (self.numeric_vals[col_name].max() - self.numeric_vals[col_name].min()) / 10.0
@@ -801,13 +822,10 @@ class NumericTestsMixin(CheckerState):
                 )
 
         for col_name in self.date_cols:
-            # Skip columns with many null values
-            if self.orig_df[col_name].isna().sum() > 0: # (self.num_rows / 2):
-                continue
-
-            sorted_vals = copy.copy(pd.to_datetime(self.orig_df[col_name]).values)
-            sorted_vals.sort()
-            sorted_vals = pd.Series(sorted_vals)
+            # .values of a datetime Series is a datetime64 array, converted to UTC if timezone-aware
+            sorted_arr = copy.copy(cast(np.ndarray, pd.to_datetime(self.orig_df[col_name]).values))
+            sorted_arr.sort()
+            sorted_vals = pd.Series(sorted_arr)
             diff_from_prev = sorted_vals.diff(1)
             diff_from_next = sorted_vals.diff(-1)
             diff_threshold = (pd.to_datetime(self.orig_df[col_name]).max() -
@@ -819,11 +837,16 @@ class NumericTestsMixin(CheckerState):
             if num_isolated_points > 0:
                 # Flag the correct rows. We currently have their indexes based on a sorted array.
                 vals_arr = [x for x, y in zip(sorted_vals, test_arr) if y]
-                test_series = [x not in vals_arr for x in self.orig_df[col_name].values]
-                prev_arr = np.array(sorted(self.orig_df[col_name].values))[list(self.orig_df[col_name].rank().astype(int)-2)]
+                test_series = [is_missing(x) or x not in vals_arr for x in self.orig_df[col_name].values]
+                # Find the closest values among the non-missing values. Rows with missing values have none.
+                non_null_vals = self.orig_df[col_name].dropna()
+                prev_arr = np.array(sorted(non_null_vals.values))[list(non_null_vals.rank().astype(int)-2)]
                 next_arr = np.array([pd.Timestamp(x) for x in np.concatenate(  # It converts to integer otherwise
-                        [np.array(sorted(self.orig_df[col_name].values)), np.array([self.orig_df[col_name].max()])]
-                    ).astype(pd.Timestamp)])[list(self.orig_df[col_name].rank().astype(int))]
+                        [np.array(sorted(non_null_vals.values)), np.array([non_null_vals.max()])]
+                    ).astype(pd.Timestamp)])[list(non_null_vals.rank().astype(int))]
+                prev_arr = pd.Series(prev_arr, index=non_null_vals.index).reindex(self.orig_df.index).values
+                next_arr = pd.Series(next_arr, index=non_null_vals.index, dtype=object).reindex(
+                    self.orig_df.index, fill_value=pd.NaT).values  # type: ignore[arg-type]  # NaT is not in the stubs
 
                 self._process_analysis_binary(
                     test_id,
@@ -918,8 +941,8 @@ class NumericTestsMixin(CheckerState):
                              bin_counts.loc[bin_id+2] + \
                              bin_counts.loc[bin_id+3]
                 combined_bins_counts[bin_id] = rows_count
-                if (bin_counts.sort_index().loc[bin_id+1:].sum() > (self.num_rows / 10.0)) and \
-                    (bin_counts.sort_index().loc[:bin_id].sum() > (self.num_rows / 10.0)) and \
+                if (bin_counts.sort_index().loc[bin_id+1:].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
+                    (bin_counts.sort_index().loc[:bin_id].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
                     (rows_count < self.freq_contamination_level):
                     rare_bins.append(bin_id)
             if len(rare_bins) == 0:
@@ -973,8 +996,8 @@ class NumericTestsMixin(CheckerState):
                              bin_counts.loc[bin_id+2] + \
                              bin_counts.loc[bin_id+3]
                 combined_bins_counts[bin_id] = rows_count
-                if (bin_counts.sort_index().loc[bin_id+1:].sum() > (self.num_rows / 10.0)) and \
-                        (bin_counts.sort_index().loc[:bin_id].sum() > (self.num_rows / 10.0)) and \
+                if (bin_counts.sort_index().loc[bin_id+1:].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
+                        (bin_counts.sort_index().loc[:bin_id].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
                         (rows_count < self.freq_contamination_level) and (rows_count > 0):
                     rare_bins.append(bin_id)
             if len(rare_bins) == 0:
@@ -1211,27 +1234,28 @@ class NumericTestsMixin(CheckerState):
             # convert any non-numeric values to 0. Leave NaN values as NaN.
             vals = self.orig_df[col_name].fillna(-9595959484)
             vals = convert_to_numeric(vals, 0)
-            vals = vals.astype(int).astype(str).replace('-9595959484', np.nan)
+            vals = as_str(vals.astype(int)).replace('-9595959484', np.nan)
             vals = vals.replace("0", "1")  # We count 0 as having no trailing zeros; it is essentially a 1-digit number.
 
             num_zeros_arr = vals.str.replace('.0', '', regex=False).str.len() - \
                             vals.str.replace('.0', '', regex=False).str.strip('0').str.len()
-            counts_series = num_zeros_arr.value_counts()
+            counts_series = num_zeros_arr.value_counts()  # This counts only the non-missing values
             cum_sum_series = np.where(counts_series.sort_values(ascending=False).cumsum() >
-                                      (self.num_rows - self.freq_contamination_level))
+                                      (counts_series.sum() - self.freq_contamination_level))
             if (len(cum_sum_series) == 0) or (len(cum_sum_series[0]) == 0):
                 continue
             last_normal_index = cum_sum_series[0][0]
             normal_vals = counts_series.index[:last_normal_index + 1]
-            min_normal = min(normal_vals)
-            max_normal = max(normal_vals)
+            # The numbers of zeros are floats where there are missing values
+            min_normal = int(min(normal_vals))
+            max_normal = int(max(normal_vals))
             test_series = ((num_zeros_arr >= min_normal) & (num_zeros_arr <= max_normal + 2)) | is_missing_dict[col_name]
 
             desc_str = f'The column has values with consistently {min_normal} to {max_normal} trailing zeros.'
             if min_normal == max_normal:
                 desc_str = f'The column has values with consistently {min_normal} trailing zeros.'
 
-            if min_normal > 0:
+            if min_normal == 0:
                 exception_str = f" -- flagging values with with {max_normal + 3} or more trailing zeros"
             else:
                 exception_str = (f" -- flagging values with less than {min_normal} or with more than {max_normal + 2} "
@@ -1501,8 +1525,9 @@ class NumericTestsMixin(CheckerState):
                 much_larger_pairs_arr.append([col_name_1, col_name_2])
 
         # Consolidate patterns where possible, in order to generate fewer, and more useful, patterns.
-        patterns_arr = []  # The set of unique columns in each pattern
-        patterns_pairs_arr = []  # The set of pair-wise relationships between columns in each pattern
+        patterns_arr: list[list[str]] = []  # The set of unique columns in each pattern
+        # The set of pair-wise relationships between columns in each pattern
+        patterns_pairs_arr: list[list[list[str]]] = []
         for col_name_1, col_name_2 in much_larger_pairs_arr:
             found_existing_pattern = False
             for p_idx, p in enumerate(patterns_arr):
@@ -1517,10 +1542,10 @@ class NumericTestsMixin(CheckerState):
                 patterns_arr.append([col_name_1, col_name_2])
                 patterns_pairs_arr.append([[col_name_1, col_name_2]])
 
-        for pattern_idx, cols in enumerate(patterns_arr):
+        for pattern_idx, pattern_cols in enumerate(patterns_arr):
             # Order the columns in the pattern based on their median values
-            col_medians = [self.column_medians[c] for c in cols]
-            cols = np.array(cols)[np.argsort(col_medians)]
+            col_medians = [self.column_medians[c] for c in pattern_cols]
+            cols = np.array(pattern_cols)[np.argsort(col_medians)]
 
             if len(cols) == 2:
                     desc = (f'"{patterns_pairs_arr[pattern_idx][0][0]}" is larger than '
@@ -1579,16 +1604,10 @@ class NumericTestsMixin(CheckerState):
                 continue
             num_same = cols_same_count_dict[tuple(sorted([col_name_1, col_name_2]))]
 
-            # Skip where there are many null or zero values, including cases where either is Null
-            if self.orig_df[col_name_1].isna().sum() > (self.num_rows * 0.75):
+            # Skip where there are many zero values. Rows with null values are not tested.
+            if self.orig_df[col_name_1].tolist().count(0) > (self.num_valid_rows[col_name_1] * 0.75):
                 continue
-            if self.orig_df[col_name_2].isna().sum() > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[col_name_1].tolist().count(0) > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[col_name_2].tolist().count(0) > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[[col_name_1, col_name_2]].isna().sum(axis=1).replace(2, 1).sum() > (self.num_rows * 0.50):
+            if self.orig_df[col_name_2].tolist().count(0) > (self.num_valid_rows[col_name_2] * 0.75):
                 continue
 
             # Skip pairs where only rare rows have no nulls
@@ -1651,15 +1670,7 @@ class NumericTestsMixin(CheckerState):
             if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Skip where there are many null values. This does not need to check for zero values as in SIMILAR_WRT_RATIO
-            if self.orig_df[col_name_1].isna().sum() > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[col_name_2].isna().sum() > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[[col_name_1, col_name_2]].isna().sum(axis=1).replace(2, 1).sum() > (self.num_rows * 0.50):
-                continue
-
-            # Skip pairs where only rare rows have no nulls
+            # Skip pairs where only rare rows have no nulls. Rows with null values are not tested.
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
@@ -1775,9 +1786,13 @@ class NumericTestsMixin(CheckerState):
             if sample_series.count(False) > 1:
                 continue
 
+            # 0 and -0 are the negatives of each other, as in the sample test
             vals_arr_1 = convert_to_numeric(self.orig_df[col_name_1], self.column_medians[col_name_1])
             vals_arr_2 = convert_to_numeric(self.orig_df[col_name_2], self.column_medians[col_name_2])
-            test_series = np.array([math.isclose(x, -y) and x != 0
+            # As POSITIVE and NEGATIVE skip mostly zero columns: 0 being the negative of 0 says little
+            if ((vals_arr_1 == 0) & (vals_arr_2 == 0)).tolist().count(True) > (self.num_rows * 0.75):
+                continue
+            test_series = np.array([math.isclose(x, -y)
                                     for x, y in zip(vals_arr_1, vals_arr_2)])
             test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
@@ -1795,7 +1810,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('constant sum 1', [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant sum 2', 5000 - self.synth_df['constant sum 1'])
         self._add_synthetic_column('constant sum 3', 5000 - self.synth_df['constant sum 1'])
-        self.synth_df.at[999, 'constant sum 3'] = self.synth_df.at[999, 'constant sum 3'] * 2.0
+        self.synth_df.at[999, 'constant sum 3'] = cast(float, self.synth_df.at[999, 'constant sum 3']) * 2.0
 
 
     def _check_constant_sum(self, test_id):
@@ -1830,7 +1845,8 @@ class NumericTestsMixin(CheckerState):
             vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
             vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
             sample_sums = vals_arr_1 + vals_arr_2
-            nmad = np.nanmedian(np.absolute(sample_sums - np.nanmedian(sample_sums))) / np.nanmedian(sample_sums) \
+            nmad = np.nanmedian(np.absolute(sample_sums - cast(float, np.nanmedian(sample_sums)))) / \
+                np.nanmedian(sample_sums) \
                 if np.nanmedian(sample_sums) != 0 \
                 else 0.0
             if nmad > 0.01:
@@ -1841,11 +1857,12 @@ class NumericTestsMixin(CheckerState):
             sums_series = vals_arr_1 + vals_arr_2
             # Get the median absolute deviation of the differences, normalized by the median. Note, the scipy
             # implementation does not handle Null values.
-            nmad = np.nanmedian(np.absolute(sums_series - np.nanmedian(sums_series))) / np.nanmedian(sums_series) \
+            nmad = np.nanmedian(np.absolute(sums_series - cast(float, np.nanmedian(sums_series)))) / \
+                np.nanmedian(sums_series) \
                 if np.nanmedian(sums_series) != 0 \
                 else 0.0
             if nmad < 0.01:
-                test_series = abs(sums_series - np.nanmedian(sums_series)) < \
+                test_series = abs(sums_series - cast(float, np.nanmedian(sums_series))) < \
                               abs(0.01 * np.nanmedian(sums_series))
                 test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
@@ -1867,7 +1884,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('constant diff 1', [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant diff 2', 1000 + self.synth_df['constant diff 1'])
         self._add_synthetic_column('constant diff 3', 1000 + self.synth_df['constant diff 1'])
-        self.synth_df.at[999, 'constant diff 3'] = self.synth_df.at[999, 'constant diff 3'] * 2.0
+        self.synth_df.at[999, 'constant diff 3'] = cast(float, self.synth_df.at[999, 'constant diff 3']) * 2.0
 
 
     def _check_constant_diff(self, test_id):
@@ -1899,9 +1916,12 @@ class NumericTestsMixin(CheckerState):
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Test on a sample
-            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
+            # Test on a sample, using the rows with values in both columns
+            sample_non_null = (self.sample_df[col_name_1].notna() & self.sample_df[col_name_2].notna()).values
+            if not sample_non_null.any():
+                continue
+            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1][sample_non_null]
+            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2][sample_non_null]
             diffs_series = vals_arr_1 - vals_arr_2
             if diffs_series.median() == 0:
                 continue  # If the two columns are the same, there is a separate test for that.
@@ -1911,9 +1931,11 @@ class NumericTestsMixin(CheckerState):
             if nmad > 0.01:
                 continue
 
-            # Get the median absolute deviation of the differences, normalized by the median
-            vals_arr_1 = self.numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.numeric_vals_filled[col_name_2]
+            # Get the median absolute deviation of the differences, normalized by the median. Rows with a missing value
+            # in either column neither support nor violate the pattern, so these use only the other rows.
+            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
+            vals_arr_1 = self.numeric_vals_filled[col_name_1][non_null]
+            vals_arr_2 = self.numeric_vals_filled[col_name_2][non_null]
             diffs_series = abs(vals_arr_1 - vals_arr_2)
             diffs_series = diffs_series.replace([np.inf, -np.inf, np.nan], diffs_series.median())
             nmad = scipy.stats.median_abs_deviation(diffs_series) / statistics.median(diffs_series)\
@@ -1922,6 +1944,7 @@ class NumericTestsMixin(CheckerState):
             if nmad < 0.01:
                 test_series = abs(diffs_series - statistics.median(diffs_series)) <= \
                               abs(0.01 * statistics.median(diffs_series))
+                test_series = test_series.reindex(self.orig_df.index, fill_value=True)
                 # todo: for all check_constant_* tests, check it wouldn't work as well to just use one column. Is the other just zero?
                 # here, checking the same scale should work but doesn't seem to.
 
@@ -1931,7 +1954,7 @@ class NumericTestsMixin(CheckerState):
                     test_series,
                     (f'The difference of "{col_name_1}" and "{col_name_2}" is consistently close to '
                      f'{statistics.median(diffs_series)}'),
-                    display_info={'Diff': diffs_series}
+                    display_info={'Diff': diffs_series.reindex(self.orig_df.index)}
                 )
 
 
@@ -1944,7 +1967,7 @@ class NumericTestsMixin(CheckerState):
                                     [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant product 2', 5000 / self.synth_df['constant product 1'])
         self._add_synthetic_column('constant product 3', 5000 / self.synth_df['constant product 1'])
-        self.synth_df.at[999, 'constant product 3'] = self.synth_df.at[999, 'constant product 3'] * 2.0
+        self.synth_df.at[999, 'constant product 3'] = cast(float, self.synth_df.at[999, 'constant product 3']) * 2.0
 
 
     def _check_constant_product(self, test_id):
@@ -1975,9 +1998,12 @@ class NumericTestsMixin(CheckerState):
             # For this test, we do not check the 2 columns are on the same scale, as they can be on quite different
             # scales and still produce a constant product in a meaningful way.
 
-            # Test on a sample
-            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
+            # Test on a sample, using the rows with values in both columns
+            sample_non_null = (self.sample_df[col_name_1].notna() & self.sample_df[col_name_2].notna()).values
+            if not sample_non_null.any():
+                continue
+            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1][sample_non_null]
+            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2][sample_non_null]
             sample_series = vals_arr_1 * vals_arr_2
             nmad = scipy.stats.median_abs_deviation(sample_series) / statistics.median(sample_series) \
                 if statistics.median(sample_series) != 0 \
@@ -1985,9 +2011,11 @@ class NumericTestsMixin(CheckerState):
             if nmad > 0.01:
                 continue
 
+            # Rows with a missing value in either column neither support nor violate the pattern: their product is NaN
             vals_arr_1 = self.numeric_vals_filled[col_name_1]
             vals_arr_2 = self.numeric_vals_filled[col_name_2]
-            test_series_a = abs(vals_arr_1 * vals_arr_2)
+            test_series_a = abs(vals_arr_1 * vals_arr_2).where(
+                self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna())
 
             # Get the median absolute deviation of the products, normalized by the median
             nmad = np.nanmedian(np.absolute(test_series_a - np.nanmedian(test_series_a))) / np.nanmedian(test_series_a) \
@@ -2014,7 +2042,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('constant ratio 1', [random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('constant ratio 2', 5000 * self.synth_df['constant ratio 1'])
         self._add_synthetic_column('constant ratio 3', 5000 * self.synth_df['constant ratio 1'])
-        self.synth_df.at[999, 'constant ratio 3'] = self.synth_df.at[999, 'constant ratio 3'] * 2.0
+        self.synth_df.at[999, 'constant ratio 3'] = cast(float, self.synth_df.at[999, 'constant ratio 3']) * 2.0
 
 
     def _check_constant_ratio(self, test_id):
@@ -2058,9 +2086,12 @@ class NumericTestsMixin(CheckerState):
                 col_name_1 = col_name_2
                 col_name_2 = temp
 
-            # Test first on a sample
-            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
+            # Test first on a sample, using the rows with values in both columns
+            sample_non_null = (self.sample_df[col_name_1].notna() & self.sample_df[col_name_2].notna()).values
+            if not sample_non_null.any():
+                continue
+            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1][sample_non_null]
+            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2][sample_non_null]
             sample_series = list(map(safe_div, vals_arr_1, vals_arr_2))
             nmad = scipy.stats.median_abs_deviation(sample_series) / np.nanmedian(sample_series) \
                 if np.nanmedian(sample_series) != 0 \
@@ -2076,16 +2107,20 @@ class NumericTestsMixin(CheckerState):
             if np.nanmedian(sample_series) in [1.0, -1.0, 0.0]:
                 continue
 
-            vals_arr_1 = self.numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.numeric_vals_filled[col_name_2]
+            # Rows with a missing value in either column neither support nor violate the pattern: their ratio is NaN
+            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
+            vals_arr_1 = self.numeric_vals_filled[col_name_1].where(non_null)
+            vals_arr_2 = self.numeric_vals_filled[col_name_2].where(non_null)
             test_series_a = list(map(safe_div, vals_arr_1, vals_arr_2))
 
             # Get the median absolute deviation of the ratios, normalized by the median
-            nmad = np.nanmedian(np.absolute(test_series_a - np.nanmedian(test_series_a))) / np.nanmedian(test_series_a) \
+            nmad = np.nanmedian(np.absolute(np.asarray(test_series_a) - np.nanmedian(test_series_a))) / \
+                np.nanmedian(test_series_a) \
                 if np.nanmedian(test_series_a) != 0 \
                 else 0.0
             if abs(nmad) < 0.01:
-                test_series = abs(test_series_a - np.nanmedian(test_series_a)) < abs(0.01 * np.nanmedian(test_series_a))
+                test_series = abs(np.asarray(test_series_a) - np.nanmedian(test_series_a)) < \
+                              abs(0.01 * np.nanmedian(test_series_a))
                 test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
@@ -2109,7 +2144,8 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('even_multiple all',
                                     np.random.randint(1, 1_000, 1000) * self.synth_df['even_multiple rand'])
         self._add_synthetic_column('even_multiple most', self.synth_df['even_multiple all'])
-        self.synth_df.at[999, 'even_multiple most'] = self.synth_df.at[999, 'even_multiple most'] * 1.25 + 1
+        self.synth_df.at[999, 'even_multiple most'] = \
+            cast(float, self.synth_df.at[999, 'even_multiple most']) * 1.25 + 1
 
 
     def _check_even_multiple(self, test_id):
@@ -2127,7 +2163,6 @@ class NumericTestsMixin(CheckerState):
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
-        min_valid = self.num_rows / 2
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                 print(f"  Examining pair number {pair_idx:,} of {num_pairs:,} pairs of numeric columns")
@@ -2136,14 +2171,17 @@ class NumericTestsMixin(CheckerState):
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
+            # Rows with a missing value in either column neither support nor violate the pattern, so are not counted
+            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
             num_valid = len(np.where(
+                non_null &
                 (self.orig_df[col_name_1] != 0) &
                 (self.orig_df[col_name_1] != 1) &
                 (self.orig_df[col_name_1] != -1) &
                 (self.orig_df[col_name_2] != 0) &
                 (self.orig_df[col_name_2] != 1) &
                 (self.orig_df[col_name_2] != -1))[0])
-            if num_valid < min_valid:
+            if num_valid < (non_null.sum() / 2):
                 continue
 
             if self.orig_df[col_name_1].isna().sum() > (self.num_rows * 0.75):
@@ -2152,11 +2190,9 @@ class NumericTestsMixin(CheckerState):
                 continue
             if self.orig_df[col_name_2].tolist().count(0) > (self.num_rows * 0.75):
                 continue
-            if self.orig_df[[col_name_1, col_name_2]].isna().sum(axis=1).replace(2, 1).sum() > (self.num_rows * 0.50):
-                continue
 
-            val_arr_1 = self.numeric_vals_filled[col_name_1]
-            val_arr_2 = self.numeric_vals_filled[col_name_2]
+            val_arr_1 = self.numeric_vals_filled[col_name_1].where(non_null)
+            val_arr_2 = self.numeric_vals_filled[col_name_2].where(non_null)
             test_series = np.where(val_arr_2 != 0, val_arr_1 / val_arr_2, val_arr_1).tolist()
 
             # Remove cases where there is trivially an even multiple
@@ -2165,7 +2201,7 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             test_series = [float(x).is_integer() for x in test_series]
-            test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+            test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
             self._process_analysis_binary(
                 test_id,
                 [col_name_1, col_name_2],
@@ -2212,7 +2248,8 @@ class NumericTestsMixin(CheckerState):
             bins[0] = bins[0] - (bin_width / 10.0)
             bins[-1] = bins[-1] + (bin_width / 10.0)
             bin_labels = [int(x) for x in range(len(bins)-1)]
-            vals_arr = self.numeric_vals_filled[col_name]
+            # Missing values are left out of the bins, so are not in any cell
+            vals_arr = self.numeric_vals_filled[col_name].where(self.orig_df[col_name].notna())
             binned_values = pd.cut(vals_arr, bins, labels=bin_labels)
             return binned_values, bins
 
@@ -2326,8 +2363,8 @@ class NumericTestsMixin(CheckerState):
             "correlated rand_b" with exceptions. We do not flag the correlation between 'correlated most' and
             'correlated rand_b' as they are almost the same.
         """
-        list_a = sorted([random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
-        list_b = sorted([random.randint(1, 2_000) for _ in range(self.num_synth_rows)])
+        list_a: Sequence[int] = sorted([random.randint(1, 1_000) for _ in range(self.num_synth_rows)])
+        list_b: Sequence[float] = sorted([random.randint(1, 2_000) for _ in range(self.num_synth_rows)])
         c = list(zip(list_a, list_b))
         random.shuffle(c)
         list_a, list_b = zip(*c)
@@ -2364,15 +2401,14 @@ class NumericTestsMixin(CheckerState):
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            val_arr_1 = self.numeric_vals_filled[col_name_1]
-            val_arr_2 = self.numeric_vals_filled[col_name_2]
+            # Rows with a missing value in either column neither support nor violate the pattern, so the correlation
+            # and the percentiles are calculated on the other rows
+            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
+            val_arr_1 = self.numeric_vals_filled[col_name_1].where(non_null)
+            val_arr_2 = self.numeric_vals_filled[col_name_2].where(non_null)
             if val_arr_1.nunique() < 3:
                 continue
             if val_arr_2.nunique() < 3:
-                continue
-            if self.orig_df[col_name_1].isna().sum() > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[col_name_2].isna().sum() > (self.num_rows * 0.75):
                 continue
 
             # Skip columns that are almost entirely the same
@@ -2382,8 +2418,8 @@ class NumericTestsMixin(CheckerState):
 
             spearman_corr = abs(val_arr_1.corr(val_arr_2, method='spearman'))
             if spearman_corr >= 0.995:
-                col_1_percentiles = self.orig_df[col_name_1].rank(pct=True)
-                col_2_percentiles = self.orig_df[col_name_2].rank(pct=True)
+                col_1_percentiles = self.orig_df[col_name_1].where(non_null).rank(pct=True)
+                col_2_percentiles = self.orig_df[col_name_2].where(non_null).rank(pct=True)
 
                 # Test for positive correlation
                 test_series = np.array([abs(x-y) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
@@ -2565,13 +2601,8 @@ class NumericTestsMixin(CheckerState):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                 print(f"  Examining pair {pair_idx:,} of {len(numeric_pairs_list):,} pairs of numeric columns")
 
-            # Skip where the columns have many null values
-            if self.orig_df[col_name_1].isna().sum() > (self.num_rows * 0.5):
-                continue
-            if self.orig_df[col_name_2].isna().sum() > (self.num_rows * 0.5):
-                continue
-
-            # Skip pairs where only rare rows have no nulls
+            # Skip pairs where only rare rows have no nulls. Rows with null values, or following a null value, are not
+            # tested.
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
@@ -2629,17 +2660,17 @@ class NumericTestsMixin(CheckerState):
 
         # Test rounding to 10's
         self._add_synthetic_column('a_rounded_b all_d', (self.synth_df['a_rounded_b rand'] / 10).apply(round) * 10)
-        self._add_synthetic_column('a_rounded_b most_d', self.synth_df['a_rounded_b all_d'])
+        self._add_synthetic_column('a_rounded_b most_d', self.synth_df['a_rounded_b all_d'].astype(float))
         self.synth_df.loc[999, 'a_rounded_b most_d'] = 100.8
 
         # Test rounding to 100's
         self._add_synthetic_column('a_rounded_b all_e',(self.synth_df['a_rounded_b rand'] / 100).apply(round) * 100)
-        self._add_synthetic_column('a_rounded_b most_e', self.synth_df['a_rounded_b all_e'])
+        self._add_synthetic_column('a_rounded_b most_e', self.synth_df['a_rounded_b all_e'].astype(float))
         self.synth_df.loc[999, 'a_rounded_b most_e'] = 100.8
 
         # Test rounding to 1000's
         self._add_synthetic_column('a_rounded_b all_f', (self.synth_df['a_rounded_b rand'] / 1000).apply(round) * 1000)
-        self._add_synthetic_column('a_rounded_b most_f', self.synth_df['a_rounded_b all_f'])
+        self._add_synthetic_column('a_rounded_b most_f', self.synth_df['a_rounded_b all_f'].astype(float))
         self.synth_df.loc[999, 'a_rounded_b most_f'] = 100.8
 
 
@@ -2668,9 +2699,12 @@ class NumericTestsMixin(CheckerState):
         round_1000_dict = {}
 
         for col_name in self.numeric_cols:
-            vals_arr = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])
-            vals_arr_sample = convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name])
-            number_decimals_dict[col_name] = vals_arr.apply(get_num_decimal_digits)
+            # Missing values are kept as NaN, so they neither match nor violate any of the relationships
+            vals_arr = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name]).where(
+                self.orig_df[col_name].notna().to_numpy())
+            vals_arr_sample = convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name]).where(
+                self.sample_df[col_name].notna().to_numpy())
+            number_decimals_dict[col_name] = vals_arr.dropna().apply(get_num_decimal_digits)
 
             sample_floor_dict[col_name] = vals_arr_sample.apply(np.floor)
             sample_ceil_dict[col_name] = vals_arr_sample.apply(np.ceil)
@@ -2940,10 +2974,12 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 # Check the two columns that have the values that are checked have a reasonable number of at least
-                # two unique values
-                if self.orig_df[col_name_1].value_counts().values[1] < self.freq_contamination_level:
+                # two unique values, relative to the number of non-null values
+                if self.orig_df[col_name_1].value_counts().values[1] < \
+                        self.freq_contamination_level * (self.num_valid_rows[col_name_1] / self.num_rows):
                     continue
-                if self.orig_df[col_name_2].value_counts().values[1] < self.freq_contamination_level:
+                if self.orig_df[col_name_2].value_counts().values[1] < \
+                        self.freq_contamination_level * (self.num_valid_rows[col_name_2] / self.num_rows):
                     continue
 
                 if col_triples_any_null_bool_dict[tuple(sorted([col_name_1, col_name_2, col_name_3]))]:
@@ -2970,6 +3006,9 @@ class NumericTestsMixin(CheckerState):
                     continue
                 test_series_a = test_series_a.replace(np.nan, 1.0)
                 test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
+                # Rows with missing values neither support nor violate the pattern
+                test_series = test_series | \
+                    self.sample_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
                 num_not_matching = test_series.tolist().count(False)
                 if num_not_matching > 1:
                     continue
@@ -2979,20 +3018,24 @@ class NumericTestsMixin(CheckerState):
                 if current_tuple in flagged_tuples:
                     continue
 
-                # Test on the full data
+                # Test on the full data. Rows with missing values are not tested, so skip where few rows have none.
+                is_missing_arr = self.orig_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
+                if (~is_missing_arr).sum() < self.freq_contamination_level:
+                    continue
                 test_series_a = (self.numeric_vals_filled[col_name_3] / \
                                     (self.numeric_vals_filled[col_name_1] - self.numeric_vals_filled[col_name_2]))
                 test_series_a = test_series_a.replace(np.nan, 1.0)
                 test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
+                test_series = test_series | is_missing_arr
                 num_matching = test_series.tolist().count(True)
                 if num_matching < (self.num_rows - self.freq_contamination_level):
                     continue
 
-                # Test the match wouldn't be as close simply using col_name_1
+                # Test the match wouldn't be as close simply using col_name_1, using the rows without missing values
                 test_series_a = abs(1.0 - (self.numeric_vals_filled[col_name_3] / \
                                            abs(self.numeric_vals_filled[col_name_1] - self.numeric_vals_filled[col_name_2])))
                 test_series_b = abs(1.0 - (self.numeric_vals_filled[col_name_3] / abs(self.numeric_vals_filled[col_name_1])))
-                if test_series_a.median() < test_series_b.median():
+                if test_series_a[~is_missing_arr].median() < test_series_b[~is_missing_arr].median():
                     self._process_analysis_binary(
                         test_id,
                         [col_name_1, col_name_2, col_name_3],
@@ -3059,10 +3102,9 @@ class NumericTestsMixin(CheckerState):
             if (med_3 < med_1) or (med_3 < med_2) or (med_3 < (med_1 * med_2 * 0.5)) or (med_3 > (med_1 * med_2 * 2.0)):
                 continue
 
-            # Skip cases where the product is trivially true because some columns are largely zeros or largely null.
-            if self.orig_df[col_name_3].tolist().count(0) > (self.num_rows * 0.75):
-                continue
-            if self.orig_df[col_name_3].isna().sum() > (self.num_rows * 0.75):
+            # Skip cases where the product is trivially true because some columns are largely zeros. Rows with null
+            # values are not tested, and triples with few rows without nulls are skipped above.
+            if self.orig_df[col_name_3].tolist().count(0) > (self.num_valid_rows[col_name_3] * 0.75):
                 continue
 
             # Test the relationship on a small sample of the full data
@@ -3072,22 +3114,26 @@ class NumericTestsMixin(CheckerState):
                 continue
             test_series_a = test_series_a.replace(np.nan, 1.0)
             test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
+            test_series = test_series | self.sample_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
             num_not_matching = test_series.tolist().count(False)
             if num_not_matching > 1:
                 continue
 
             # Test on the full data
+            is_missing_arr = self.orig_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
             test_series_a = self.numeric_vals_filled[col_name_3] / \
                             (self.numeric_vals_filled[col_name_1] * self.numeric_vals_filled[col_name_2])
 
-            # First check there is a reasonable number of matches before filling the null values.
-            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
+            # First check there is a reasonable number of matches before filling the null values, in the rows without
+            # null values.
+            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False) & ~is_missing_arr
             if test_series.tolist().count(True) < self.freq_contamination_level:
                 continue
 
             # We fill the null values to allow null values to not violate the pattern.
             test_series_a = test_series_a.replace(np.nan, 1.0)
             test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
+            test_series = test_series | is_missing_arr
             num_matching = test_series.tolist().count(True)
             if num_matching >= (self.num_rows - self.freq_contamination_level):
                 self._process_analysis_binary(
@@ -3216,8 +3262,8 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('larger_sum all',
                                     self.synth_df['larger_sum rand_b'] + self.synth_df['larger_sum rand_a'] + random.randint(1, 10))
         self._add_synthetic_column('larger_sum most',
-                                    self.synth_df['larger_sum all'])
-        self.synth_df.at[999, 'larger_sum most'] = self.synth_df.at[999, 'larger_sum most'] * 0.2
+                                    self.synth_df['larger_sum all'].astype(float))
+        self.synth_df.at[999, 'larger_sum most'] = cast(float, self.synth_df.at[999, 'larger_sum most']) * 0.2
 
 
     def _check_larger_than_sum(self, test_id):
@@ -3237,16 +3283,17 @@ class NumericTestsMixin(CheckerState):
             if self.spearman_corr[col_b][col_c] < 0.40:
                 return False
 
-            # Test the relationship on a small sample of the full data
+            # Test the relationship on a small sample of the full data. Rows with missing values do not violate it.
             test_series = self.sample_df[col_c].astype(float) > (self.sample_df[col_a].astype(float) +
                                                                  self.sample_df[col_b].astype(float))
+            test_series = test_series | self.sample_df[[col_a, col_b, col_c]].isna().any(axis=1)
             num_not_matching = test_series.tolist().count(False)
             if num_not_matching > 1:
                 return False
 
-            # Test there is a correlation on a sample
+            # Test there is a correlation on a sample, using the rows with values in all three columns
             corr = scipy.stats.spearmanr(self.sample_df[col_a].astype(float) + self.sample_df[col_b].astype(float),
-                                            self.sample_df[col_c].astype(float))
+                                            self.sample_df[col_c].astype(float), nan_policy='omit')
             if corr.correlation < 0.9:
                 return False
 
@@ -3329,7 +3376,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('larger_diff all',
                                     self.synth_df['larger_diff rand_b'] - self.synth_df['larger_diff rand_a'] + random.randint(1, 10))
         self._add_synthetic_column('larger_diff most', self.synth_df['larger_diff all'])
-        self.synth_df.at[999, 'larger_diff most'] = self.synth_df.at[999, 'larger_diff most'] * 0.2
+        self.synth_df.at[999, 'larger_diff most'] = cast(float, self.synth_df.at[999, 'larger_diff most']) * 0.2
 
 
     def _check_larger_than_abs_diff(self, test_id):
@@ -3353,7 +3400,7 @@ class NumericTestsMixin(CheckerState):
             num_same = (self.orig_df[col_a] == self.orig_df[col_c]).tolist().count(True)
             if num_same > (self.num_rows * 0.9):
                 return True
-            num_same = (self.orig_df[col_a] == self.orig_df[col_c]).tolist().count(True)
+            num_same = (self.orig_df[col_b] == self.orig_df[col_c]).tolist().count(True)
             if num_same > (self.num_rows * 0.9):
                 return True
 
@@ -3453,7 +3500,7 @@ class NumericTestsMixin(CheckerState):
             'sum of cols rand_b',
             'sum of cols rand_c']].sum(axis=1))
         self._add_synthetic_column('sum of cols most', self.synth_df['sum of cols all'].copy())
-        self.synth_df.at[999, 'sum of cols most'] = self.synth_df.at[999, 'sum of cols most'] * 5.0
+        self.synth_df.at[999, 'sum of cols most'] = cast(float, self.synth_df.at[999, 'sum of cols most']) * 5.0
 
         # Add columns where the pattern based on cols rand_a, rand_b, and rand_c plus a constant are always, and mostly
         # true
@@ -3463,7 +3510,8 @@ class NumericTestsMixin(CheckerState):
             'sum of cols rand_c']].sum(axis=1))
         self.synth_df['sum of cols plus all'] += 67.3
         self._add_synthetic_column('sum of cols plus most', self.synth_df['sum of cols plus all'].copy())
-        self.synth_df.at[999, 'sum of cols plus most'] = self.synth_df.at[999, 'sum of cols plus most'] * 5.0
+        self.synth_df.at[999, 'sum of cols plus most'] = \
+            cast(float, self.synth_df.at[999, 'sum of cols plus most']) * 5.0
 
         # Add columns where the pattern based on cols rand_a, rand_b, and rand_c times a constant are always, and mostly
         # true
@@ -3473,7 +3521,8 @@ class NumericTestsMixin(CheckerState):
             'sum of cols rand_c']].sum(axis=1))
         self.synth_df['sum of cols times all'] *= 1.6
         self._add_synthetic_column('sum of cols times most', self.synth_df['sum of cols times all'].copy())
-        self.synth_df.at[999, 'sum of cols times most'] = self.synth_df.at[999, 'sum of cols times most'] * 5.0
+        self.synth_df.at[999, 'sum of cols times most'] = \
+            cast(float, self.synth_df.at[999, 'sum of cols times most']) * 5.0
 
 
     def _check_sum_of_columns(self, test_id):
@@ -3511,7 +3560,7 @@ class NumericTestsMixin(CheckerState):
             found_any = False
 
             # For any subsets whose sum is too small to match col_name, there is no use trying any smaller subsets.
-            know_failed_subsets = {}
+            know_failed_subsets: dict[tuple[str, ...], bool] = {}
 
             starting_size = len(similar_cols)
             if limit_subset_sizes:
@@ -3520,7 +3569,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols, subset_size))
+                subsets: list[Sequence[str]] = list(combinations(similar_cols, subset_size))
                 if self.verbose >= 3 and len(similar_cols) > 15:
                     print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
                 for subset_idx, subset in enumerate(subsets):
@@ -3538,7 +3587,7 @@ class NumericTestsMixin(CheckerState):
 
                     # Check if this set of columns summing to col_name is plausible, checking if the sum of medians is
                     # significantly smaller or larger. actually, no -- we check ading/ multiply by constant below
-                    sum_of_medians = 0
+                    sum_of_medians: float = 0
                     for c in subset:
                         sum_of_medians += self.column_medians[c]
                     if sum_of_medians > (self.column_medians[col_name] * 1.1):
@@ -3546,10 +3595,10 @@ class NumericTestsMixin(CheckerState):
 
                     subset = list(subset)
 
-                    # Check all 3 sub-tests on a sample first
-                    sample_df = self.sample_df[subset].astype(float)
-                    col_sums = sample_df.sum(axis=1)
-                    sample_diffs_series = self.sample_df[col_name].astype(float) - col_sums
+                    # Check all 3 sub-tests on a sample first, skipping rows with missing values
+                    sample_df = self.sample_df[[*subset, col_name]].dropna().astype(float)
+                    col_sums = sample_df[subset].sum(axis=1)
+                    sample_diffs_series = sample_df[col_name] - col_sums
                     sample_col_values = sample_diffs_series == 0
                     subtest_1_okay = sample_col_values.tolist().count(False) <= 1
 
@@ -3559,15 +3608,18 @@ class NumericTestsMixin(CheckerState):
                     subtest_2_okay = sample_col_values.count(False) <= 1
 
                     # Check on a sample for 3rd sub-test
-                    ratios_series = self.sample_df[col_name].astype(float) / col_sums
+                    ratios_series = sample_df[col_name] / col_sums
                     median_ratio = ratios_series.median()
                     sample_col_values = [math.isclose(x, median_ratio) for x in ratios_series]
                     subtest_3_okay = sample_col_values.count(False) <= 1
 
                     # Check if col_name is the sum of subset
                     if subtest_1_okay or subtest_2_okay or subtest_3_okay:
+                        # Rows with missing values are not tested, so skip where few rows have none
+                        if self.orig_df[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
+                            continue
                         df = self.orig_df[subset].astype(float)
-                        col_sums = df.sum(axis=1)
+                        col_sums = df.sum(axis=1, skipna=False)  # The sums are NaN where any value is missing
                         diffs_series = self.orig_df[col_name].astype(float) - col_sums
                         col_values = diffs_series == 0
                         col_values = self.check_results_for_null(col_values, col_name, subset)
@@ -3586,7 +3638,7 @@ class NumericTestsMixin(CheckerState):
                         if too_small_arr.tolist().count(True) > self.freq_contamination_level:
                             know_failed_subsets[tuple(subset)] = True
                     else:
-                        too_small_arr = self.sample_df[col_name].astype(float) > col_sums
+                        too_small_arr = sample_df[col_name] > col_sums
                         if too_small_arr.tolist().count(True) > 1:
                             know_failed_subsets[tuple(subset)] = True
 
@@ -3595,7 +3647,7 @@ class NumericTestsMixin(CheckerState):
                     # the differences is this constant.
                     if subtest_2_okay:
                         median_diff = diffs_series.median()
-                        col_values = [math.isclose(x, median_diff) for x in diffs_series]
+                        col_values = np.array([math.isclose(x, median_diff) for x in diffs_series])
                         col_values = self.check_results_for_null(col_values, col_name, subset)
                         if col_values.tolist().count(False) < self.freq_contamination_level:
                             self._process_analysis_binary(
@@ -3616,7 +3668,7 @@ class NumericTestsMixin(CheckerState):
                     if subtest_3_okay:
                         ratios_series = self.orig_df[col_name].astype(float) / col_sums
                         median_ratio = ratios_series.median()
-                        col_values = [math.isclose(x, median_ratio) for x in ratios_series]
+                        col_values = np.array([math.isclose(x, median_ratio) for x in ratios_series])
                         col_values = self.check_results_for_null(col_values, col_name, subset)
                         if col_values.tolist().count(False) < self.freq_contamination_level:
                             self._process_analysis_binary(
@@ -3653,7 +3705,7 @@ class NumericTestsMixin(CheckerState):
             'min_of_cols rand_b',
             'min_of_cols rand_c']].min(axis=1))
         self._add_synthetic_column('min_of_cols most', self.synth_df['min_of_cols all'].copy())
-        self.synth_df.at[999, 'min_of_cols most'] = self.synth_df.at[999, 'min_of_cols most'] * 5.0
+        self.synth_df.at[999, 'min_of_cols most'] = cast(float, self.synth_df.at[999, 'min_of_cols most']) * 5.0
 
 
     def _check_min_of_columns(self, test_id):
@@ -3692,7 +3744,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols_idxs, subset_size))
+                subsets: list[Sequence[int]] = list(combinations(similar_cols_idxs, subset_size))
                 if self.verbose >= 2 and len(similar_cols) > 15:
                     if not printed_column_status:
                         print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns")
@@ -3706,7 +3758,7 @@ class NumericTestsMixin(CheckerState):
                     test_np = two_rows_np[:, subset]
                     col_mins = test_np.min(axis=1)
                     test_series = np.where(two_rows_np[:, col_idx] == col_mins, True, False)
-                    if test_series.tolist().count(False) > 0:
+                    if test_series.tolist().count(False) > 1:
                         continue
 
                     # Test on a subset of the rows
@@ -3770,7 +3822,7 @@ class NumericTestsMixin(CheckerState):
             'max_of_cols rand_b',
             'max_of_cols rand_c']].max(axis=1))
         self._add_synthetic_column('max_of_cols most', self.synth_df['max_of_cols all'].copy())
-        self.synth_df.at[999, 'max_of_cols most'] = self.synth_df.at[999, 'max_of_cols most'] * 5.0
+        self.synth_df.at[999, 'max_of_cols most'] = cast(float, self.synth_df.at[999, 'max_of_cols most']) * 5.0
 
 
     def _check_max_of_columns(self, test_id):
@@ -3779,7 +3831,7 @@ class NumericTestsMixin(CheckerState):
         """
 
         # Try all subsets where it's median is less than this column's, but more than 1/10 of it.
-        # For each target column, try all subsets whose minimum values match this column.
+        # For each target column, try all subsets whose maximum values match this column.
 
         two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
 
@@ -3810,7 +3862,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols_idxs, subset_size))
+                subsets: list[Sequence[int]] = list(combinations(similar_cols_idxs, subset_size))
                 if self.verbose >= 2 and len(similar_cols) > 15:
                     if not printed_column_status:
                         print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns")
@@ -3852,7 +3904,7 @@ class NumericTestsMixin(CheckerState):
                         if not subset_okay:
                             continue
 
-                        # Check if this is a pattern in a trivial way. Check each column in the subset is the min at
+                        # Check if this is a pattern in a trivial way. Check each column in the subset is the max at
                         # least once.
                         subset_okay = True
                         for col in subset_names:
@@ -3895,7 +3947,7 @@ class NumericTestsMixin(CheckerState):
             'mean_of_cols rand_b',
             'mean_of_cols rand_c']].mean(axis=1))
         self._add_synthetic_column('mean_of_cols most', self.synth_df['mean_of_cols all'].copy())
-        self.synth_df.at[999, 'mean_of_cols most'] = self.synth_df.at[999, 'mean_of_cols most'] * 5.0
+        self.synth_df.at[999, 'mean_of_cols most'] = cast(float, self.synth_df.at[999, 'mean_of_cols most']) * 5.0
 
 
     def _check_mean_of_columns(self, test_id):
@@ -3914,7 +3966,7 @@ class NumericTestsMixin(CheckerState):
         # We loop through the positive numeric columns and for each find the set of columns with similar values.
         # For each subset of these, we check if any is the mean of the others. We then do not need to check any of these
         # columns again, but continue through the positive numeric columns for numeric columns in other ranges.
-        skip_col_sets = []
+        skip_col_sets: list[set[str]] = []
 
         # Identify the set of similar columns for each positive numeric column
         similar_cols_dict, _, calc_size = self.get_similar_cols(
@@ -3952,7 +4004,7 @@ class NumericTestsMixin(CheckerState):
                 if found_any:
                     break
 
-                subsets = list(combinations(similar_cols, subset_size))
+                subsets: list[Sequence[str]] = list(combinations(similar_cols, subset_size))
                 if self.verbose >= 3 and len(similar_cols) > 15:
                     print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
 
@@ -3973,18 +4025,24 @@ class NumericTestsMixin(CheckerState):
 
                     subset = list(subset)
 
-                    # Test on a sample of the rows in the columns. Using numpy works faster in this case.
+                    # Test on a sample of the rows in the columns, skipping rows with missing values. Using numpy works
+                    # faster in this case.
                     cols_idxs = [self.orig_df.columns.tolist().index(x) for x in subset]
-                    sample_np = self.sample_df.values[:, cols_idxs]
+                    sample_non_null_arr = self.sample_df[subset].notna().all(axis=1).values
+                    sample_np = self.sample_df.values[sample_non_null_arr][:, cols_idxs]
                     col_mean = sample_np.mean(axis=1)
 
                     # We loop through all the columns in the subset, to avoid duplicate work later
-                    matching_column = []
+                    matching_column: str | None = None
                     for c in subset:
-                        if np.allclose(self.sample_df[c], col_mean.astype(float)):
+                        if np.allclose(self.sample_df[c][sample_non_null_arr], col_mean.astype(float)):
                             matching_column = c
                             break
                     if not matching_column:
+                        continue
+
+                    # Rows with missing values are not tested, so skip where few rows have none
+                    if self.orig_df[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
                         continue
 
                     # Test on the full columns
@@ -4024,7 +4082,8 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('matched_pos_neg rand_b', [random.randint(-1000, 1000) for _ in range(self.num_synth_rows)])
         self._add_synthetic_column('matched_pos_neg all', self.synth_df['matched_pos_neg rand_a'] * random.randint(1, 100))
         self._add_synthetic_column('matched_pos_neg most', self.synth_df['matched_pos_neg rand_a'] * random.randint(1, 100))
-        self.synth_df.at[999, 'matched_pos_neg most'] = self.synth_df.at[999, 'matched_pos_neg most'] * -1.0
+        self.synth_df.at[999, 'matched_pos_neg most'] = \
+            cast(float, self.synth_df.at[999, 'matched_pos_neg most']) * -1.0
 
 
     def check_mathed_set_pos_neg(self, test_id):
@@ -4063,7 +4122,8 @@ class NumericTestsMixin(CheckerState):
         # be skipped, but is a useful heuristic to reduce execution time.
         num_cols = len(cols)
         found_any = False
-        know_failed_subsets = {}  # dictionary of dictionaries, with and element for each subset size.
+        # dictionary of dictionaries, with and element for each subset size.
+        know_failed_subsets: dict[int, dict[tuple[str, ...], bool]] = {}
         printed_subset_size_msg = False
         for subset_size in range(num_cols, 1, -1):
             know_failed_subsets[subset_size] = {}
@@ -4102,8 +4162,8 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 # Test on a sample of rows
-                pos_matching_arr = [1] * len(self.sample_df)
-                neg_matching_arr = [1] * len(self.sample_df)
+                pos_matching_arr = np.full(len(self.sample_df), True)
+                neg_matching_arr = np.full(len(self.sample_df), True)
                 for c_idx, c in enumerate(subset[1:]):  # noqa: B007 - used after the loop
                     pos_matching_arr = pos_matching_arr & (sample_pos_dict[subset[0]] == sample_pos_dict[c])
                     if pos_matching_arr.tolist().count(False) > 1:
@@ -4118,8 +4178,8 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 # Test on the full columns
-                pos_matching_arr = [1] * self.num_rows
-                neg_matching_arr = [1] * self.num_rows
+                pos_matching_arr = np.full(self.num_rows, True)
+                neg_matching_arr = np.full(self.num_rows, True)
                 subset_matches = True
                 for c in subset[1:]:
                     pos_matching_arr = pos_matching_arr & (pos_dict[subset[0]] == pos_dict[c])
@@ -4197,7 +4257,7 @@ class NumericTestsMixin(CheckerState):
                 zero_dict[col_name] = self.orig_df[col_name] == 0
                 non_zero_dict[col_name] = self.orig_df[col_name] != 0
 
-        know_failed_subsets = {}
+        know_failed_subsets: dict[tuple[str, ...], bool] = {}
         printed_subset_size_msg = False
 
         # Loop through the subsets, from biggest to smallest. Consider only subsets of at least 2 columns.
@@ -4235,10 +4295,10 @@ class NumericTestsMixin(CheckerState):
                 if not subset_matches:
                     continue
 
-                sample_zero_matching_arr = [1] * len(self.sample_df)
-                sample_non_zero_matching_arr = [1] * len(self.sample_df)
-                zero_matching_arr = [1] * self.num_rows
-                non_zero_matching_arr = [1] * self.num_rows
+                sample_zero_matching_arr = np.full(len(self.sample_df), True)
+                sample_non_zero_matching_arr = np.full(len(self.sample_df), True)
+                zero_matching_arr = np.full(self.num_rows, True)
+                non_zero_matching_arr = np.full(self.num_rows, True)
 
                 # Test on a sample of rows
                 for c_idx, c in enumerate(subset):  # noqa: B007 - used after the loop
@@ -4317,7 +4377,7 @@ class NumericTestsMixin(CheckerState):
         self.synth_df['dt regr. 1d'] = [random.randint(1, 100) for _ in range(self.num_synth_rows)]
         self.synth_df['dt regr. 2'] = set_y('dt regr. 1a', 'dt regr. 1b')
         self.synth_df['dt regr. 3'] = set_y('dt regr. 1c', 'dt regr. 1d')
-        self.synth_df.at[999, 'dt regr. 3'] = self.synth_df.at[999, 'dt regr. 3'] * 10.0
+        self.synth_df.at[999, 'dt regr. 3'] = cast(float, self.synth_df.at[999, 'dt regr. 3']) * 10.0
 
 
     def _check_dt_regressor(self, test_id):
@@ -4365,7 +4425,7 @@ class NumericTestsMixin(CheckerState):
             uncorrelated_cols = []
             for c in self.numeric_cols:
                 if c in x_data.columns:
-                    if abs(self.spearman_corr.loc[col_name, c]) > 0.2:
+                    if abs(cast(float, self.spearman_corr.loc[col_name, c])) > 0.2:
                         x_data[c] = self.numeric_vals_filled[c]
                     elif cols_same_bool_dict[tuple(sorted([col_name, c]))]:
                         uncorrelated_cols.append(c)  # Actually over-correlated, but will remove as well.
@@ -4448,6 +4508,8 @@ class NumericTestsMixin(CheckerState):
                 errors_arr = (y_pred - y)
                 normalized_errors_arr = abs(errors_arr / self.column_medians[col_name])
                 test_series = normalized_errors_arr < 0.1
+                # Rows with missing values in the target column or the columns used by the DT are not tested
+                test_series = test_series | self.orig_df[cols + [col_name]].isna().any(axis=1)
                 self._process_analysis_binary(
                     test_id,
                     cols + [col_name],
@@ -4475,7 +4537,7 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column(
             'lin regr 3',
             (40.1 * self.synth_df['lin regr 1d']) + (3.1 * self.synth_df['lin regr 1e']) + (5.1 * self.synth_df['lin regr 1f']))
-        self.synth_df.at[999, 'lin regr 3'] = self.synth_df.at[999, 'lin regr 3'] * 10.0
+        self.synth_df.at[999, 'lin regr 3'] = cast(float, self.synth_df.at[999, 'lin regr 3']) * 10.0
 
 
     def _check_lin_regressor(self, test_id):
@@ -4554,7 +4616,10 @@ class NumericTestsMixin(CheckerState):
             y = scaler.fit_transform(y.values.reshape(-1, 1)).reshape(1, -1)[0]
 
             try:
-                regr.fit(train_x_data, train_y)
+                # Lasso with alpha=0 is an unregularised fit, as intended; scikit-learn warns about it
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', UserWarning)
+                    regr.fit(train_x_data, train_y)
             except Exception as e:
                 if self.DEBUG_MSG:
                     if colored:
@@ -4673,7 +4738,7 @@ class NumericTestsMixin(CheckerState):
 
         sub_df = self.orig_df[self.numeric_cols].sample(n=min(self.num_rows, 2000), random_state=0)
         corr_matrix = sub_df.corr(method='spearman')
-        correlated_sets_arr=[]
+        correlated_sets_arr: list[set[str]] = []
         pair = get_next_corr_pair(corr_matrix, correlated_sets_arr)
         while pair:
             full_set = get_rest_set(corr_matrix, pair, correlated_sets_arr)
@@ -4775,7 +4840,8 @@ class NumericTestsMixin(CheckerState):
                                     [random.randint(1, 1000) for _ in range(self.num_synth_rows)])
         self.synth_df.at[999, 'predict_null rand_b'] = 985  # Set to be known to be over 800,
         vals2 = np.random.randint(1, 1000, size=self.num_synth_rows)
-        vals2 = np.where(self.synth_df['predict_null rand_b'] > 800, None, vals2)
+        # numpy's stubs do not accept None as a where() branch; the result is an object array
+        vals2 = np.where(self.synth_df['predict_null rand_b'] > 800, None, vals2)  # type: ignore[call-overload]
         self._add_synthetic_column('predict_null all', vals2)
         self._add_synthetic_column('predict_null most', vals2)
         self.synth_df.at[999, 'predict_null most'] = 833
@@ -4845,6 +4911,14 @@ class NumericTestsMixin(CheckerState):
             if len(x_df.columns) == 0:
                 continue
 
+            # Rows with a missing value in any of the X columns neither support nor violate the pattern, so the DT is
+            # fit and evaluated only on the other rows. Check again these are not almost all Null or non-Null.
+            rows_used = ~pd.concat([is_missing_dict[c] for c in x_df.columns], axis=1).any(axis=1)
+            if (target_col[rows_used].tolist().count(True) < math.sqrt(self.num_rows)) or \
+                    (target_col[rows_used].tolist().count(False) < math.sqrt(self.num_rows)):
+                continue
+            x_df = x_df[rows_used]
+
             # One-hot encode any categorical X columns
             use_categorical_features = categorical_features.copy()
             if col_name in use_categorical_features:
@@ -4862,9 +4936,9 @@ class NumericTestsMixin(CheckerState):
             # Create, fit, and test the DT. We create as simple of a tree as possible to get a good level of accuracy.
             for max_leaf_nodes in range(2, 9):
                 clf = DecisionTreeClassifier(max_leaf_nodes=max_leaf_nodes, random_state=0)
-                clf.fit(x_df, target_col)
+                clf.fit(x_df, target_col[rows_used])
                 y_pred = clf.predict(x_df)
-                f1_dt = metrics.f1_score(target_col, y_pred, average='macro')
+                f1_dt = metrics.f1_score(target_col[rows_used], y_pred, average='macro')
                 if f1_dt > 0.9:
                     break
 
@@ -4891,7 +4965,9 @@ class NumericTestsMixin(CheckerState):
                 # Clean the split points for categorical features to use the values, not 0.5
                 rules = self.get_decision_tree_rules_as_categories(rules, categorical_features)
 
-                test_series = (target_col == y_pred)
+                # There is no prediction for the rows not used
+                y_pred = pd.Series(y_pred, index=x_df.index).reindex(self.orig_df.index)
+                test_series = (target_col == y_pred) | ~rows_used
                 self._process_analysis_binary(
                     test_id,
                     cols + [col_name],
@@ -4899,7 +4975,7 @@ class NumericTestsMixin(CheckerState):
                     f'The Null values in column "{col_name}" (with {num_missing_dict[col_name]} null and '
                     f'{self.num_rows - num_missing_dict[col_name]} non-null values) are consistently '
                     f'predictable from {cols} based using a decision tree with the following rules: \n{rules}',
-                    display_info={'Pred': pd.Series(y_pred).replace({True: 'Null', False: 'Non-Null'})}
+                    display_info={'Pred': y_pred.replace({True: 'Null', False: 'Non-Null'})}
                 )
 
     ##################################################################################################################

@@ -12,6 +12,7 @@ import datetime
 import math
 import random
 import statistics
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -61,8 +62,6 @@ class DateTestsMixin(CheckerState):
 
     def _check_early_dates(self, test_id):
         for col_name in self.date_cols:
-            # todo: may need to cast back to datetime: pd.to_datetime(self.orig_df[col_name]) -- do all these methods
-            #   also add the interpolation all these methods
             q1 = pd.to_datetime(self.orig_df[col_name]).quantile(0.25, interpolation='midpoint')
             q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
@@ -95,8 +94,8 @@ class DateTestsMixin(CheckerState):
 
     def _check_late_dates(self, test_id):
         for col_name in self.date_cols:
-            q1 = pd.to_datetime(self.orig_df[col_name]).quantile(0.25)
-            q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75)
+            q1 = pd.to_datetime(self.orig_df[col_name]).quantile(0.25, interpolation='midpoint')
+            q3 = pd.to_datetime(self.orig_df[col_name]).quantile(0.75, interpolation='midpoint')
             try:
                 upper_limit = q3 + (self.iqr_limit * (q3 - q1))  # Using a stricter threshold than the 2.2 normally used
             except Exception:
@@ -142,7 +141,9 @@ class DateTestsMixin(CheckerState):
             # todo: test all methods with timestamps
             dow_list = pd.Series([x.day_of_week if hasattr(x, 'day_of_week') else x.dayofweek for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = dow_list.value_counts()
-            rare_dow = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * dow_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_dow = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_dow) == 0:
                 continue
             test_series = np.array([x not in rare_dow for x in dow_list])
@@ -162,8 +163,8 @@ class DateTestsMixin(CheckerState):
         """
         test_date = datetime.datetime.strptime("01-7-1922", "%d-%m-%Y")
         self._add_synthetic_column('dom rand', pd.date_range(test_date, periods=self.num_synth_rows))
-        self._add_synthetic_column('dom all',  pd.date_range(test_date, periods=self.num_synth_rows, freq='M'))
-        self._add_synthetic_column('dom most', pd.date_range(test_date, periods=self.num_synth_rows-1, freq='M'))
+        self._add_synthetic_column('dom all',  pd.date_range(test_date, periods=self.num_synth_rows, freq=pd.offsets.MonthEnd()))
+        self._add_synthetic_column('dom most', pd.date_range(test_date, periods=self.num_synth_rows-1, freq=pd.offsets.MonthEnd()))
         self.synth_df.loc[999, 'dom most'] = datetime.datetime.strptime("02-7-2022", "%d-%m-%Y")
 
 
@@ -177,7 +178,9 @@ class DateTestsMixin(CheckerState):
 
             dom_list = pd.Series([x.day for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = dom_list.value_counts()
-            rare_dom = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * dom_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_dom = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_dom) == 0:
                 continue
             test_series = np.array([x not in rare_dom for x in dom_list])
@@ -197,8 +200,8 @@ class DateTestsMixin(CheckerState):
         """
         test_date = datetime.datetime.strptime("01-7-2022", "%d-%m-%Y")
         self._add_synthetic_column('month rand', pd.date_range(test_date, periods=self.num_synth_rows, freq='3D'))
-        dates = pd.date_range(test_date, periods=self.num_synth_rows, freq='3D')
-        dates = [x if x.month != 12 else x + relativedelta(months=1) for x in dates]
+        date_range = pd.date_range(test_date, periods=self.num_synth_rows, freq='3D')
+        dates = [x if x.month != 12 else x + relativedelta(months=1) for x in date_range]
         self._add_synthetic_column('month all', dates)
         self._add_synthetic_column('month most', dates)
         self.synth_df.loc[999, 'month most'] = datetime.datetime.strptime("02-12-2022", "%d-%m-%Y")
@@ -214,7 +217,9 @@ class DateTestsMixin(CheckerState):
 
             month_list = pd.Series([x.month for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = month_list.value_counts()
-            rare_months = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * month_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_months = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_months) == 0:
                 continue
             test_series = np.array([x not in rare_months for x in month_list])
@@ -252,7 +257,9 @@ class DateTestsMixin(CheckerState):
 
             hour_list = pd.Series([x.hour for x in pd.to_datetime(self.orig_df[col_name])])
             counts_list = hour_list.value_counts()
-            rare_hours = [x for x, y in zip(counts_list.index, counts_list.values) if y < self.freq_contamination_level]
+            # Scaled to the values present, but a value seen once must still be able to count as rare
+            rare_limit = max(self.freq_contamination_level * hour_list.notna().mean(), min(self.freq_contamination_level, 2))
+            rare_hours = [x for x, y in zip(counts_list.index, counts_list.values) if y < rare_limit]
             if len(rare_hours) == 0:
                 continue
             test_series = np.array([x not in rare_hours for x in hour_list])
@@ -447,7 +454,7 @@ class DateTestsMixin(CheckerState):
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
                 gap_array = pd.Series([
-                    0 if (is_missing(x) or is_missing(y)) else (x-y).days
+                    np.nan if (is_missing(x) or is_missing(y)) else (x-y).days
                     for x, y in zip(pd.to_datetime(self.orig_df[col_name_1]), pd.to_datetime(self.orig_df[col_name_2]))
                 ])
                 self._process_analysis_counts(
@@ -649,7 +656,7 @@ class DateTestsMixin(CheckerState):
             col_name_1 = self.date_cols[col_name_idx_1]
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
-                test_series = [(y1 == y2) and (m1 == m2) and (d1 == d1) for y1, y2, m1, m2, d1, d2 in
+                matches_arr = [(y1 == y2) and (m1 == m2) and (d1 == d2) for y1, y2, m1, m2, d1, d2 in
                                zip(pd.to_datetime(self.orig_df[col_name_1]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.month,
@@ -657,7 +664,7 @@ class DateTestsMixin(CheckerState):
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.day,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.day,
                                 )]
-                test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(matches_arr) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -704,13 +711,13 @@ class DateTestsMixin(CheckerState):
             col_name_1 = self.date_cols[col_name_idx_1]
             for col_name_idx_2 in range(col_name_idx_1 + 1, len(self.date_cols)):
                 col_name_2 = self.date_cols[col_name_idx_2]
-                test_series = [(y1 == y2) and (m1 == m2) for y1, y2, m1, m2 in
+                matches_arr = [(y1 == y2) and (m1 == m2) for y1, y2, m1, m2 in
                                zip(pd.to_datetime(self.orig_df[col_name_1]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.year,
                                    pd.to_datetime(self.orig_df[col_name_1]).dt.month,
                                    pd.to_datetime(self.orig_df[col_name_2]).dt.month,
                                 )]
-                test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = np.array(matches_arr) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -852,7 +859,7 @@ class DateTestsMixin(CheckerState):
             # bin.
             for bin_id in bin_labels:
                 bin_row_idxs[bin_id] = np.where(bin_assignments == bin_id)
-                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]
+                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]  # type: ignore[index]  # pandas-stubs reject the 1-tuple from np.where()
 
             for num_col in self.numeric_cols:
 
@@ -892,8 +899,8 @@ class DateTestsMixin(CheckerState):
 
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
-                    num_vals_all = convert_to_numeric(sub_df[num_col], med)
-                    sub_test_series = pd.Series([(x < threshold) or (x!=x) or (x is None) for x in num_vals_all])
+                    num_vals_all = convert_to_numeric(sub_df[num_col], cast(float, med))
+                    sub_test_series = pd.Series([(x <= threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:
                         index_of_large = \
@@ -954,7 +961,7 @@ class DateTestsMixin(CheckerState):
             # bin.
             for bin_id in bin_labels:
                 bin_row_idxs[bin_id] = np.where(bin_assignments == bin_id)
-                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]
+                sub_dfs_arr_dict[bin_id] = self.orig_df.loc[bin_row_idxs[bin_id]]  # type: ignore[index]  # pandas-stubs reject the 1-tuple from np.where()
 
             for num_col in self.numeric_cols:
 
@@ -963,8 +970,9 @@ class DateTestsMixin(CheckerState):
 
                 test_series = [True] * self.num_rows
                 for bin_id in bin_labels:
-                    # Get the lower limit (based on IQR), given the full column
-                    lower_limit, col_q1, col_q3 = lower_limits_dict[num_col]
+                    # Get the lower limit (based on the IDR), the median and q1, given the full column
+                    lower_limit, _, col_q1 = lower_limits_dict[num_col]
+                    col_q2 = self.column_medians[num_col]
 
                     # Get the stats for the numeric column for the subset
                     sub_df = sub_dfs_arr_dict[bin_id]
@@ -978,7 +986,7 @@ class DateTestsMixin(CheckerState):
                     # values, though smaller than in LARGE_GIVEN_PAIRS, which looks at still more subsets.
                     threshold = q1 - (iqr * 1.5 * self.iqr_limit)
 
-                    if q1 is None or med is None or q3 is None or lower_limit is None or col_q1 is None or col_q3 is None:
+                    if q1 is None or med is None or q3 is None or lower_limit is None or col_q1 is None or col_q2 is None:
                         continue
 
                     # We are only concerned in this test with subsets that tend to have larger values in the
@@ -988,13 +996,13 @@ class DateTestsMixin(CheckerState):
                     if res_1.tolist().count(True) > 0:
                         continue
 
-                    # Check this subset is small compared to the full column
-                    if q1 <= col_q1:
+                    # Check this subset is large compared to the full column
+                    if (med <= col_q2) or (q1 <= col_q1):
                         continue
 
                     # We can not use self.numeric_value_filled, as that was filled with the median for the full column,
                     # not the median for this subset.
-                    num_vals_all = convert_to_numeric(sub_df[num_col], med)
+                    num_vals_all = convert_to_numeric(sub_df[num_col], cast(float, med))
                     sub_test_series = pd.Series([(x >= threshold) or (x!=x) or (x is None) for x in num_vals_all])
 
                     if 0 < sub_test_series.tolist().count(False) <= self.freq_contamination_level:

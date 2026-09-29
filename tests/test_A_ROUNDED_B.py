@@ -71,8 +71,16 @@ def test_synthetic_one_row_nulls():
 
 
 @requires_synthetic_nones
-def test_synthetic_in_sync_nulls():  # currently failing. I think we should have the same patterns if the nones are in sync
-    synth_test(test_id, "in-sync", synth_patterns_cols, synth_exceptions_cols, allow_more=True)
+def test_synthetic_in_sync_nulls():
+    # The nulls remove every exception (rows 33, 118 and 829) of these two, so they are patterns without exceptions
+    no_exceptions_left = ['"a_rounded_b all_b" AND "a_rounded_b all_e"', '"a_rounded_b all_c" AND "a_rounded_b all_e"']
+    synth_test(
+        test_id,
+        "in-sync",
+        synth_patterns_cols + no_exceptions_left,
+        [col for col in synth_exceptions_cols if col not in no_exceptions_left],
+        allow_more=True,
+    )
 
 
 @requires_synthetic_nones

@@ -11,7 +11,14 @@ import pandas as pd
 import pandas.api.types as pandas_types
 
 from .checker_state import CheckerState
-from .checker_utils import convert_to_numeric, is_missing, is_notebook, set_warnings_levels
+from .checker_utils import (
+    as_str,
+    column_from_values,
+    convert_to_numeric,
+    is_missing,
+    library_call,
+    normalise_dtypes,
+)
 from .tests_definitions import get_all_test_definitions
 
 
@@ -41,8 +48,6 @@ class DataInitMixin(CheckerState):
                  1: Display test names during execution
                  2: Display test descriptions and progress updates
         """
-
-        set_warnings_levels()
 
         # Set class variables from the parameters
         # iqr_limit indicates how many multiples of the IQR below the 1st quartile or above the 3rd quartile are
@@ -142,15 +147,6 @@ class DataInitMixin(CheckerState):
         self.single_test_summary_dict = {}
         self.single_test_summary_df = None
 
-        # Display options. There are relevant only when running this in a debugger or notebook.
-        # Note: these can significantly slow down Jupyter in some environments, and so is set only for debugger
-        # environments.
-        if not is_notebook():
-            pd.set_option('display.width', 32000)
-            pd.set_option('display.max_columns', 3000)
-            pd.set_option('display.max_colwidth', 3000)
-            pd.set_option('display.max_rows', 5000)
-
         # A dictionary describing each test. For each, we have the ID, description, method to test for the pattern
         # and exceptions, a method to generate synthetic data to demonstrate the test, and in indicator if the
         # pattern is in the patterns short list (ie, the patterns listed by default in a call to get_patterns()),
@@ -167,6 +163,7 @@ class DataInitMixin(CheckerState):
 
 
 
+    @library_call
     def init_data(
         self,
         df: pd.DataFrame,
@@ -184,7 +181,7 @@ class DataInitMixin(CheckerState):
             None. Data is stored in instance variables.
         """
 
-        self.orig_df = df.copy()
+        self.orig_df = normalise_dtypes(df)
 
         # Check the dataframe does not contain duplicate column names. If it does, rename all columns with a _idx at
         # the end of each
@@ -239,7 +236,7 @@ class DataInitMixin(CheckerState):
             elif self.orig_df[col_name].dtype in [np.datetime64, 'datetime64[ns]']:
                 self.date_cols.append(col_name)
             elif pandas_types.is_numeric_dtype(self.orig_df[col_name]) or \
-                    self.orig_df[col_name].astype(str).str.replace('-', '', regex=False).str.\
+                    as_str(self.orig_df[col_name].dropna()).str.replace('-', '', regex=False).str.\
                             replace('.', '', regex=False).str.isdigit().tolist().count(False) < default_contamination_level:
                 self.numeric_cols.append(col_name)
             else:
@@ -255,20 +252,22 @@ class DataInitMixin(CheckerState):
         # necessary for this tool, so will only add this if necessary.
 
         # As we cannot define the format for the date columns, attempts to cast values to datetime may present
-        # warnings, which we ignore, but only during this process.
+        # warnings, which we ignore until init_data() returns (see library_call()).
         warnings.filterwarnings(action='ignore', category=UserWarning)
         if known_date_cols is None:
             new_date_cols = []
             for col_name in self.string_cols + self.numeric_cols:
-                avg_num_chars = statistics.median(self.orig_df[col_name].astype(str).str.len())
-                num_rows_all_digits = self.orig_df[col_name].astype(str).str.isdigit().tolist().count(True)
+                # Judge the format on the values present: missing values would read as 'nan' or 'None'
+                col_vals = as_str(self.orig_df[col_name].dropna())
+                avg_num_chars = statistics.median(col_vals.str.len())
+                num_rows_all_digits = col_vals.str.isdigit().tolist().count(True)
 
                 # Do not convert to date if the strings are too short. They must be at least yyyymm (6 characters)
                 if avg_num_chars < 6:
                     continue
 
                 # Do not convert to date if the strings are almost all digits and are too long
-                if num_rows_all_digits > (self.num_rows / 2) and avg_num_chars > 8:
+                if num_rows_all_digits > (len(col_vals) / 2) and avg_num_chars > 8:
                     continue
 
                 # Try some known formats before letting pandas attempt to determine the format
@@ -336,13 +335,13 @@ class DataInitMixin(CheckerState):
                     self.numeric_cols.remove(datecol)
                 if datecol in self.binary_cols:
                     self.binary_cols.remove(datecol)
-        set_warnings_levels()
+        self.orig_df = normalise_dtypes(self.orig_df)  # pd.to_datetime() may have used another resolution
 
         # For any columns flagged as string columns, the dtype may be category.  Convert the columns to string to
         # ensure the code can compare values and perform other string operations
         for col_name in self.string_cols + self.binary_cols:
             if self.orig_df[col_name].dtype.name == 'category':
-                self.orig_df[col_name] = self.orig_df[col_name].astype(str)
+                self.orig_df[col_name] = as_str(self.orig_df[col_name])
 
         for col_name in self.numeric_cols:
             if self.orig_df[col_name].dtype.name == 'category':
@@ -376,13 +375,12 @@ class DataInitMixin(CheckerState):
 
         trimmed_orig_df = self.orig_df.copy()
         if len(self.numeric_cols) > 0:
-            # Calculate and cache the pairwise correlations between each numeric column
-            numeric_df = None
-            for col_name in self.numeric_cols:
-                if numeric_df is None:
-                    numeric_df = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])
-                else:
-                    numeric_df = pd.concat([numeric_df, convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])], axis=1)
+            # Calculate and cache the pairwise correlations between each numeric column. Missing values stay missing,
+            # so each correlation uses the rows where both columns have values.
+            numeric_df = pd.concat([
+                convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name]).where(
+                    self.orig_df[col_name].notna().to_numpy())
+                for col_name in self.numeric_cols], axis=1)
             numeric_df.columns = self.numeric_cols
 
             # Calculate the correlations between the numeric columns
@@ -433,7 +431,8 @@ class DataInitMixin(CheckerState):
                 return True
 
         for col_name in self.orig_df.columns:
-            self.orig_df[col_name] = [x if not test_NA(x) else None for x in self.orig_df[col_name]]
+            self.orig_df[col_name] = column_from_values(
+                [x if not test_NA(x) else None for x in self.orig_df[col_name]], self.orig_df.index)
 
         # patterns_df has a row for each test for each feature where there is a pattern with no exceptions.
         self.patterns_arr = []
@@ -464,6 +463,7 @@ class DataInitMixin(CheckerState):
             print()
 
     def _init_variables(self):
+        self.cache_contamination_level = None
         self.lower_limits_dict = None
         self.upper_limits_dict = None
         self.larger_pairs_dict = None

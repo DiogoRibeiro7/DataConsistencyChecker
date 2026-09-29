@@ -12,11 +12,13 @@ import numbers
 import random
 import statistics
 from itertools import combinations
+from typing import cast
 
 import numpy as np
 import pandas as pd
 
 from data_consistency_checker.checker_state import CheckerState
+from data_consistency_checker.checker_utils import map_elements
 
 
 class MultiColumnTestsMixin(CheckerState):
@@ -92,7 +94,7 @@ class MultiColumnTestsMixin(CheckerState):
             # Test on a sample
             test_series = [z in (x, y) for x, y, z in
                            zip(self.sample_df[col_name_a], self.sample_df[col_name_b], self.sample_df[col_name_c])]
-            test_series = test_series | \
+            test_series = np.array(test_series) | \
                           sample_col_pair_both_null_dict[tuple(sorted([col_name_a, col_name_c]))] | \
                           sample_col_pair_both_null_dict[tuple(sorted([col_name_b, col_name_c]))]
 
@@ -102,7 +104,7 @@ class MultiColumnTestsMixin(CheckerState):
             # Test of the full data
             test_series = [z in (x, y) for x, y, z in
                            zip(self.orig_df[col_name_a], self.orig_df[col_name_b], self.orig_df[col_name_c])]
-            test_series = test_series | \
+            test_series = np.array(test_series) | \
                           col_pair_both_null_dict[tuple(sorted([col_name_a, col_name_c]))] | \
                           col_pair_both_null_dict[tuple(sorted([col_name_b, col_name_c]))]
             num_matching = test_series.tolist().count(True)
@@ -328,7 +330,7 @@ class MultiColumnTestsMixin(CheckerState):
         self._add_synthetic_column('two_pairs_rand_d',
                                     [x if y else x + 1 for x, y in zip(self.synth_df['two_pairs_rand_c'], a_b_match_arr)])
         self.synth_df.loc[999, 'two_pairs_rand_d'] = \
-            self.synth_df.loc[999, 'two_pairs_rand_c'] + 1 if a_b_match_arr[999] \
+            cast(int, self.synth_df.loc[999, 'two_pairs_rand_c']) + 1 if a_b_match_arr[999] \
                 else self.synth_df.loc[999, 'two_pairs_rand_c']
 
 
@@ -359,8 +361,9 @@ class MultiColumnTestsMixin(CheckerState):
         match_okay_limit = self.num_rows / 10.0
 
         # To avoid calculating the matching for pairs of columns multiple times, we cache their matching.
-        sample_pairs_match_bool_dict = {}
-        pairs_match_arr_dict = {}
+        sample_pairs_match_bool_dict: dict[tuple[str, str], bool] = {}
+        sample_pairs_match_arr_dict: dict[tuple[str, str], list[bool]] = {}
+        pairs_match_arr_dict: dict[tuple[str, str], list[bool]] = {}
 
         num_combinations_tested = 0
 
@@ -387,7 +390,8 @@ class MultiColumnTestsMixin(CheckerState):
                         (match_1_2_sample_arr.count(False) < match_sample_okay_limit):
                     sample_pairs_match_bool_dict[(col_name_1, col_name_2)] = False
                     continue
-                sample_pairs_match_bool_dict[(col_name_1, col_name_2)] = False
+                sample_pairs_match_bool_dict[(col_name_1, col_name_2)] = True
+                sample_pairs_match_arr_dict[(col_name_1, col_name_2)] = match_1_2_sample_arr
 
                 if (col_name_1, col_name_2) in pairs_match_arr_dict:
                     if not pairs_match_arr_dict[(col_name_1, col_name_2)]:
@@ -418,6 +422,7 @@ class MultiColumnTestsMixin(CheckerState):
                         if (col_name_3, col_name_4) in sample_pairs_match_bool_dict:
                             if not sample_pairs_match_bool_dict[(col_name_3, col_name_4)]:
                                 continue
+                            match_3_4_sample_arr = sample_pairs_match_arr_dict[(col_name_3, col_name_4)]
                         else:
                             match_3_4_sample_arr = [(x == y) or (w and z) for x, y, w, z in
                                                     zip(self.sample_df[col_name_3],
@@ -429,6 +434,7 @@ class MultiColumnTestsMixin(CheckerState):
                                 sample_pairs_match_bool_dict[(col_name_3, col_name_4)] = False
                                 continue
                             sample_pairs_match_bool_dict[(col_name_3, col_name_4)] = True
+                            sample_pairs_match_arr_dict[(col_name_3, col_name_4)] = match_3_4_sample_arr
 
                         # With this test, it is not possible to determine a priori how many combinations it will
                         # check. The theoretical limit may be calculated, where all columns of the same type pair
@@ -441,7 +447,11 @@ class MultiColumnTestsMixin(CheckerState):
                                        f"max_combinations is currently set to {self.max_combinations:,}.")
                             return
 
-                        sample_series = [x == y for x, y in zip(match_1_2_sample_arr, match_3_4_sample_arr)]
+                        # Rows with a missing value in any of the four columns neither support nor violate the pattern
+                        sample_is_na_arr = sample_is_na_dict[col_name_1].to_numpy() | sample_is_na_dict[col_name_2].to_numpy() | \
+                            sample_is_na_dict[col_name_3].to_numpy() | sample_is_na_dict[col_name_4].to_numpy()
+                        sample_series = [x == y or z for x, y, z in
+                                         zip(match_1_2_sample_arr, match_3_4_sample_arr, sample_is_na_arr)]
                         if sample_series.count(False) > 1:
                             continue
 
@@ -458,7 +468,9 @@ class MultiColumnTestsMixin(CheckerState):
                                 (match_3_4_arr.count(False) < match_okay_limit):
                             continue
 
-                        test_series = [x == y for x, y in zip(match_1_2_arr, match_3_4_arr)]
+                        is_na_arr = is_na_dict[col_name_1].to_numpy() | is_na_dict[col_name_2].to_numpy() | \
+                            is_na_dict[col_name_3].to_numpy() | is_na_dict[col_name_4].to_numpy()
+                        test_series = [x == y or z for x, y, z in zip(match_1_2_arr, match_3_4_arr, is_na_arr)]
                         self._process_analysis_binary(
                             test_id,
                             [col_name_1, col_name_2, col_name_3, col_name_4],
@@ -541,7 +553,8 @@ class MultiColumnTestsMixin(CheckerState):
                 # are all unique combinations. The threshold for this is arbitrary, but set to a small multiple of the
                 # number of rows.
                 if self.num_rows <= max_combinations <= (self.num_rows * 2):
-                    test_series = self.orig_df.duplicated(subset=subset)
+                    # Rows with a missing value in any of the columns neither support nor violate the pattern
+                    test_series = self.orig_df.duplicated(subset=subset) & self.orig_df[list(subset)].notna().all(axis=1)
                     num_dup = test_series.tolist().count(True)
                     if 0 < num_dup < self.freq_contamination_level:
                         self._process_analysis_binary(
@@ -616,14 +629,20 @@ class MultiColumnTestsMixin(CheckerState):
         if len(self.numeric_cols) < 2:
             return
 
-        num_zeros_arr = self.orig_df.applymap(lambda x: (x is None) or (x == 0)).sum(axis=1)
+        num_zeros_arr = map_elements(self.orig_df, lambda x: x == 0).sum(axis=1)
+
+        # Missing values may or may not be 0, so the most common count is taken from the rows without missing values,
+        # and a row with missing values is an exception only if no values in their place could give it that count.
+        num_missing_arr = self.orig_df.isna().sum(axis=1)
+        if (num_missing_arr > 0).all():
+            return
 
         # If there are consistently no 0 values per row, this is not an interesting pattern
-        most_common_count = statistics.mode(num_zeros_arr)
+        most_common_count = statistics.mode(num_zeros_arr[num_missing_arr == 0])
         if most_common_count == 0:
             return
 
-        test_series = num_zeros_arr == most_common_count
+        test_series = (num_zeros_arr <= most_common_count) & (num_zeros_arr + num_missing_arr >= most_common_count)
         self._process_analysis_binary(
             test_id,
             list(self.orig_df.columns),
@@ -655,10 +674,17 @@ class MultiColumnTestsMixin(CheckerState):
 
 
     def _check_unique_values_per_row(self, test_id):
-        counts_per_row = self.orig_df.apply(lambda x: len(set(x)), axis=1)
-        counts_series = counts_per_row.value_counts(normalize=False)
+        # Missing values are not counted. They may or may not repeat other values in their row, so the common counts
+        # are taken from the rows without missing values, and a row with missing values is an exception only if no
+        # values in their place could give it a common count.
+        counts_per_row = self.orig_df.apply(lambda x: len({v for v in x if not pd.isna(v)}), axis=1)
+        num_missing_arr = self.orig_df.isna().sum(axis=1)
+        counts_series = counts_per_row[num_missing_arr == 0].value_counts(normalize=False)
         uncommon_counts = [x for x, y in zip(counts_series.index, counts_series.values) if y < self.freq_contamination_level]
         common_counts = sorted([x for x in counts_series.index if x not in uncommon_counts])
+        # There may be too few rows without missing values for any count to be common
+        if len(common_counts) == 0:
+            return
         min_common_counts = min(common_counts)
         max_common_counts = max(common_counts)
 
@@ -671,13 +697,14 @@ class MultiColumnTestsMixin(CheckerState):
             return
 
         if min_common_counts == max_common_counts:
-            test_series = counts_per_row == max_common_counts
+            test_series = (counts_per_row <= max_common_counts) & \
+                          (counts_per_row + num_missing_arr >= max_common_counts)
             common_str = str(min_common_counts)
             exceptions_str = "Flagging rows with other counts of unique values"
         else:
             lower_limit = min_common_counts / 2
             upper_limit = max_common_counts * 2
-            test_series = (counts_per_row >= lower_limit) & (counts_per_row <= upper_limit)
+            test_series = (counts_per_row + num_missing_arr >= lower_limit) & (counts_per_row <= upper_limit)
             if lower_limit > 0:
                 exceptions_str = (f"Flagging rows with other counts less than {lower_limit} or greater than "
                                    f"{upper_limit} unique values")
@@ -720,7 +747,9 @@ class MultiColumnTestsMixin(CheckerState):
         if len(self.numeric_cols) < 2:
             return
 
-        test_series = self.orig_df.applymap(lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
+        test_series = map_elements(self.orig_df, lambda x: isinstance(x, numbers.Number) and cast(float, x) < 0).sum(axis=1)
+        # Missing values may or may not be negative, so rows with missing values do not have a count
+        test_series = test_series.where(self.orig_df.notna().all(axis=1))
         self._process_analysis_counts(
             test_id,
             list(self.orig_df.columns),
@@ -757,7 +786,8 @@ class MultiColumnTestsMixin(CheckerState):
         d9 = rand_df['Avg Percentile'].quantile(0.9)
         idr = abs(d9 - d1)
         lower_limit = d1 - (self.idr_limit * idr)
-        test_series = rand_df['Avg Percentile'] >= lower_limit
+        # Rows with all numeric values missing have no average percentile, so neither support nor violate the pattern
+        test_series = (rand_df['Avg Percentile'] >= lower_limit) | rand_df['Avg Percentile'].isna()
         flagged_vals = [x for x in rand_df['Avg Percentile'] if x < lower_limit]
         self._process_analysis_binary(
             test_id,
@@ -803,7 +833,8 @@ class MultiColumnTestsMixin(CheckerState):
         # As the value is limited to 1.0, we do not use self.iqr_limit here, but instead the standard coefficient of
         # 2.2 for testing for outliers.
         upper_limit = q3 + (2.2 * iqr)
-        test_series = rank_df['Avg Percentile'] <= upper_limit
+        # Rows with all numeric values missing have no average percentile, so neither support nor violate the pattern
+        test_series = (rank_df['Avg Percentile'] <= upper_limit) | rank_df['Avg Percentile'].isna()
         flagged_vals = [x for x in rank_df['Avg Percentile'] if x > upper_limit]
         self._process_analysis_binary(
             test_id,

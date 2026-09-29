@@ -12,6 +12,7 @@ import os
 from collections.abc import Collection
 from itertools import product
 from textwrap import wrap
+from typing import TextIO
 
 import numpy as np
 import pandas as pd
@@ -19,10 +20,13 @@ from IPython.display import Markdown, display
 
 from .checker_state import CheckerState
 from .checker_utils import (
+    as_str,
     convert_to_numeric,
     get_num_decimal_digits,
     is_missing,
     is_notebook,
+    library_call,
+    map_elements,
     print_line,
     print_text,
     replace_special_with_space,
@@ -66,7 +70,8 @@ class DisplayMixin(CheckerState):
             if definition.implemented
         ]
 
-    def print_test_descriptions(self, long_desc: bool = False, f: object | None = None) -> None:
+    @library_call
+    def print_test_descriptions(self, long_desc: bool = False, f: TextIO | None = None) -> None:
         """Print test descriptions.
 
         Args:
@@ -113,6 +118,7 @@ class DisplayMixin(CheckerState):
         """
         return [test_id for test_id, definition in self.test_dict.items() if definition.code]
 
+    @library_call
     def demo_test(self, test_id: str, include_nulls: bool = False) -> None:
         """Demonstrate a single test on synthetic data.
 
@@ -180,6 +186,7 @@ class DisplayMixin(CheckerState):
             print(f"Executing test {test_num:3}: {test_id} \n  {desc}")
 
 
+    @library_call
     def display_next(self):
         """
         Display the detailed results of the next check that found something.
@@ -207,6 +214,7 @@ class DisplayMixin(CheckerState):
         self.display_detailed_results(test_id_list=[test_id], max_shown=25)
         self.current_display_test += 1
 
+    @library_call
     def display_least_flagged_rows(self, with_results: bool = True, n_rows: int = 10) -> None:
         """
         Display the rows with the lowest outlier scores.
@@ -220,6 +228,7 @@ class DisplayMixin(CheckerState):
             n_rows: Maximum number of rows to show. At most 10 rows are shown when `with_results` is True.
         """
 
+        assert self.test_results_df is not None
         sorted_df = self.test_results_df.sort_values('FINAL SCORE', ascending=True)
         if with_results:
             self._display_rows_with_tests(sorted_df, n_rows)
@@ -231,6 +240,7 @@ class DisplayMixin(CheckerState):
             else:
                 print(df)
 
+    @library_call
     def display_most_flagged_rows(self, with_results: bool = True, n_rows: int = 10) -> None:
         """
         Display the rows with the highest outlier scores.
@@ -263,6 +273,7 @@ class DisplayMixin(CheckerState):
             else:
                 print(df)
 
+    @library_call
     def display_detailed_results(
             self,
             test_id_list: list[str] | None = None,
@@ -317,6 +328,8 @@ class DisplayMixin(CheckerState):
                 ((self.exceptions_summary_df is None) or (len(self.exceptions_summary_df) == 0)):
             print("No patterns or exceptions to display.")
             return
+        # check_data_quality() sets both frames together
+        assert self.patterns_df is not None and self.exceptions_summary_df is not None
 
         # If issue_id_list or row_id_list are set, these apply only to exceptions, implying only exceptions should
         # be displayed.
@@ -356,6 +369,7 @@ class DisplayMixin(CheckerState):
                     return
 
                 # Create a dataframe representing only the specified rows
+                assert self.test_results_df is not None
                 row_id_list_df = self.test_results_df.loc[row_id_list]
 
             # Each test's results are introduced by a header, unless results for only one test can be shown
@@ -410,7 +424,7 @@ class DisplayMixin(CheckerState):
                             print_text(max_shown_msg, f)
                             return
 
-                        if row_id_list and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
+                        if row_id_list_df is not None and not row_id_list_df[self.get_results_col_name(test_id, columns_set)].any():
                             continue
 
                         # If columns_set_arr is specified, only report issues with some overlap of columns with
@@ -465,6 +479,7 @@ class DisplayMixin(CheckerState):
                "displayed here, specific issues, or row numbers, or setting include_examples and/or "
                "plot_results to False.")
 
+        assert self.patterns_df is not None and self.exceptions_summary_df is not None
         if show_patterns and show_exceptions and \
                 ((len(self.exceptions_summary_df) + len(self.patterns_df)) > max_shown):
             print()
@@ -523,6 +538,7 @@ class DisplayMixin(CheckerState):
             if show_short_list_only:
                 for test_id in test_id_list:
                     if test_id not in self.get_patterns_shortlist():
+                        assert self.patterns_df is not None
                         sub_patterns_test = self.patterns_df[self.patterns_df['Test ID'] == test_id]
                         if len(sub_patterns_test):
                             print_text((f"Not displaying patterns without exceptions for {test_id}. This test is not in "
@@ -747,15 +763,15 @@ class DisplayMixin(CheckerState):
             vals2 = convert_to_numeric(df[col_name_2], 0)
             df['SUM'] = (vals1 + vals2).values
         elif test_id in ['RARE_VALUES']:
-            df["Count of Value"] = [display_info['counts'][x] for x in df[col_name].astype(str)]
+            df["Count of Value"] = [display_info['counts'][x] for x in as_str(df[col_name])]
         elif test_id in ['NUMBER_DECIMALS']:
             df['Number decimals'] = [-1 if is_missing(x) else get_num_decimal_digits(x) for x in df[col_name]]
-            df[col_name] = df[col_name].astype(str)
+            df[col_name] = as_str(df[col_name])
         elif test_id in ['ROUNDING']:
             vals = df[col_name].fillna(-9595959484)
             vals = convert_to_numeric(vals, 0)
             vals = vals.astype(int)
-            vals = vals.astype(str)
+            vals = as_str(vals)
             s = vals.str.replace('.0', '', regex=False).str.len() - \
                 vals.str.replace('.0', '', regex=False).str.strip('0').str.len()
             vals = vals.replace('-9595959484', np.nan)
@@ -784,12 +800,12 @@ class DisplayMixin(CheckerState):
         elif test_id in ['MAX_OF_COLUMNS']:
             df['MAX'] = df[source_cols].max(axis=1)
         elif test_id in ['RARE_PAIRS_FIRST_WORD_VAL', 'LARGE_GIVEN_PREFIX', 'SMALL_GIVEN_PREFIX']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             df[f'{col_name_1} FIRST WORD'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['LEADING_WHITESPACE']:
-            df['NUM LEADING SPACES'] = df[col_name].astype(str).str.len() - df[col_name].astype(str).str.lstrip(' ').str.len()
+            df['NUM LEADING SPACES'] = as_str(df[col_name]).str.len() - as_str(df[col_name]).str.lstrip(' ').str.len()
         elif test_id in ['TRAILING_WHITESPACE']:
-            df['NUM TRAILING SPACES'] = df[col_name].astype(str).str.len() - df[col_name].astype(str).str.rstrip(' ').str.len()
+            df['NUM TRAILING SPACES'] = as_str(df[col_name]).str.len() - as_str(df[col_name]).str.rstrip(' ').str.len()
         elif test_id in ['MULTIPLE_OF_CONSTANT']:
             if is_patterns:
                 df['NUM MULTIPLES'] = round(df[col_name] / display_info['value'])
@@ -808,56 +824,56 @@ class DisplayMixin(CheckerState):
         elif test_id in ['CONSTANT_GAP', 'LARGE_GAP', 'SMALL_GAP', 'LATER']:
             df['Gap'] = pd.to_datetime(df[col_name_2]) - pd.to_datetime(df[col_name_1])
         elif test_id in ['NUMBER_ALPHA_CHARS']:
-            df['Num Alpha Chars'] = df[col_name].astype(str).apply(lambda x: len([e for e in x if e.isalpha()]))
+            df['Num Alpha Chars'] = as_str(df[col_name]).apply(lambda x: len([e for e in x if e.isalpha()]))
         elif test_id in ['NUMBER_NUMERIC_CHARS']:
-            df['Num Numeric Chars'] = df[col_name].astype(str).apply(lambda x: len([e for e in x if e.isdigit()]))
+            df['Num Numeric Chars'] = as_str(df[col_name]).apply(lambda x: len([e for e in x if e.isdigit()]))
         elif test_id in ['NUMBER_ALPHANUMERIC_CHARS']:
-            df['Num Alpha-Numeric Chars'] = df[col_name].astype(str).apply(lambda x: len([e for e in x if e.isalnum()]))
+            df['Num Alpha-Numeric Chars'] = as_str(df[col_name]).apply(lambda x: len([e for e in x if e.isalnum()]))
         elif test_id in ['NUMBER_NON-ALPHANUMERIC_CHARS']:
             df['Num Non-Alpha-Numeric Chars'] = display_info['test_series'].loc[df.index]
         elif test_id in ['NUMBER_CHARS', 'MANY_CHARS', 'FEW_CHARS']:
-            df['Num Chars'] = df[col_name].astype(str).str.len()
+            df['Num Chars'] = as_str(df[col_name]).str.len()
         elif test_id in ['FIRST_CHAR_ALPHA', 'FIRST_CHAR_NUMERIC', 'FIRST_CHAR_SMALL_SET', 'FIRST_CHAR_UPPERCASE',
                          'FIRST_CHAR_LOWERCASE']:
-            df['First Char'] = df[col_name].astype(str).str.lstrip().str.slice(0,1)
+            df['First Char'] = as_str(df[col_name]).str.lstrip().str.slice(0,1)
         elif test_id in ['LAST_CHAR_SMALL_SET']:
-            df['Last Char'] = df[col_name].astype(str).str.rstrip().str[-1:]
+            df['Last Char'] = as_str(df[col_name]).str.rstrip().str[-1:]
         elif test_id in ['FIRST_WORD_SMALL_SET']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             df['First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['LAST_WORD_SMALL_SET']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             df['Last Word'] = [x[-1] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['NUMBER_WORDS']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             df['Num Words'] = [len(x) for x in word_arr]
         elif test_id in ['LONGEST_WORDS']:
-            col_vals = df[col_name].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             word_lens_arr = [[len(w) for w in x] for x in word_arr]
             df['Longest Word Len'] = [max(x) if len(x) > 0 else 0 for x in word_lens_arr]
         elif test_id in ['RARE_PAIRS_FIRST_CHAR', 'SAME_FIRST_CHARS']:
-            df[f'{col_name_1} First Char'] = df[col_name_1].astype(str).str[:1]
-            df[f'{col_name_2} First Char'] = df[col_name_2].astype(str).str[:1]
+            df[f'{col_name_1} First Char'] = as_str(df[col_name_1]).str[:1]
+            df[f'{col_name_2} First Char'] = as_str(df[col_name_2]).str[:1]
         elif test_id in ['RARE_PAIRS_FIRST_WORD', 'SAME_FIRST_WORD']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             df[f'{col_name_1} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df[col_name_2].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_2]).apply(replace_special_with_space)
             df[f'{col_name_2} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['SAME_LAST_WORD']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             df[f'{col_name_1} Last Word'] = [x[-1] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df[col_name_2].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_2]).apply(replace_special_with_space)
             df[f'{col_name_2} Last Word'] = [x[-1] if len(x) > 0 else "" for x in col_vals.str.split()]
         elif test_id in ['SIMILAR_NUM_CHARS']:
-            df[f'{col_name_1} Num Chars'] = df[col_name_1].astype(str).str.len()
-            df[f'{col_name_2} Num Chars'] = df[col_name_2].astype(str).str.len()
+            df[f'{col_name_1} Num Chars'] = as_str(df[col_name_1]).str.len()
+            df[f'{col_name_2} Num Chars'] = as_str(df[col_name_2]).str.len()
         elif test_id in ['SIMILAR_NUM_WORDS']:
-            col_vals = df[col_name_1].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_1]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             df[f'{col_name_1} Num Words'] = [len(x) for x in word_arr]
-            col_vals = df[col_name_2].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df[col_name_2]).apply(replace_special_with_space)
             word_arr = col_vals.str.split()
             df[f'{col_name_2} Num Words'] = [len(x) for x in word_arr]
         elif test_id in ['SMALL_VS_CORR_COLS', 'LARGE_VS_CORR_COLS']:
@@ -867,11 +883,11 @@ class DisplayMixin(CheckerState):
         elif test_id in ['MISSING_VALUES_PER_ROW']:
             df['Number Missing Values'] = df.isna().sum(axis=1)
         elif test_id in ['ZERO_VALUES_PER_ROW']:
-            df['Number Zero Values'] = df.applymap(lambda x: (x is None) or (x == 0)).sum(axis=1)
+            df['Number Zero Values'] = map_elements(df, lambda x: (x is None) or (x == 0)).sum(axis=1)
         elif test_id in ['UNIQUE_VALUES_PER_ROW']:
             df['Number Unique Values'] = df.apply(lambda x: len(set(x)), axis=1)
         elif test_id in ['NEGATIVE_VALUES_PER_ROW']:
-            df['Number Negative Values'] = df.applymap(lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)
+            df['Number Negative Values'] = map_elements(df, lambda x: isinstance(x, numbers.Number) and x < 0).sum(axis=1)  # type: ignore[operator]  # Number defines no ordering
         elif test_id in ['DECISION_TREE_CLASSIFIER', 'DECISION_TREE_REGRESSOR', 'PREV_VALUES_DT', 'LINEAR_REGRESSION',
                          'PREDICT_NULL_DT']:
             df["PREDICTION"] = display_info['Pred'].loc[df.index]
@@ -928,14 +944,14 @@ class DisplayMixin(CheckerState):
         # Set the row order
         df = df.sort_values(df.columns[-1]) if test_id in ['SMALL_GIVEN_DATE', 'LARGE_GIVEN_DATE'] else df.sort_index()
 
-        pd.options.display.float_format = '{:f}'.format
-        if f:
-            f.write(df.to_html())
-            f.write("<br><br>")
-        elif is_notebook():
-            display(df)
-        else:
-            print(df)
+        with pd.option_context('display.float_format', '{:f}'.format):
+            if f:
+                f.write(df.to_html())
+                f.write("<br><br>")
+            elif is_notebook():
+                display(df)
+            else:
+                print(df)
 
     def _draw_rows_around_flagged_row(self, df, test_id, cols, display_info, f):
         """
@@ -1043,9 +1059,11 @@ class DisplayMixin(CheckerState):
 
         # If there are no values flagged for this test in this feature, there will not be a column in
         # test_results_df. In this case, return any values.
-        if not is_patterns and results_col_name not in self.test_results_df.columns:
-            assert False, "Should not happen"  # noqa: B011
-            return self.orig_df[col_name].sample(n=n_examples, random_state=0)
+        if not is_patterns:
+            assert self.test_results_df is not None
+            if results_col_name not in self.test_results_df.columns:
+                assert False, "Should not happen"  # noqa: B011
+                return self.orig_df[col_name].sample(n=n_examples, random_state=0)
 
         df = self._get_balanced_sample(test_id, cols, n_examples, display_info)
 
@@ -1066,6 +1084,7 @@ class DisplayMixin(CheckerState):
 
         # Remove rows that were flagged. If is_patterns is True, no rows were flagged, and we skip this check.
         if not is_patterns:
+            assert self.test_results_df is not None
             sub_df = self.test_results_df.loc[df.index]
             mask = sub_df[results_col_name] == 0
             df = df[mask]
@@ -1293,6 +1312,7 @@ class DisplayMixin(CheckerState):
         check_score: bool
             if True, only rows with scores above zero will be displayed
         """
+        assert self.test_results_df is not None and self.exceptions_summary_df is not None
 
         flagged_idx_arr = sorted_df.index[:10]
         for row_idx in flagged_idx_arr[:n_rows]:
@@ -1341,6 +1361,7 @@ class DisplayMixin(CheckerState):
     # ------------------------------------------------------------------
     # Dataset statistics helpers
     # ------------------------------------------------------------------
+    @library_call
     def display_columns_types_list(self) -> None:
         """Display lists of columns for each inferred type."""
         print()
@@ -1371,6 +1392,7 @@ class DisplayMixin(CheckerState):
         else:
             print_text("None")
 
+    @library_call
     def display_columns_types_table(self) -> None:
         """Display the inferred types along with sample data."""
         var_types = []

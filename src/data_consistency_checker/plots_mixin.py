@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import math
 import os
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,13 +20,21 @@ from IPython.display import Markdown, display
 from matplotlib.patches import Rectangle
 
 from .checker_state import CheckerState
-from .checker_utils import clean_x_tick_labels, is_notebook, print_text, replace_special_with_space
+from .checker_utils import (
+    as_str,
+    clean_x_tick_labels,
+    is_notebook,
+    library_call,
+    print_text,
+    replace_special_with_space,
+)
 
 
 class PlotsMixin(CheckerState):
     """Mixin providing plotting utilities for :class:`DataConsistencyChecker`."""
 
 
+    @library_call
     def check_data_quality_by_feature_pairs(self, max_features_shown: int = 30) -> None:
         """
         Show how often simple relationships hold between each pair of numeric columns.
@@ -113,6 +122,7 @@ class PlotsMixin(CheckerState):
     # Public methods to output the results of the analysis in various ways
     ##################################################################################################################
 
+    @library_call
     def plot_final_scores_distribution_by_row(self):
         """
         Display a probability plot and histogram representing the distribution of final scores by row.
@@ -140,6 +150,7 @@ class PlotsMixin(CheckerState):
             s.set_title("Distribution of Scores per Row (Excluding Scores of 0)")
             plt.show()
 
+    @library_call
     def plot_final_scores_distribution_by_feature(self):
         """
         Display a bar plot representing the distribution of final scores by feature.
@@ -153,12 +164,13 @@ class PlotsMixin(CheckerState):
         s.set_title("Distribution of Total Scores per Column")
         plt.show()
 
+    @library_call
     def plot_final_scores_distribution_by_test(self):
         """
         Display a bar plot representing the distribution of final scores by test.
         """
 
-        if len(self.exceptions_summary_df) == 0:
+        if self.exceptions_summary_df is None or len(self.exceptions_summary_df) == 0:
             print("No exceptions found")
             return
 
@@ -170,6 +182,7 @@ class PlotsMixin(CheckerState):
         s.set_title("Distribution of Scores per Test")
         plt.show()
 
+    @library_call
     def quick_report(self):
         """
         Display an overview of the results in one call.
@@ -206,6 +219,7 @@ class PlotsMixin(CheckerState):
         display_plot(self.plot_final_scores_distribution_by_test, "Final Scores by Test")
 
 
+    @library_call
     def plot_columns_vs_final_scores(self):
         """
         Used to determine if there are any relationships between column values and the final scores of the rows. This
@@ -225,6 +239,7 @@ class PlotsMixin(CheckerState):
             print("No exceptions found.")
             return
 
+        assert self.test_results_df is not None  # set with exceptions_summary_df by check_data_quality()
         df = self.orig_df.copy()
         df['FINAL SCORE'] = self.test_results_df['FINAL SCORE']
 
@@ -304,6 +319,7 @@ class PlotsMixin(CheckerState):
             f: File handle used for HTML export.
         """
         image_file_name = f"output_{self.image_output_num}.png"
+        assert self.output_folder is not None  # set by display_detailed_results() when saving to disk
         full_image_file_name = os.path.join(self.output_folder, image_file_name)
         plt.savefig(full_image_file_name)
         self.image_output_num += 1
@@ -369,9 +385,10 @@ class PlotsMixin(CheckerState):
         # Find the flagged values and identify them on the plot
         if show_exceptions:
             results_col_name = self.get_results_col_name(test_id, col_name)
+            assert self.test_results_df is not None
             results_col = self.test_results_df[results_col_name]
             flagged_idxs = np.where(results_col)
-            flagged_vals = self.orig_df.loc[flagged_idxs, col_name].values
+            flagged_vals = self.orig_df.loc[flagged_idxs[0], col_name].values
             for v in flagged_vals:
                 s.axvline(v, color='red')
         self.show_image(f)
@@ -451,13 +468,16 @@ class PlotsMixin(CheckerState):
             s.set_title(f'Distribution of "{x_col}" and "{y_col}"')
             s.legend().remove()
             s.set_xlim(xlim)
-            s.set_ylim(ylim)
+            with warnings.catch_warnings():  # Constant values give equal limits, which matplotlib widens
+                warnings.simplefilter('ignore', UserWarning)
+                s.set_ylim(ylim)
             apply_gridlines(ax)
             draw_diagonal(ax)
             clean_x_tick_labels(fig, 1, ax)
         else:
             fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 4))
             result_col_name = self.get_results_col_name(test_id, columns_set)
+            assert self.test_results_df is not None
             df['Flagged'] = self.test_results_df[result_col_name]
             df_not_flagged = df[df['Flagged'] == 0]
 
@@ -476,7 +496,9 @@ class PlotsMixin(CheckerState):
             s.set_title(f'Distribution of \n"{x_col}" \nand \n"{y_col}" \n(excluding flagged values)')
             s.legend().remove()
             s.set_xlim(xlim)
-            s.set_ylim(ylim)
+            with warnings.catch_warnings():  # Constant values give equal limits, which matplotlib widens
+                warnings.simplefilter('ignore', UserWarning)
+                s.set_ylim(ylim)
             apply_gridlines(ax[0])
             draw_diagonal(ax[0])
             clean_x_tick_labels(fig, 2, ax[0])
@@ -506,7 +528,9 @@ class PlotsMixin(CheckerState):
             s.legend().remove()
             apply_gridlines(ax[1])
             s.set_xlim(xlim)
-            s.set_ylim(ylim)
+            with warnings.catch_warnings():  # Constant values give equal limits, which matplotlib widens
+                warnings.simplefilter('ignore', UserWarning)
+                s.set_ylim(ylim)
             clean_x_tick_labels(fig, 2, ax[1])
 
         plt.tight_layout()
@@ -566,11 +590,12 @@ class PlotsMixin(CheckerState):
 
             # Find the flagged values and identify them on the plot
             results_col_name = self.get_results_col_name(test_id, col_name)
+            assert self.test_results_df is not None
             results_col = self.test_results_df[results_col_name]
             not_flagged_idxs = np.where(~results_col)
-            not_flagged_vals = self.orig_df.loc[not_flagged_idxs][col_name].values
+            not_flagged_vals = self.orig_df.loc[not_flagged_idxs[0]][col_name].values
             flagged_idxs = np.where(results_col)
-            flagged_vals = self.orig_df.loc[flagged_idxs][col_name].values
+            flagged_vals = self.orig_df.loc[flagged_idxs[0]][col_name].values
 
             # Draw one plot without the flagged values
             s = sns.scatterplot(x=not_flagged_idxs[0], y=not_flagged_vals, color='blue', ax=ax[0])
@@ -606,9 +631,10 @@ class PlotsMixin(CheckerState):
 
         # Also draw a histogram of the relevant classes.
         results_col_name = self.get_results_col_name(test_id, columns_set)
+        assert self.test_results_df is not None
         results_col = self.test_results_df[results_col_name]
         flagged_idxs = np.where(results_col)
-        flagged_df = self.orig_df.loc[flagged_idxs]
+        flagged_df = self.orig_df.loc[flagged_idxs[0]]
         vals = flagged_df[cols[0]].unique()
         nvals = len(vals)
         fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
@@ -756,6 +782,7 @@ class PlotsMixin(CheckerState):
 
     def _draw_results_plots(self, test_id, cols, columns_set, show_exceptions, display_info, f):
         """Dispatch to appropriate plotting routine for a test."""
+        assert self.test_results_df is not None  # results are only displayed after check_data_quality()
 
         if test_id in ['UNUSUAL_ORDER_MAGNITUDE', 'FEW_NEIGHBORS', 'FEW_WITHIN_RANGE', 'VERY_SMALL', 'VERY_LARGE',
                        'VERY_SMALL_ABS', 'LESS_THAN_ONE', 'GREATER_THAN_ONE', 'NON_ZERO', 'POSITIVE', 'NEGATIVE',
@@ -946,8 +973,8 @@ class PlotsMixin(CheckerState):
 
         elif test_id in ['RARE_PAIRS_FIRST_CHAR']:
             df2 = self.orig_df[cols].copy()
-            df2[f'{cols[0]} First Char'] = df2[cols[0]].astype(str).str[:1]
-            df2[f'{cols[1]} First Char'] = df2[cols[1]].astype(str).str[:1]
+            df2[f'{cols[0]} First Char'] = as_str(df2[cols[0]]).str[:1]
+            df2[f'{cols[1]} First Char'] = as_str(df2[cols[1]]).str[:1]
             counts_data = pd.crosstab(df2[f'{cols[0]} First Char'], df2[f'{cols[1]} First Char'])
             s = sns.heatmap(counts_data, cmap="Blues", annot=True, fmt='g')
             s.set_title(f"Counts by First Characters of {cols[0]} and {cols[1]}")
@@ -955,9 +982,9 @@ class PlotsMixin(CheckerState):
 
         elif test_id in ['RARE_PAIRS_FIRST_WORD']:
             df2 = self.orig_df[cols].copy()
-            col_vals = df2[cols[0]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df2[cols[0]]).apply(replace_special_with_space)
             df2[f'{cols[0]} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            col_vals = df2[cols[1]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df2[cols[1]]).apply(replace_special_with_space)
             df2[f'{cols[1]} First Word'] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
             counts_data = pd.crosstab(df2[f'{cols[0]} First Word'], df2[f'{cols[1]} First Word'])
             s = sns.heatmap(counts_data, cmap="Blues", annot=True, fmt='g')
@@ -1011,7 +1038,7 @@ class PlotsMixin(CheckerState):
             results_col_name = self.get_results_col_name(test_id, columns_set)
             results_col = self.test_results_df[results_col_name]
             flagged_idxs = np.where(results_col)
-            flagged_df = self.orig_df.loc[flagged_idxs]
+            flagged_df = self.orig_df.loc[flagged_idxs[0]]
             bins_with_flagged = set(display_info['bin_assignments'].values[flagged_idxs].tolist())
             nvals = len(bins_with_flagged)
             fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
@@ -1031,7 +1058,7 @@ class PlotsMixin(CheckerState):
 
         elif test_id in ['LARGE_GIVEN_PREFIX', 'SMALL_GIVEN_PREFIX']:
             df2 = self.orig_df[cols].copy()
-            col_vals = df2[cols[0]].astype(str).apply(replace_special_with_space)
+            col_vals = as_str(df2[cols[0]]).apply(replace_special_with_space)
             df2[cols[0]] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
             if cols[1] in self.date_cols:
                 df2['Epoch'] = (df2[cols[1]] - datetime.datetime(1970, 1, 1)).dt.total_seconds()
@@ -1047,11 +1074,11 @@ class PlotsMixin(CheckerState):
             results_col_name = self.get_results_col_name(test_id, columns_set)
             results_col = self.test_results_df[results_col_name]
             flagged_idxs = np.where(results_col)
-            flagged_df = self.orig_df.loc[flagged_idxs]
-            col_vals = flagged_df[cols[0]].astype(str).apply(replace_special_with_space)
+            flagged_df = self.orig_df.loc[flagged_idxs[0]]
+            col_vals = as_str(flagged_df[cols[0]]).apply(replace_special_with_space)
             flagged_df[cols[0]] = [x[0] if len(x) > 0 else "" for x in col_vals.str.split()]
-            vals = pd.Series(flagged_df[cols[0]].astype(str).apply(replace_special_with_space))
-            vals = pd.Series([x[0] if len(x) > 0 else "" for x in vals.str.split()]).unique()
+            col_vals = pd.Series(as_str(flagged_df[cols[0]]).apply(replace_special_with_space))
+            vals = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()]).unique()
             nvals = len(vals)
             fig, ax = plt.subplots(nrows=1, ncols=nvals, figsize=(nvals*4, 4))
             for v_idx, v in enumerate(vals):
@@ -1130,7 +1157,7 @@ class PlotsMixin(CheckerState):
             results_col_name = self.get_results_col_name(test_id, columns_set)
             results_col = self.test_results_df[results_col_name]
             flagged_idxs = np.where(results_col)
-            flagged_df = self.orig_df.loc[flagged_idxs]
+            flagged_df = self.orig_df.loc[flagged_idxs[0]]
             vals = flagged_df[[cols[0], cols[1]]].drop_duplicates()
             nvals = len(vals)
 

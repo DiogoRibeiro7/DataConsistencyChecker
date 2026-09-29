@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Any
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +11,7 @@ import pandas as pd
 import seaborn as sns
 
 from .checker_state import CheckerState
-from .checker_utils import print_text, truncate_description
+from .checker_utils import library_call, print_text, truncate_description
 from .report import DataConsistencyReport
 
 
@@ -40,11 +40,12 @@ class ResultsMixin(CheckerState):
         exceptions_df = self.get_exceptions_list()
         scores_df = self.get_outlier_score_summary()
 
+        # The column labels of both frames are strings
         patterns = () if patterns_df is None else tuple(
-            patterns_df.to_dict(orient="records")
+            cast(list[dict[str, Any]], patterns_df.to_dict(orient="records"))
         )
         exceptions = () if exceptions_df is None else tuple(
-            exceptions_df.to_dict(orient="records")
+            cast(list[dict[str, Any]], exceptions_df.to_dict(orient="records"))
         )
 
         score_records = scores_df.reset_index().rename(
@@ -102,9 +103,11 @@ class ResultsMixin(CheckerState):
 
         ret_list = []
         if include_patterns:
+            assert self.patterns_df is not None
             ret_list = self.patterns_df['Test ID'].unique().tolist()
 
         if include_exceptions:
+            assert self.exceptions_summary_df is not None
             ret_list += self.exceptions_summary_df['Test ID'].unique().tolist()
 
         # Get the set of unique tests, and sort them based on their standard test order
@@ -128,6 +131,7 @@ class ResultsMixin(CheckerState):
             self.single_test_summary_df = self.single_test_summary_df.fillna("-")
         return self.single_test_summary_df
 
+    @library_call
     def get_patterns_list(
         self,
         test_exclude_list: list[str] | None = None,
@@ -189,7 +193,7 @@ class ResultsMixin(CheckerState):
 
         if self.exceptions_summary_df is None or self.exceptions_summary_df.empty:
             return None
-        df = self.exceptions_summary_df.drop(columns=['Display Information']).copy()
+        df: pd.DataFrame = self.exceptions_summary_df.drop(columns=['Display Information']).copy()
         df['Column(s)'] = df.apply(clean_col_names, axis=1)
 
         # Ensure the descriptions are not too long
@@ -224,6 +228,7 @@ class ResultsMixin(CheckerState):
 
         return pd.DataFrame(self.test_results_by_column_np, columns=self.orig_df.columns)
 
+    @library_call
     def summarize_patterns_by_test_and_feature(self, all_tests: bool = False, heatmap: bool = False):
         """
         Return a table of the patterns found without exceptions, by check and column.
@@ -276,6 +281,7 @@ class ResultsMixin(CheckerState):
         return df.replace(0, '')
 
 
+    @library_call
     def summarize_exceptions_by_test_and_feature(
             self, all_tests: bool = False, heatmap: bool = False):
         """
@@ -327,6 +333,7 @@ class ResultsMixin(CheckerState):
         return df.replace(0, '')
 
 
+    @library_call
     def summarize_patterns_by_test(self, heatmap: bool = False):
         """
         Return, for each check that found patterns without exceptions, how many columns or column sets have one.
@@ -359,6 +366,7 @@ class ResultsMixin(CheckerState):
             plt.show()
         return df
 
+    @library_call
     def summarize_exceptions_by_test(self, heatmap: bool = False):
         """
         Return, for each check that found exceptions, how many columns and rows it flagged.
@@ -374,6 +382,7 @@ class ResultsMixin(CheckerState):
 
         if self.exceptions_summary_df is None:
             return None
+        assert self.test_results_df is not None  # set with exceptions_summary_df by check_data_quality()
 
         g = self.exceptions_summary_df.groupby('Test ID')
         row_counts = []
@@ -404,6 +413,7 @@ class ResultsMixin(CheckerState):
             plt.show()
         return df
 
+    @library_call
     def summarize_patterns_and_exceptions(self, all_tests: bool = False, heatmap: bool = False) -> pd.DataFrame:
         """Summarize patterns and exceptions for each test.
 
@@ -414,6 +424,7 @@ class ResultsMixin(CheckerState):
         Returns:
             ``pandas.DataFrame`` with counts of patterns with and without exceptions.
         """
+        assert self.patterns_df is not None and self.exceptions_summary_df is not None
         vals = []
         for test_id in self.get_test_list():
             if (not all_tests) and \
@@ -430,10 +441,11 @@ class ResultsMixin(CheckerState):
             plot_df = df.set_index('Test ID')
             fig, ax = plt.subplots(figsize=(len(plot_df.columns) * 0.6, len(plot_df) * 0.5))
             sns.heatmap(plot_df, cmap='YlGnBu', annot=True, fmt='d', linewidths=0.75, linecolor='black', ax=ax)
-            ax.set_ylabel(None)
+            ax.set_ylabel('')
             plt.show()
 
-        return df.replace(0, '')
+        summary: pd.DataFrame = df.replace(0, '')
+        return summary
 
     def get_outlier_scores(self, normalized: bool = False) -> list[int] | list[float]:
         """Return row-level outlier scores.
@@ -482,10 +494,12 @@ class ResultsMixin(CheckerState):
         if not required.issubset(self.test_results_df.columns):
             self._calculate_final_scores()
 
-        return self.test_results_df[
+        scores: pd.DataFrame = self.test_results_df[
             ["FINAL SCORE", "NORMALIZED SCORE"]
         ].copy()
+        return scores
 
+    @library_call
     def get_results_by_row_id(self, row_num: int) -> list[tuple[str, str]]:
         """
         Return the exceptions that flag one row.
@@ -527,12 +541,12 @@ class ResultsMixin(CheckerState):
             s = col_name
         return s
 
-    def _clean_column_names(self, df):
+    def _clean_column_names(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Where tests operate over many features, the list of features can become difficult to read.
         """
 
-        clean_df = df.copy()
+        clean_df: pd.DataFrame = df.copy()
         idxs = np.where(df['Test ID'].isin(['MISSING_VALUES_PER_ROW', 'UNIQUE_VALUES_PER_ROW']))[0].tolist()
         for idx in idxs:
             clean_df.loc[clean_df.index[idx], 'Column(s)'] = 'This test executes over all columns'
@@ -549,6 +563,7 @@ class ResultsMixin(CheckerState):
         """
 
         results_col_name = self.get_results_col_name(test_id, col_name)
+        assert self.test_results_df is not None
         if results_col_name not in self.test_results_df.columns:
             return None
         df = self.test_results_df[self.test_results_df[results_col_name] == 1]
@@ -657,11 +672,17 @@ class ResultsMixin(CheckerState):
         values are much less common than the others.
         """
 
+        def value_to_str(x):
+            # Missing values (NaN) make a series of whole numbers float: show those without the '.0'
+            if has_missing and isinstance(x, float) and x.is_integer():
+                return str(int(x))
+            return str(x)
+
         def arr_to_str(arr):
             s = ""
             sorted_arr = sorted(arr)
             for x_ix, x in enumerate(sorted_arr):
-                s += str(x)
+                s += value_to_str(x)
                 if x_ix == len(sorted_arr)-1:
                     break
                 if len(sorted_arr) == 2 and x_ix == 0:
@@ -674,6 +695,7 @@ class ResultsMixin(CheckerState):
             return s
 
         test_series = pd.Series(test_series)
+        has_missing = test_series.isna().any()
 
         col_name = original_cols[0] if len(original_cols) == 1 else self.get_col_set_name(original_cols)
 
@@ -681,7 +703,7 @@ class ResultsMixin(CheckerState):
             if allow_patterns:
                 self.patterns_arr.append([test_id,
                                           col_name,
-                                          f'{pattern_string_1} {test_series[0]} {pattern_string_2}',
+                                          f'{pattern_string_1} {value_to_str(test_series.dropna().iloc[0])} {pattern_string_2}',
                                           display_info])
                 self.col_to_original_cols_dict[col_name] = original_cols
         elif test_series.nunique() <= 5:
@@ -719,6 +741,7 @@ class ResultsMixin(CheckerState):
             return
 
         if self.verbose >= 0:
+            assert self.patterns_df is not None and self.exceptions_summary_df is not None
             print()
             print("Data consistency check complete.")
             print(f"Analysed {self.num_rows:,} rows, {len(self.orig_df.columns)} columns")
@@ -742,6 +765,7 @@ class ResultsMixin(CheckerState):
             print(f"Flagged {(self.test_results_by_column_np.sum(axis=0) > 0).sum()} column(s) with at least one exception.")
 
 
+    @library_call
     def clear_results(
             self,
             test_id_list: list[str] | None = None,
@@ -776,7 +800,7 @@ class ResultsMixin(CheckerState):
             return len(set(cols_arr).intersection(col_name_list)) == 0
 
         def check_exception_col_includes_list(row):
-            cols_arr = self.col_to_original_cols_dict[self.get_results_col_name(row[0], row[1])]
+            cols_arr = self.col_to_original_cols_dict[self.get_results_col_name(row.iloc[0], row.iloc[1])]
             return len(set(cols_arr).intersection(col_name_list)) == 0
 
         num_specfied = 0
@@ -826,7 +850,7 @@ class ResultsMixin(CheckerState):
 
             # test_results_df
             drop_cols = []
-            for col_name in self.test_results_df:
+            for col_name in self.test_results_df.columns:
                 test_name = col_name.replace('TEST ', '').split(' -- ')[0]
                 if test_name in test_id_list:
                     drop_cols.append(col_name)
@@ -858,7 +882,7 @@ class ResultsMixin(CheckerState):
 
             # test_results_df
             drop_cols = []
-            for col_name in self.test_results_df:
+            for col_name in self.test_results_df.columns:
                 if col_name not in self.col_to_original_cols_dict:  # Skip "FINAL SCORE"
                     continue
                 col_names = self.col_to_original_cols_dict[col_name]
@@ -956,6 +980,9 @@ class ResultsMixin(CheckerState):
         Restore the results of the last `check_data_quality()` call, undoing every `clear_results()` call.
         """
         self.patterns_arr = self.safe_patterns_arr.copy()
+        # check_data_quality() saves all the copies together
+        assert self.safe_patterns_df is not None and self.safe_exceptions_summary_df is not None
+        assert self.safe_test_results_df is not None and self.safe_test_results_by_column_np is not None
         self.patterns_df = self.safe_patterns_df.copy()
         self.results_summary_arr = self.safe_results_summary_arr.copy()
         self.exceptions_summary_df = self.safe_exceptions_summary_df.copy()

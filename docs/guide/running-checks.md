@@ -62,6 +62,13 @@ sense for code or ID values, where individual characters are meaningful (`get_te
 Give a fraction of the rows (the default is 0.5%) or an integer count of rows. See
 [How it works](how-it-works.md#the-contamination-level).
 
+To choose a level, `test_contamination_level()` runs the checks once per level and plots how many issues, rows and
+columns each level flags. It works on a copy, so the checker keeps the results of its last run:
+
+```python
+issues, rows, columns = dc.test_contamination_level([0.001, 0.005, 0.01, 0.05], fast_only=True)
+```
+
 ### Limiting combinations
 
 Checks on pairs or larger sets of columns can examine a very large number of combinations. A check skips itself
@@ -91,3 +98,12 @@ suits CI jobs where any failure should stop the run.
     `run_parallel=True` is not supported: checks store their results on the checker, so checks run in other
     processes could not report them back. Passing it issues a `RuntimeWarning` and runs the checks
     sequentially.
+
+### Warnings, display options and random state
+
+The checks routinely trigger warnings from pandas, SciPy and scikit-learn (deprecations, model convergence,
+constant input) that say nothing about your data, so the checker hides them while its methods run. Outside
+notebooks it also widens pandas' display while it prints tables. Both last only for the duration of each call:
+your own warning filters and pandas options are left as they were. `check_data_quality()` and
+`generate_synth_data()` seed the `random` and `numpy.random` generators for reproducible results, and put back
+their previous state when they return.

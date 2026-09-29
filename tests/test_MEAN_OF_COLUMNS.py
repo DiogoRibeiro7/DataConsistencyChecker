@@ -39,19 +39,21 @@ def test_synthetic_one_row_nulls():
     synth_test(test_id, "one-row", synth_patterns_cols, synth_exceptions_cols)
 
 
+# Rows with nulls neither support nor violate the pattern, and the rows left still hold it. Row 999, the exception,
+# is never null.
 @requires_synthetic_nones
 def test_synthetic_in_sync_nulls():
-    synth_test(test_id, "in-sync", 0, 0)
+    synth_test(test_id, "in-sync", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", 0, 0)
+    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones
 def test_synthetic_80_percent_nulls():
-    synth_test(test_id, "80-percent", 0, 0)
+    synth_test(test_id, "80-percent", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_all_columns

@@ -57,6 +57,162 @@ def test_column_tends_desc_evaluates_date_columns() -> None:
     assert ("COLUMN_TENDS_DESC", "when") in set(zip(checker.patterns_df["Test ID"], checker.patterns_df["Column(s)"]))
 
 
+def test_binary_matches_sum_describes_the_second_value_going_with_the_smaller_sums() -> None:
+    # The branch for the second binary value going with the smaller sums tested and described the opposite direction.
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({"a": rng.integers(0, 100, 200).astype(float), "b": rng.integers(0, 100, 200).astype(float)})
+    df["label"] = np.where(df["a"] + df["b"] < 101, 1, 0)
+
+    checker = _run(df, ["BINARY_MATCHES_SUM"])
+
+    assert checker.patterns_df["Description of Pattern"].tolist() == [
+        'Column "label" is consistently 1 when the sum of columns "a" and "b" is under 101.0 and 0 when the sum is '
+        "over."
+    ]
+
+
+@pytest.mark.parametrize("swap_values", [False, True], ids=["second_value_of_a", "first_value_of_a"])
+@pytest.mark.parametrize(
+    ("counts", "expected"),
+    [
+        # Rows with (a, b) = (0, 0), (0, 1), (1, 0) and (1, 1)
+        ((50, 60, 850, 40), [('"a" AND "b"', 40)]),  # 40 rows of (1, 1), where independence predicts 89
+        ((60, 780, 40, 120), []),  # 40 rows of (1, 0), more than the 16 independence predicts
+    ],
+    ids=["rarer_than_expected", "commoner_than_expected"],
+)
+def test_binary_implies_compares_each_combination_with_its_expected_count(counts, expected, swap_values) -> None:
+    # The expected counts of the combinations with the second value of "a" were computed from the counts of the
+    # first value of "a" and the second value of "b". Swapping both columns' values tests the same data in the
+    # branches that were correct.
+    combinations = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    rows = [combination for combination, count in zip(combinations, counts) for _ in range(count)]
+    df = pd.DataFrame(rows, columns=["a", "b"]).sample(frac=1, random_state=0).reset_index(drop=True)
+    if swap_values:
+        df = 1 - df
+
+    checker = _run(df, ["BINARY_IMPLIES"], freq_contamination_level=50)
+
+    exceptions = checker.exceptions_summary_df
+    assert list(zip(exceptions["Column(s)"], exceptions["Number of Exceptions"])) == expected
+
+
+@pytest.mark.parametrize(("test_id", "func"), [("BINARY_AND", np.minimum), ("BINARY_OR", np.maximum)])
+def test_binary_and_or_ignore_missing_inputs_in_the_first_rows(test_id, func) -> None:
+    # Both checks first test the first 10 rows. A missing input left BINARY_AND's result unchanged, but set
+    # BINARY_OR's to -1, so two missing inputs among those rows hid the pattern.
+    rng = np.random.default_rng(0)
+    a = rng.integers(0, 2, 300).astype(float)
+    b = rng.integers(0, 2, 300).astype(float)
+    df = pd.DataFrame({"a": a, "b": b, "out": func(a, b)})
+    rows = [i for i in range(10) if df.loc[i, "b"] == df.loc[i, "out"]][:2]  # "a" does not decide these results
+    df.loc[rows, "a"] = np.nan
+
+    checker = _run(df, [test_id])
+
+    assert checker.patterns_df["Column(s)"].tolist() == ['"a" AND "b" AND "out"']
+
+
+@pytest.mark.parametrize("input_values", [(0, 1), ("n", "y")], ids=["same_as_result", "other_than_result"])
+def test_binary_xor_checks_inputs_with_other_values_than_the_result(input_values) -> None:
+    # The second input's values were counted using the result column's values, as the first input's were not, so
+    # inputs with other values than the result were skipped.
+    rng = np.random.default_rng(0)
+    x = rng.integers(0, 2, 300)
+    y = rng.integers(0, 2, 300)
+    low, high = input_values
+    df = pd.DataFrame({"out": x ^ y, "in_a": np.where(x == 1, high, low), "in_b": np.where(y == 1, high, low)})
+
+    checker = _run(df, ["BINARY_XOR"])
+
+    assert checker.patterns_df["Column(s)"].tolist() == ['"in_a" AND "in_b" AND "out"']
+
+
+@pytest.mark.parametrize(("test_id", "func"), [("MIN_OF_COLUMNS", "min"), ("MAX_OF_COLUMNS", "max")])
+def test_min_and_max_of_columns_allow_an_exception_in_the_rows_checked_first(test_id, func) -> None:
+    # Both checks first compare two sampled rows. MIN_OF_COLUMNS skipped the columns if either row was an exception,
+    # where MAX_OF_COLUMNS, and the next check on a larger sample, allow one.
+    def rows_checked_first(data):
+        checker = DataConsistencyChecker(verbose=-1)
+        checker.init_data(data)
+        return checker.sample_df[checker.numeric_cols].sample(n=2, random_state=0).index.tolist()
+
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({name: rng.integers(100, 1000, 300) for name in ["a", "b", "c"]}).astype(float)
+    df["target"] = getattr(df[["a", "b", "c"]], func)(axis=1)
+    row = rows_checked_first(df)[0]
+    df.loc[row, "target"] = df.loc[row, ["a", "b", "c"]].median()  # neither the minimum nor the maximum
+    assert row in rows_checked_first(df)
+
+    checker = _run(df, [test_id])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [row]
+
+
+def test_rounding_describes_both_limits_when_values_usually_have_trailing_zeros() -> None:
+    # The two exception descriptions were swapped. With at least one trailing zero usual, values with too few are
+    # flagged too, but the description gave only the upper limit.
+    rng = np.random.default_rng(0)
+    values = rng.integers(1, 10, 300) * 10 ** rng.integers(1, 3, 300)  # 1 or 2 trailing zeros
+    values[100] = 7
+
+    checker = _run(pd.DataFrame({"n": values}), ["ROUNDING"])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [100]
+    assert checker.exceptions_summary_df["Description of Pattern"].tolist() == [
+        "The column has values with consistently 1 to 2 trailing zeros, with exceptions -- flagging values with less "
+        "than 1 or with more than 4 trailing zeros."
+    ]
+
+
+def test_same_date_flags_dates_that_differ_only_in_the_day() -> None:
+    # The day of the first column was compared with itself, so only the year and month were checked.
+    start = pd.Series(pd.date_range("2020-01-01", periods=1000, freq="D"))
+    end = start.copy()
+    end[7] = pd.Timestamp("2020-01-28")  # the same year and month as 2020-01-08
+    end[9] = pd.Timestamp("2020-02-10")  # the same year and day as 2020-01-10
+
+    checker = _run(pd.DataFrame({"start": start, "end": end}), ["SAME_DATE"])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [7, 9]
+
+
+@pytest.mark.parametrize(
+    ("test_id", "before", "after"),
+    [("A_PREFIX_OF_B", "", "zz"), ("A_SUFFIX_OF_B", "zz", ""), ("B_CONTAINS_A", "xy", "zz")],
+)
+def test_a_within_b_checks_do_not_flag_a_row_missing_one_value(test_id, before, after) -> None:
+    # B_CONTAINS_A excused a row only when both values were missing, where A_PREFIX_OF_B and A_SUFFIX_OF_B excuse it
+    # when either is, so a row missing one value was flagged.
+    rng = np.random.default_rng(0)
+    inner = ["".join(rng.choice(list("abcdefgh"), 4)) for _ in range(300)]
+    outer = [before + value + after for value in inner]
+    inner[40] = None
+
+    checker = _run(pd.DataFrame({"a": inner, "b": outer}), [test_id])
+
+    assert checker.patterns_df["Column(s)"].tolist() == ['"a" AND "b"']
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == []
+
+
+@pytest.mark.parametrize(
+    ("test_id", "low", "high", "unusual"), [("MANY_CHARS", 5, 11, 30), ("FEW_CHARS", 100, 201, 10)]
+)
+def test_many_and_few_chars_ignore_missing_values_when_finding_the_usual_lengths(test_id, low, high, unusual) -> None:
+    # MANY_CHARS counted missing values as empty strings in the quartiles of the lengths, so with many missing values
+    # the limit rose and unusually long values were missed. FEW_CHARS uses only the values present.
+    rng = np.random.default_rng(0)
+    values = ["a" * length for length in rng.integers(low, high, 300)]
+    values[150] = "a" * unusual
+    missing = rng.random(300) < 0.4
+    missing[150] = False
+    df = pd.DataFrame({"text": [None if is_missing else value for value, is_missing in zip(values, missing)]})
+
+    checker = _run(df, [test_id])
+
+    assert np.flatnonzero(checker.get_outlier_scores()).tolist() == [150]
+
+
 def test_same_first_chars_reports_the_shared_prefix_length() -> None:
     rng = np.random.default_rng(0)
     letters = np.array(list("abcdefghijklmnopqrstuvwxyz"))

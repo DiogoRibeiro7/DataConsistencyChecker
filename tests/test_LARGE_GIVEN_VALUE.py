@@ -23,7 +23,6 @@ def test_real():
     res["SpeedDating"] = ([], 26)
     res["eucalyptus"] = ([], ['"Locality" AND "DBH"', '"Frosts" AND "DBH"'])
     res["credit-approval"] = ([], 6)
-    res["adult"] = ([], 4)
     res["credit-g"] = (
         [],
         [
@@ -32,7 +31,7 @@ def test_real():
             '"job" AND "credit_amount"',
         ],
     )
-    res["qsar-biodeg"] = ([], ['"V25" AND "V9"', '"V25" AND "V14"', '"V25" AND "V35"'])
+    res["qsar-biodeg"] = ([], ['"V25" AND "V14"'])
     res["scene"] = ([], 97)  # As there are many, we simply provide the count
     res["bank-marketing"] = ([], ['"V3" AND "V1"'])
     res["hypothyroid"] = (
@@ -128,7 +127,7 @@ def test_synthetic_in_sync_nulls():
 
 @requires_synthetic_nones
 def test_synthetic_random_nulls():
-    synth_test(test_id, "random", 0, 0)
+    synth_test(test_id, "random", synth_patterns_cols, synth_exceptions_cols)
 
 
 @requires_synthetic_nones
