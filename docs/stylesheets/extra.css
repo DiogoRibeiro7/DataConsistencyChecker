@@ -1,0 +1,111 @@
+/* Shared width for the header, navigation and documentation content. */
+.md-grid {
+  max-width: 76rem;
+}
+
+/* The homepage edit link sits over the hero in both color schemes. */
+.md-content__inner:has(.dcc-hero) > .md-content__button {
+  color: #dce4f5;
+}
+
+.md-typeset .dcc-hero {
+  margin: 0 0 2rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border: 1px solid #39466b;
+  border-radius: 0.85rem;
+  background:
+    linear-gradient(125deg, rgb(82 109 255 / 20%), rgb(31 178 181 / 9%) 70%),
+    #141b2e;
+  color: #dce4f5;
+}
+
+.md-typeset .dcc-hero .dcc-eyebrow {
+  margin: 0 0 1rem;
+  color: #9eeaf1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset .dcc-hero h1 {
+  max-width: 20ch;
+  margin: 0 0 0.5em;
+  color: #f4f7ff;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.md-typeset .dcc-hero p {
+  max-width: 62ch;
+  font-size: 1.05rem;
+}
+
+.md-typeset .dcc-hero .md-button {
+  margin: 0.35rem 0.45rem 0 0;
+  border-color: #a5b4e0;
+  border-radius: 0.3rem;
+  color: #f4f7ff;
+  font-size: 0.85rem;
+}
+
+.md-typeset .dcc-hero .md-button--primary {
+  border-color: #9eeaf1;
+  background: #9eeaf1;
+  color: #141b2e;
+}
+
+.md-typeset .dcc-hero .md-button:is(:hover, :focus-visible) {
+  border-color: #d4f9fc;
+  background: #d4f9fc;
+  color: #141b2e;
+}
+
+.md-typeset .dcc-hero a:focus-visible {
+  outline: 3px solid #f4f7ff;
+  outline-offset: 4px;
+}
+
+.md-typeset .dcc-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin: 1.6rem 0 2.2rem;
+}
+
+.md-typeset .dcc-cards > div {
+  padding: 0.2rem 1.2rem 0.5rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-top: 3px solid var(--md-accent-fg-color);
+  border-radius: 0.55rem;
+  background: var(--md-code-bg-color);
+}
+
+.md-typeset .dcc-cards h2 {
+  margin: 0.8rem 0 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.md-typeset .dcc-cards p {
+  font-size: 0.85rem;
+}
+
+@media screen and (max-width: 44rem) {
+  .md-typeset .dcc-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .md-typeset .dcc-hero {
+    background: none;
+    color: #111;
+  }
+
+  .md-typeset .dcc-hero :is(h1, .dcc-eyebrow, .md-button) {
+    color: #111;
+  }
+}

@@ -18,7 +18,11 @@ dc.clear_results(clear_all_exceptions=True)           # every exception (pattern
 ```
 
 Exactly one option may be given per call; call it repeatedly to clear more. The lists, summaries and displays
-then reflect only the remaining findings.
+then reflect only the remaining findings. Raw, normalized and per-cell scores are recalculated too; see
+[Scores after curating findings](outlier-scores.md#scores-after-curating-findings).
+
+Call `get_report()` again after clearing findings to capture the updated results. Previously created reports
+are immutable snapshots and keep their original findings and scores.
 
 ## Restoring
 
@@ -26,7 +30,7 @@ then reflect only the remaining findings.
 dc.restore_results()
 ```
 
-This undoes every `clear_results()` call, restoring the results of the last `check_data_quality()`.
+This undoes every `clear_results()` call, restoring the findings and scores of the last `check_data_quality()`.
 
 The [Demo_Clear_Issues notebook](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Clear_Issues.ipynb)
 shows a full example.

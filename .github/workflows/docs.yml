@@ -3,6 +3,17 @@ name: Docs
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'mkdocs.yml'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'CITATION.cff'
+      - 'LICENSE'
+      - '.github/workflows/docs.yml'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -18,12 +29,20 @@ jobs:
   build:
     name: Build documentation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v7
+      - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v6
       - uses: DiogoRibeiro7/git-actions-collection/.github/actions/setup-poetry@v1
         with:
           python-version: '3.12'
           install-deps: 'false'
+      - name: Validate dependency lock
+        run: poetry check --lock
       - name: Install dependencies
         run: poetry install --with docs --no-interaction
       - name: Build the site

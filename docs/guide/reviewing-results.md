@@ -54,6 +54,18 @@ several notebook cells.
 
 ## Rows
 
+The checker resets its internal row index to `0, 1, 2, ...`. Row IDs in findings, scores and reports refer to
+positions in the DataFrame passed to `init_data()`, not its original index labels. Use `iloc` to inspect the
+same input row:
+
+```python
+row_num = 42
+df.iloc[row_num]                       # input row at this position
+dc.get_results_by_row_id(row_num)      # findings that flag it
+```
+
+If you sort or filter the data before analysis, use that same sorted or filtered DataFrame to look up rows.
+
 ```python
 dc.display_most_flagged_rows(n_rows=10)   # the most unusual rows, with the checks that flagged them
 dc.display_least_flagged_rows(n_rows=10)  # the most typical rows, for context

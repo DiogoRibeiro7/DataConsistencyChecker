@@ -80,11 +80,18 @@ Row 42 is flagged by five different checks, so it has an outlier score of 5, whi
 ## 5. Keep the results
 
 ```python
+import json
+from pathlib import Path
+
 report = dc.get_report()        # a structured, JSON-safe snapshot
 payload = report.to_dict()
+Path("report.json").write_text(json.dumps(payload, indent=2, allow_nan=False), encoding="utf-8")
 
 dc.display_detailed_results(save_to_disk=True, output_folder="reports")  # an HTML report
 ```
+
+This saves `report.json` and `reports/Data_consistency.html`. Keep any PNG files written alongside the HTML
+when sharing it. See [Structured reports](../guide/reports.md) for the JSON fields.
 
 ## The same analysis in one call
 
@@ -94,7 +101,13 @@ from data_consistency_checker import DataConsistencyConfig, analyze
 report = analyze(df, DataConsistencyConfig(verbose=-1))
 ```
 
-Or from the command line:
+To run the same example from the command line, first save the DataFrame:
+
+```python
+df.to_csv("orders.csv", index=False)
+```
+
+Then run this in a terminal from the directory containing `orders.csv`:
 
 ```bash
 data-consistency-checker check orders.csv --output report.json
