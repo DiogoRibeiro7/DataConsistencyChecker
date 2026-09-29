@@ -135,8 +135,11 @@ class StringTestsMixin(CheckerState):
             if test_series.tolist().count(False) < self.freq_contamination_level:
                 flagged_idxs = list(np.where(test_series == False)[0])  # noqa: E712
                 test_series = [True] * self.num_rows
+                # Values in numeric columns that are not numbers are sorted last, as missing values are
+                sort_df = self.get_numeric_vals_nan_df() if sort_col in self.numeric_cols else self.orig_df
+                sorted_index = sort_df.sort_values(sort_col).index
                 for idx in flagged_idxs:
-                    test_series[self.orig_df.sort_values(sort_col).index[idx]] = False
+                    test_series[sorted_index[idx]] = False
 
         sort_msg = ""
         if sort_col:
@@ -519,8 +522,11 @@ class StringTestsMixin(CheckerState):
             # Check if there's a small set of characters that make up the bulk of the values
             count_most_common = np.where(
                 counts_series.sort_values(ascending=False).cumsum().to_numpy() > (num_non_null_vals - self.freq_contamination_level))[0]
-            if len(count_most_common) > 0:
-                count_most_common = count_most_common[0]
+            if len(count_most_common) == 0:
+                # Blank values have no last character and are not counted, so no set of last characters may cover
+                # enough of the values
+                continue
+            count_most_common = count_most_common[0]
             if count_most_common <= 5:
                 common_last_chars = list(counts_series.sort_values(ascending=False)[:count_most_common+1].index)
                 rare_last_chars = []
@@ -3645,10 +3651,11 @@ class StringTestsMixin(CheckerState):
                     continue
                 if df is None:
                     df = self.orig_df.copy()
-                    # Rows with a missing value in col_name_1 have no position in the sort order, so are placed last
+                    # Rows with a missing value in col_name_1, or one that is not a number, have no position in the
+                    # sort order, so are placed last
                     if col_name_1 in self.numeric_cols:
                         sort_order = self.numeric_vals_filled[col_name_1].where(
-                            self.orig_df[col_name_1].notna().to_numpy()).sort_values().index
+                            self.numeric_vals_nan[col_name_1].notna().to_numpy()).sort_values().index
                     else:
                         sort_order = self.orig_df[col_name_1].sort_values().index
                     df = df.loc[sort_order]
@@ -4182,6 +4189,8 @@ class StringTestsMixin(CheckerState):
             return
 
         nunique_dict = self.get_nunique_dict()
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
 
         # Create a numpy array of just the numeric columns for efficiency
         numeric_df: pd.Series | pd.DataFrame | None = None
@@ -4251,9 +4260,9 @@ class StringTestsMixin(CheckerState):
                 any_subsets_uncorrelated = False
                 some_subset_correlated = False
                 test_series = [True] * self.num_rows
-                # Rows with a missing value in either numeric column neither support nor violate the pattern, so we
-                # test each subset using only its rows where both are non-null.
-                pair_non_null = (self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()).values
+                # Rows with a missing value, or one that is not a number, in either numeric column neither support nor
+                # violate the pattern, so we test each subset using only its rows where both are numbers.
+                pair_non_null = (nums[col_name_1].notna() & nums[col_name_2].notna()).values
                 for val in conditioning_vals:
                     idxs = val_idxs_dict[val]
                     idxs = idxs[pair_non_null[idxs]]
@@ -4276,9 +4285,9 @@ class StringTestsMixin(CheckerState):
 
                     # pairwise_correlation() is fast, but does not distinguish positive from negative correlation
                     if (val is None) or (val != val):
-                        sub_df = self.orig_df[self.orig_df[col_cond].isna()]
+                        sub_df = nums[self.orig_df[col_cond].isna()]
                     else:
-                        sub_df = self.orig_df[self.orig_df[col_cond] == val]
+                        sub_df = nums[self.orig_df[col_cond] == val]
                     sub_df = sub_df.dropna(subset=[col_name_1, col_name_2])
                     spearancorr = sub_df[col_name_1].corr(sub_df[col_name_2], method='spearman')
                     if abs(spearancorr) < 0.95:

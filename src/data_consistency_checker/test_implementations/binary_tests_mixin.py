@@ -837,6 +837,9 @@ class BinaryTestsMixin(CheckerState):
                        f"max_combinations is currently set to {self.max_combinations:,}.")
             return
 
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
+
         for bin_idx, bin_col in enumerate(self.binary_cols):
             if self.verbose >= 2 and bin_idx > 0 and bin_idx % 10 == 0:
                 print(f"  Examining column {bin_idx} of {len(self.binary_cols)} binary columns")
@@ -878,8 +881,8 @@ class BinaryTestsMixin(CheckerState):
                     # Test if the binary column is consistently val0 for the larger values in the numeric column
                     threshold = statistics.mean([set_0_min, set_1_max])
                     test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
-                                   for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                                   for x, y in zip(self.orig_df[bin_col], nums[num_col])]
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | nums[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -893,8 +896,8 @@ class BinaryTestsMixin(CheckerState):
                     # Test if the binary column is consistently val1 for the larger values in the numeric column
                     threshold = statistics.mean([set_1_min, set_0_max])
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
-                                   for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                                   for x, y in zip(self.orig_df[bin_col], nums[num_col])]
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | nums[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -908,8 +911,8 @@ class BinaryTestsMixin(CheckerState):
                     # Test if the binary column is consistently val0 for the larger values in the numeric column
                     threshold = statistics.mean([set_0_01_percentile, set_1_99_percentile])
                     test_series = [bool(x == val0 and y > threshold or x == val1 and y <= threshold)
-                                   for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                                   for x, y in zip(self.orig_df[bin_col], nums[num_col])]
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | nums[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],
@@ -923,8 +926,8 @@ class BinaryTestsMixin(CheckerState):
                     # Test if the binary column is consistently val1 for the larger values in the numeric column
                     threshold = statistics.mean([set_1_01_percentile, set_0_99_percentile])
                     test_series = [bool(x == val1 and y > threshold or x == val0 and y <= threshold)
-                                   for x, y in zip(self.orig_df[bin_col], self.orig_df[num_col])]
-                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | self.orig_df[num_col].isna()
+                                   for x, y in zip(self.orig_df[bin_col], nums[num_col])]
+                    test_series = np.array(test_series) | self.orig_df[bin_col].isna() | nums[num_col].isna()
                     self._process_analysis_binary(
                         test_id,
                         [num_col, bin_col],

@@ -23,7 +23,9 @@ dc.init_data(df, known_date_cols=None)
 
 - **binary** — exactly two distinct values;
 - **date** — datetime columns, plus text or numeric columns that parse as dates;
-- **numeric** and **string** — the rest.
+- **numeric** — numbers, including columns with a few values that are not numbers (fewer than 0.5% of the rows),
+  such as `"?"`. `INVALID_NUMBERS` flags those values;
+- **string** — the rest.
 
 Columns with a single distinct value are ignored. Check the inferred types with `display_columns_types_list()`
 or `display_columns_types_table()`. If date detection gets a column wrong, pass the date columns explicitly
