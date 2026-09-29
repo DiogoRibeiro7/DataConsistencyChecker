@@ -2244,8 +2244,11 @@ class NumericTestsMixin(CheckerState):
         self._add_synthetic_column('even_multiple all',
                                     np.random.randint(1, 1_000, 1000) * self.synth_df['even_multiple rand'])
         self._add_synthetic_column('even_multiple most', self.synth_df['even_multiple all'])
-        self.synth_df.at[999, 'even_multiple most'] = \
-            cast(float, self.synth_df.at[999, 'even_multiple most']) * 1.25 + 1
+        exception_value = cast(float, self.synth_df.at[999, 'even_multiple most']) * 1.25 + 1
+        if not exception_value.is_integer():
+            # pandas 2 upcast the int column to float for this assignment; pandas 3 raises instead
+            self.synth_df['even_multiple most'] = self.synth_df['even_multiple most'].astype(float)
+        self.synth_df.at[999, 'even_multiple most'] = exception_value
 
 
     def _check_even_multiple(self, test_id):
