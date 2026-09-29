@@ -3087,14 +3087,15 @@ class NumericTestsMixin(CheckerState):
         # This saves some execution time, but primarily reduces double reporting.
         reported_dict = {}
 
-        col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
-
         num_triples, column_triples = self._get_numeric_column_triples()
         if num_triples > self.max_combinations:
             if self.verbose >= 1:
                 print(f"  Skipping test. There are {int(num_triples):,} triples of numeric columns. "
                        f"max_combinations is currently set to {self.max_combinations:,}.")
             return
+
+        # Fetched after the check above: building it for a skipped test is wasted work
+        col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
 
         # Everything that depends on a single column is computed once, before the loop, as numpy arrays.
         sample_vals = {c: self.sample_numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
