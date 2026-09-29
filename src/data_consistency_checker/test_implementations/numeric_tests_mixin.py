@@ -2961,12 +2961,28 @@ class NumericTestsMixin(CheckerState):
         col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
         nunique_dict = self.get_nunique_dict()
 
+        # Everything that depends on a single column is computed once, before the loops, as numpy arrays.
+        sample_vals = {c: self.sample_numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        sample_null = {c: self.sample_df[c].isna().to_numpy() for c in self.numeric_cols}
+        full_vals = {c: self.numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        full_null = {c: self.orig_df[c].isna().to_numpy() for c in self.numeric_cols}
+        abs_medians = {c: abs(self.column_medians[c]) for c in self.numeric_cols}
+
+        # Whether the second most frequent value of a column is too rare. Filled the first time a column is examined.
+        few_second_values = {}
+
+        def has_few_second_values(col_name):
+            if col_name not in few_second_values:
+                few_second_values[col_name] = self.orig_df[col_name].value_counts().values[1] < \
+                    self.freq_contamination_level * (self.num_valid_rows[col_name] / self.num_rows)
+            return few_second_values[col_name]
+
         flagged_tuples = {}
+        _, column_pairs = self._get_numeric_column_pairs_unique()
         for col_idx, col_name_3 in enumerate(self.numeric_cols):
             if self.verbose >= 2 and col_idx > 0 and col_idx % 10 == 0:
                 print(f"  Examining column {col_idx} of {len(self.numeric_cols)} numeric columns.")
-            _, column_pairs = self._get_numeric_column_pairs_unique()
-            for _cols_idx, (col_name_1, col_name_2) in enumerate(column_pairs):
+            for col_name_1, col_name_2 in column_pairs:
                 if col_name_1 == col_name_3 or col_name_2 == col_name_3:
                     continue
 
@@ -2975,19 +2991,18 @@ class NumericTestsMixin(CheckerState):
 
                 # Check the two columns that have the values that are checked have a reasonable number of at least
                 # two unique values, relative to the number of non-null values
-                if self.orig_df[col_name_1].value_counts().values[1] < \
-                        self.freq_contamination_level * (self.num_valid_rows[col_name_1] / self.num_rows):
+                if has_few_second_values(col_name_1):
                     continue
-                if self.orig_df[col_name_2].value_counts().values[1] < \
-                        self.freq_contamination_level * (self.num_valid_rows[col_name_2] / self.num_rows):
+                if has_few_second_values(col_name_2):
                     continue
 
-                if col_triples_any_null_bool_dict[tuple(sorted([col_name_1, col_name_2, col_name_3]))]:
+                current_tuple = tuple(sorted([col_name_1, col_name_2, col_name_3]))
+                if col_triples_any_null_bool_dict[current_tuple]:
                     continue
 
-                med_1 = abs(self.column_medians[col_name_1])
-                med_2 = abs(self.column_medians[col_name_2])
-                med_3 = abs(self.column_medians[col_name_3])
+                med_1 = abs_medians[col_name_1]
+                med_2 = abs_medians[col_name_2]
+                med_3 = abs_medians[col_name_3]
 
                 # Test that subtracting the 1st and 2nd columns makes sense (they are on the same scale)
                 if ((med_2 != 0) and ((med_1 / med_2) < 0.1)) or ((med_2 != 0) and ((med_1 / med_2) > 10.0)):
@@ -3000,34 +3015,32 @@ class NumericTestsMixin(CheckerState):
                     continue
 
                 # Test the relationship on a small sample of the full data
-                test_series_a = (self.sample_numeric_vals_filled[col_name_3] / \
-                    (self.sample_numeric_vals_filled[col_name_1] - self.sample_numeric_vals_filled[col_name_2]))
-                if test_series_a.isna().sum() > (self.num_rows * 0.75):
+                with np.errstate(all='ignore'):
+                    test_arr = sample_vals[col_name_3] / (sample_vals[col_name_1] - sample_vals[col_name_2])
+                is_nan_arr = np.isnan(test_arr)
+                if np.count_nonzero(is_nan_arr) > (self.num_rows * 0.75):
                     continue
-                test_series_a = test_series_a.replace(np.nan, 1.0)
-                test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
+                test_arr = np.where(is_nan_arr, 1.0, test_arr)
                 # Rows with missing values neither support nor violate the pattern
-                test_series = test_series | \
-                    self.sample_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
-                num_not_matching = test_series.tolist().count(False)
+                test_series = ((test_arr > 0.9) & (test_arr < 1.1)) | \
+                    sample_null[col_name_1] | sample_null[col_name_2] | sample_null[col_name_3]
+                num_not_matching = len(test_series) - np.count_nonzero(test_series)
                 if num_not_matching > 1:
                     continue
 
                 # Check if this set of columns has already been flagged
-                current_tuple = tuple(sorted([col_name_1, col_name_2, col_name_3]))
                 if current_tuple in flagged_tuples:
                     continue
 
                 # Test on the full data. Rows with missing values are not tested, so skip where few rows have none.
-                is_missing_arr = self.orig_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
+                is_missing_arr = full_null[col_name_1] | full_null[col_name_2] | full_null[col_name_3]
                 if (~is_missing_arr).sum() < self.freq_contamination_level:
                     continue
-                test_series_a = (self.numeric_vals_filled[col_name_3] / \
-                                    (self.numeric_vals_filled[col_name_1] - self.numeric_vals_filled[col_name_2]))
-                test_series_a = test_series_a.replace(np.nan, 1.0)
-                test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
-                test_series = test_series | is_missing_arr
-                num_matching = test_series.tolist().count(True)
+                with np.errstate(all='ignore'):
+                    test_arr = full_vals[col_name_3] / (full_vals[col_name_1] - full_vals[col_name_2])
+                test_arr = np.where(np.isnan(test_arr), 1.0, test_arr)
+                test_series = ((test_arr > 0.9) & (test_arr < 1.1)) | is_missing_arr
+                num_matching = np.count_nonzero(test_series)
                 if num_matching < (self.num_rows - self.freq_contamination_level):
                     continue
 
@@ -3074,14 +3087,25 @@ class NumericTestsMixin(CheckerState):
         # This saves some execution time, but primarily reduces double reporting.
         reported_dict = {}
 
-        col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
-
         num_triples, column_triples = self._get_numeric_column_triples()
         if num_triples > self.max_combinations:
             if self.verbose >= 1:
                 print(f"  Skipping test. There are {int(num_triples):,} triples of numeric columns. "
                        f"max_combinations is currently set to {self.max_combinations:,}.")
             return
+
+        # Fetched after the check above: building it for a skipped test is wasted work
+        col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
+
+        # Everything that depends on a single column is computed once, before the loop, as numpy arrays.
+        sample_vals = {c: self.sample_numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        sample_null = {c: self.sample_df[c].isna().to_numpy() for c in self.numeric_cols}
+        full_vals = {c: self.numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        full_null = {c: self.orig_df[c].isna().to_numpy() for c in self.numeric_cols}
+        abs_medians = {c: abs(self.column_medians[c]) for c in self.numeric_cols}
+
+        # Whether a column is largely zeros. Filled the first time a column is examined.
+        mostly_zeros = {}
 
         # Test if col_name_3 is approximately the product of col_name_1 and col_name_2
         for cols_idx, (col_name_1, col_name_2, col_name_3) in enumerate(column_triples):
@@ -3091,12 +3115,12 @@ class NumericTestsMixin(CheckerState):
             if columns_tuple in reported_dict:
                 continue
 
-            if col_triples_any_null_bool_dict[tuple(sorted([col_name_1, col_name_2, col_name_3]))]:
+            if col_triples_any_null_bool_dict[columns_tuple]:
                 continue
 
-            med_1 = abs(self.column_medians[col_name_1])
-            med_2 = abs(self.column_medians[col_name_2])
-            med_3 = abs(self.column_medians[col_name_3])
+            med_1 = abs_medians[col_name_1]
+            med_2 = abs_medians[col_name_2]
+            med_3 = abs_medians[col_name_3]
 
             # Test that the columns may be related checking the medians of the 3 columns
             if (med_3 < med_1) or (med_3 < med_2) or (med_3 < (med_1 * med_2 * 0.5)) or (med_3 > (med_1 * med_2 * 2.0)):
@@ -3104,37 +3128,40 @@ class NumericTestsMixin(CheckerState):
 
             # Skip cases where the product is trivially true because some columns are largely zeros. Rows with null
             # values are not tested, and triples with few rows without nulls are skipped above.
-            if self.orig_df[col_name_3].tolist().count(0) > (self.num_valid_rows[col_name_3] * 0.75):
+            if col_name_3 not in mostly_zeros:
+                mostly_zeros[col_name_3] = \
+                    self.orig_df[col_name_3].tolist().count(0) > (self.num_valid_rows[col_name_3] * 0.75)
+            if mostly_zeros[col_name_3]:
                 continue
 
             # Test the relationship on a small sample of the full data
-            test_series_a = self.sample_numeric_vals_filled[col_name_3] / \
-                            (self.sample_numeric_vals_filled[col_name_1] * self.sample_numeric_vals_filled[col_name_2])
-            if test_series_a.isna().sum() > (self.num_rows * 0.75):
+            with np.errstate(all='ignore'):
+                test_arr = sample_vals[col_name_3] / (sample_vals[col_name_1] * sample_vals[col_name_2])
+            is_nan_arr = np.isnan(test_arr)
+            if np.count_nonzero(is_nan_arr) > (self.num_rows * 0.75):
                 continue
-            test_series_a = test_series_a.replace(np.nan, 1.0)
-            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
-            test_series = test_series | self.sample_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
-            num_not_matching = test_series.tolist().count(False)
+            test_arr = np.where(is_nan_arr, 1.0, test_arr)
+            test_series = ((test_arr > 0.9) & (test_arr < 1.1)) | \
+                sample_null[col_name_1] | sample_null[col_name_2] | sample_null[col_name_3]
+            num_not_matching = len(test_series) - np.count_nonzero(test_series)
             if num_not_matching > 1:
                 continue
 
             # Test on the full data
-            is_missing_arr = self.orig_df[[col_name_1, col_name_2, col_name_3]].isna().any(axis=1).values
-            test_series_a = self.numeric_vals_filled[col_name_3] / \
-                            (self.numeric_vals_filled[col_name_1] * self.numeric_vals_filled[col_name_2])
+            is_missing_arr = full_null[col_name_1] | full_null[col_name_2] | full_null[col_name_3]
+            with np.errstate(all='ignore'):
+                test_arr = full_vals[col_name_3] / (full_vals[col_name_1] * full_vals[col_name_2])
 
             # First check there is a reasonable number of matches before filling the null values, in the rows without
             # null values.
-            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False) & ~is_missing_arr
-            if test_series.tolist().count(True) < self.freq_contamination_level:
+            test_series = (test_arr > 0.9) & (test_arr < 1.1) & ~is_missing_arr
+            if np.count_nonzero(test_series) < self.freq_contamination_level:
                 continue
 
             # We fill the null values to allow null values to not violate the pattern.
-            test_series_a = test_series_a.replace(np.nan, 1.0)
-            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
-            test_series = test_series | is_missing_arr
-            num_matching = test_series.tolist().count(True)
+            test_arr = np.where(np.isnan(test_arr), 1.0, test_arr)
+            test_series = ((test_arr > 0.9) & (test_arr < 1.1)) | is_missing_arr
+            num_matching = np.count_nonzero(test_series)
             if num_matching >= (self.num_rows - self.freq_contamination_level):
                 self._process_analysis_binary(
                     test_id,
@@ -3186,18 +3213,24 @@ class NumericTestsMixin(CheckerState):
 
         col_triples_any_null_bool_dict = self.get_col_triples_any_null_bool_dict()
 
+        # Everything that depends on a single column is computed once, before the loop, as numpy arrays.
+        sample_vals = {c: self.sample_numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        full_vals = {c: self.numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        full_null = {c: self.orig_df[c].isna().to_numpy() for c in self.numeric_cols}
+
         # If A == B * C, then C will be the ratio A / B and B will be the ratio A / C. To avoid flagging both, we
-        # keep track of the triples flagged.
-        flagged_sets = []
+        # keep track of the triples flagged, as sorted tuples of their columns.
+        flagged_tuples = set()
 
         for cols_idx, (col_name_1, col_name_2, col_name_3) in enumerate(column_triples):
             if self.verbose >= 2 and cols_idx > 0 and cols_idx % 100_000 == 0:
                 print(f"  Examining column set {cols_idx:,} of {len(column_triples):,} combinations of columns.")
 
-            if {col_name_1, col_name_2, col_name_3} in flagged_sets:
+            columns_tuple = tuple(sorted([col_name_1, col_name_2, col_name_3]))
+            if columns_tuple in flagged_tuples:
                 continue
 
-            if col_triples_any_null_bool_dict[tuple(sorted([col_name_1, col_name_2, col_name_3]))]:
+            if col_triples_any_null_bool_dict[columns_tuple]:
                 continue
 
             # Test that the columns may be related just checking the medians of the 3 columns
@@ -3211,21 +3244,21 @@ class NumericTestsMixin(CheckerState):
                         continue
 
             # Test the relationship on a sample of the full data
-            test_series_a = self.sample_numeric_vals_filled[col_name_3] / \
-                            abs(self.sample_numeric_vals_filled[col_name_1] / self.sample_numeric_vals_filled[col_name_2])
-            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
-            num_not_matching = test_series.tolist().count(False)
+            with np.errstate(all='ignore'):
+                test_arr = sample_vals[col_name_3] / np.abs(sample_vals[col_name_1] / sample_vals[col_name_2])
+            test_series = (test_arr > 0.9) & (test_arr < 1.1)
+            num_not_matching = len(test_series) - np.count_nonzero(test_series)
             if num_not_matching > 1:
                 continue
 
             # Test col1 / col2 on the full data
-            test_series_a = self.numeric_vals_filled[col_name_3] / \
-                            abs(self.numeric_vals_filled[col_name_1] / self.numeric_vals_filled[col_name_2])
-            if test_series_a.isna().sum() > (self.num_rows * 0.75):
+            with np.errstate(all='ignore'):
+                test_arr = full_vals[col_name_3] / np.abs(full_vals[col_name_1] / full_vals[col_name_2])
+            if np.count_nonzero(np.isnan(test_arr)) > (self.num_rows * 0.75):
                 continue
-            test_series = np.where((test_series_a > 0.9) & (test_series_a < 1.1), True, False)
-            test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna() | self.orig_df[col_name_3].isna()
-            num_matching = test_series.tolist().count(True)
+            test_series = ((test_arr > 0.9) & (test_arr < 1.1)) | \
+                full_null[col_name_1] | full_null[col_name_2] | full_null[col_name_3]
+            num_matching = np.count_nonzero(test_series)
             if num_matching >= (self.num_rows - self.freq_contamination_level):
                 self._process_analysis_binary(
                     test_id,
@@ -3233,7 +3266,7 @@ class NumericTestsMixin(CheckerState):
                     test_series,
                     (f'"{col_name_3}" is consistently similar (within 10%) to the ratio of "{col_name_1}" and '
                      f'"{col_name_2}"'))
-                flagged_sets.append({col_name_1, col_name_2, col_name_3})
+                flagged_tuples.add(columns_tuple)
                 continue
 
 
