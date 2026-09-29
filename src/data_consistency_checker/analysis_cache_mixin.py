@@ -264,6 +264,11 @@ class AnalysisCacheMixin(CheckerState):
         num_pairs, col_pairs = self._get_numeric_column_pairs()
         if num_pairs == 0 or col_pairs is None:
             return self.larger_pairs_dict
+
+        # The sample's values and null masks, per column, computed once rather than once per pair
+        sample_vals_dict = {c: self.sample_numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        sample_isna_dict = {c: self.sample_df[c].isna().to_numpy() for c in self.numeric_cols}
+
         for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
             key = (col_name_1, col_name_2)
 
@@ -274,12 +279,10 @@ class AnalysisCacheMixin(CheckerState):
                 self.larger_pairs_dict[key] = None
                 continue
 
-            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
-            sample_series = ((vals_arr_1 - vals_arr_2) >= 0) | \
-                            self.sample_df[col_name_1].isna().values | \
-                            self.sample_df[col_name_2].isna().values
-            if sample_series.tolist().count(False) > 1:
+            with np.errstate(invalid='ignore'):
+                sample_arr = ((sample_vals_dict[col_name_1] - sample_vals_dict[col_name_2]) >= 0) | \
+                             sample_isna_dict[col_name_1] | sample_isna_dict[col_name_2]
+            if np.count_nonzero(~sample_arr) > 1:
                 self.larger_pairs_dict[key] = None
                 continue
 
