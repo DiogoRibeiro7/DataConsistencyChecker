@@ -12,7 +12,6 @@ import math
 import random
 import statistics
 import string
-from collections.abc import Callable
 from typing import cast
 
 import numpy as np
@@ -29,15 +28,8 @@ from data_consistency_checker.checker_utils import (
     convert_to_numeric,
     get_non_alphanumeric,
     is_missing,
-    is_uppercase,
     replace_special_with_space,
 )
-
-colored: Callable[..., str] | None
-try:
-    from termcolor import colored
-except ImportError:  # pragma: no cover - optional presentation dependency
-    colored = None
 
 letters = string.ascii_letters
 digits = string.digits
@@ -71,7 +63,8 @@ class StringTestsMixin(CheckerState):
         col_values: The values in col_name, either in the original order of the data, or sorted by sort_col if there
             is a sort_col
 
-        Handling null values: this does not currently support many null values.
+        Handling null values: this does not currently support many null values. Null values are treated as any other
+        value, so if interspersed through the column will negate any grouping.
         """
 
         # Skip if there are any rare values
@@ -85,24 +78,14 @@ class StringTestsMixin(CheckerState):
         if self.orig_df[col_name].nunique() < 3:
             return
 
-        # First test if a pattern holds when removing all null values
+        # Null values are kept in place, which keeps the actual row numbers. They break any run of the same value.
         col_df = pd.DataFrame({col_name: col_values})
-        col_df.dropna()
         col_df['Next'] = col_df[col_name].shift(1)
         col_df['Same'] = col_df[col_name] == col_df['Next']
         num_same = col_df['Same'].tolist().count(True)
         # There will always be rows not like the next: where the list moves from one value to the next. So ideally,
         # the number of rows that are the same as the next is the total number of rows - (number values -1). As well,
         # the last row is always unlike the next, as the next is undefined.
-        ideal_same = self.num_valid_rows[col_name] - self.orig_df[col_name].nunique()
-        if (ideal_same - num_same) > self.freq_contamination_level:
-            return
-
-        # Test with the null values. This is necessary to maintain the actual row numbers
-        col_df = pd.DataFrame({col_name: col_values})
-        col_df['Next'] = col_df[col_name].shift(1)
-        col_df['Same'] = col_df[col_name] == col_df['Next']
-        num_same = col_df['Same'].tolist().count(True)
         ideal_same = self.num_valid_rows[col_name] - self.orig_df[col_name].nunique()
         if (ideal_same - num_same) > self.freq_contamination_level:
             return
@@ -238,7 +221,7 @@ class StringTestsMixin(CheckerState):
                 f'Column "{col_name}" consistently contains values without leading spaces'
             )
 
-            # Test if there are a normal number of trailing spaces
+            # Test if there are a normal number of leading spaces
             median_num_spaces = test_series_non_null_counts.median()
             test_series = self.orig_df[col_name].apply(is_missing) | \
                           ((test_series_counts > (median_num_spaces / 2)) & \
@@ -319,7 +302,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_alpha(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -359,7 +342,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_numeric(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -369,12 +352,12 @@ class StringTestsMixin(CheckerState):
                 continue
 
             # Test on a sample of the full data
-            sample_series = as_str(self.sample_df[col_name]).str.slice(0, 1).str.isdigit()
+            sample_series = as_str(self.sample_df[col_name]).str.lstrip().str.slice(0, 1).str.isdigit()
             if sample_series.tolist().count(False) > 1:
                 continue
 
             # Test of the full data
-            test_series = as_str(self.orig_df[col_name]).str.slice(0, 1).str.isdigit()
+            test_series = as_str(self.orig_df[col_name]).str.lstrip().str.slice(0, 1).str.isdigit()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
@@ -408,7 +391,7 @@ class StringTestsMixin(CheckerState):
             if self.orig_df[col_name].nunique() < math.sqrt(self.num_rows):
                 continue
 
-            test_series = pd.Series([str(x)[:1] if not y else None for x, y in zip(self.orig_df[col_name], self.orig_df[col_name].isna())])
+            test_series = pd.Series([str(x).lstrip()[:1] if not y else None for x, y in zip(self.orig_df[col_name], self.orig_df[col_name].isna())])
             num_non_null_vals = self.orig_df[col_name].notna().sum()
 
             counts_series = test_series.value_counts(normalize=False)  # Get the counts for each first letter
@@ -450,7 +433,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_uppercase(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -459,7 +442,7 @@ class StringTestsMixin(CheckerState):
             if value_lens_arr.quantile(0.9) <= 1:
                 continue
 
-            test_series = as_str(self.orig_df[col_name]).str[:1].apply(is_uppercase)
+            test_series = as_str(self.orig_df[col_name]).str.lstrip().str[:1].str.isupper()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
@@ -484,7 +467,7 @@ class StringTestsMixin(CheckerState):
     def _check_first_char_lowercase(self, test_id):
         for col_name in self.string_cols:
             # Skip columns where there is only one character used for the first character in all values
-            first_chars = as_str(self.orig_df[col_name]).str[:1]
+            first_chars = as_str(self.orig_df[col_name]).str.lstrip().str[:1]
             if first_chars.nunique() == 1:
                 continue
 
@@ -493,7 +476,7 @@ class StringTestsMixin(CheckerState):
             if value_lens_arr.quantile(0.9) <= 1:
                 continue
 
-            test_series = as_str(self.orig_df[col_name]).str[:1].isin(list(string.ascii_lowercase))
+            test_series = as_str(self.orig_df[col_name]).str.lstrip().str[:1].str.islower()
             test_series = test_series | self.orig_df[col_name].isna()
             self._process_analysis_binary(
                 test_id,
@@ -807,8 +790,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_number_alphanumeric_chars(self, test_id):
         """
-        Handling null values: null values are considered zero-length strings, with no alphabetic, numeric, or
-        special characters.
+        Handling null values: null values are not counted, so neither support nor violate a pattern.
         """
 
         nunique_dict = self.get_nunique_dict()
@@ -817,8 +799,8 @@ class StringTestsMixin(CheckerState):
             if nunique_dict[col_name] < 5:
                 continue
 
-            alnum_counts = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalnum()]))
-            test_series = [alnum_counts.median() if y else x for x, y in zip(alnum_counts, self.orig_df[col_name].isnull())]
+            test_series = as_str(self.orig_df[col_name].fillna("")).apply(lambda x: len([e for e in x if e.isalnum()]))
+            test_series = test_series.mask(self.orig_df[col_name].isna())
             self._process_analysis_counts(
                 test_id,
                 [col_name],
@@ -1596,6 +1578,9 @@ class StringTestsMixin(CheckerState):
     def _check_grouped_strings(self, test_id):
         """
         This is similar to GROUPED_STRINGS_BY_NUMERIC, but uses the row order the data is received in.
+
+        Handling null values: as in GROUPED_STRINGS_BY_NUMERIC, null values are treated as any other value and so if
+        interspersed through the column will negate any grouping.
         """
         for col_name in self.string_cols + self.binary_cols:
             if self.orig_df[col_name].nunique() > math.sqrt(self.num_rows):
@@ -1643,8 +1628,9 @@ class StringTestsMixin(CheckerState):
     def _check_rare_pairs(self, test_id):
         """
         This flags pairs of values, where neither value is by itself rare, but the combination is. This is performed
-        on each pair of string columns. The test RARE_COMBINATION covers pairs of numeric columns. For pairs of
-        columns with one string and one numeric, there are the VERY_LARGE_GIVEN_VALUE and VERY_SMALL_GIVEN_VALUE tests.
+        on each pair of binary columns that have the same two values. The test RARE_COMBINATION covers pairs of
+        numeric columns. For pairs of columns with one string and one numeric, there are the LARGE_GIVEN_VALUE and
+        SMALL_GIVEN_VALUE tests.
         """
         num_pairs, pairs = self._get_binary_column_pairs_unique()
         if num_pairs > self.max_combinations:
@@ -2775,8 +2761,8 @@ class StringTestsMixin(CheckerState):
                            for w, x, y, z in zip(
                     sample_is_missing_dict[col_name_1],
                     sample_is_missing_dict[col_name_2],
-                    as_str(self.sample_df[col_name_1]),
-                    as_str(self.sample_df[col_name_2])
+                    as_str(self.sample_df[col_name_1]).str.strip(),
+                    as_str(self.sample_df[col_name_2]).str.strip()
                 )]
             if test_series.count(False) > 1:
                 continue
@@ -2812,6 +2798,11 @@ class StringTestsMixin(CheckerState):
 
 
     def _check_a_suffix_of_b(self, test_id):
+        """
+        Handling null values: This test skips columns that are primarily null. Any patterns are not considered violated
+        in a given row if either cell is null.
+        """
+
         is_missing_dict = self.get_is_missing_dict()
         sample_is_missing_dict = self.get_sample_is_missing_dict()
 
@@ -2821,6 +2812,8 @@ class StringTestsMixin(CheckerState):
                 print(f"  Skipping test. There are {num_pairs:,} pairs of string columns. "
                        f"max_combinations is currently set to {self.max_combinations:,}.")
             return
+
+        cols_same_bool_dict = self.get_cols_same_bool_dict()
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 500 == 0:
@@ -2832,13 +2825,17 @@ class StringTestsMixin(CheckerState):
             if is_missing_dict[col_name_2].tolist().count(True) > (self.num_rows / 2):
                 continue
 
+            # Skip if the two columns are largely the same
+            if cols_same_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
+                continue
+
             # Test first on a sample
             test_series = [True if (w or x) else ((len(y) < len(z)) and (y == z[-len(y):]))
                            for w, x, y, z in zip(
                     sample_is_missing_dict[col_name_1],
                     sample_is_missing_dict[col_name_2],
-                    as_str(self.sample_df[col_name_1]),
-                    as_str(self.sample_df[col_name_2])
+                    as_str(self.sample_df[col_name_1]).str.strip(),
+                    as_str(self.sample_df[col_name_2]).str.strip()
                 )]
             if test_series.count(False) > 1:
                 continue
@@ -2847,8 +2844,8 @@ class StringTestsMixin(CheckerState):
                            for w, x, y, z in zip(
                     is_missing_dict[col_name_1],
                     is_missing_dict[col_name_2],
-                    as_str(self.orig_df[col_name_1]),
-                    as_str(self.orig_df[col_name_2])
+                    as_str(self.orig_df[col_name_1]).str.strip(),
+                    as_str(self.orig_df[col_name_2]).str.strip()
                 )]
             self._process_analysis_binary(
                 test_id,
@@ -3092,6 +3089,10 @@ class StringTestsMixin(CheckerState):
                     sub_dfs_dict[v] = self.orig_df[self.orig_df[col_name_1] == v]
 
             for col_name_2 in self.numeric_cols + self.date_cols:
+
+                if self.orig_df[col_name_2].nunique() < math.sqrt(self.num_rows):
+                    continue
+
                 test_series = [True] * self.num_rows
                 for v in common_values:
                     sub_df = sub_dfs_dict[v]
@@ -3430,7 +3431,7 @@ class StringTestsMixin(CheckerState):
                         q1 = pd.to_datetime(sub_df[col_name_2]).quantile(0.25, interpolation='midpoint')
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
-                            # Use a coeffiecient of 1.5 for dates, which tend to vary much less than numeric values.
+                            # Use a coefficient of 1.5 for dates, which tend to vary much less than numeric values.
                             upper_limit_subset = q3 + (1.5 * (q3 - q1))
                         except Exception:
                             continue
@@ -3465,9 +3466,9 @@ class StringTestsMixin(CheckerState):
         Patterns with exception:
         """
         self._add_synthetic_column('small_given_prefix rand',
-                                    ['A-' + np.random.choice(list(string.ascii_letters))]*100 +
-                                    ['B-' + np.random.choice(list(string.ascii_letters))]*100 +
-                                    ['C-' + np.random.choice(list(string.ascii_letters))]*(self.num_synth_rows - 200))
+                                    ['A-' + np.random.choice(list(string.ascii_letters)) for _ in range(100)] +
+                                    ['B-' + np.random.choice(list(string.ascii_letters)) for _ in range(100)] +
+                                    ['C-' + np.random.choice(list(string.ascii_letters)) for _ in range(self.num_synth_rows - 200)])
         self._add_synthetic_column('small_given_prefix all', np.concatenate([
             np.random.randint(0, 100, 100),
             np.random.randint(100, 200, 100),
@@ -3511,6 +3512,11 @@ class StringTestsMixin(CheckerState):
             first_words = pd.Series([x[0] if len(x) > 0 else "" for x in col_vals.str.split()])
             first_words = first_words.mask(self.orig_df[col_name_1].isna().to_numpy())
             if first_words.nunique() > 10:
+                continue
+
+            # Skip columns where the set of unique first words is almost as large as the set of unique strings. In
+            # this case, the first word is not meaningful.
+            if first_words.nunique() > (col_vals[self.orig_df[col_name_1].notna()].nunique() / 2):
                 continue
             vc = first_words.value_counts()
             common_values = []
@@ -3568,7 +3574,8 @@ class StringTestsMixin(CheckerState):
                         q1 = pd.to_datetime(sub_df[col_name_2]).quantile(0.25, interpolation='midpoint')
                         q3 = pd.to_datetime(sub_df[col_name_2]).quantile(0.75, interpolation='midpoint')
                         try:
-                            lower_limit_subset = q1 - (self.iqr_limit * (q3 - q1))
+                            # Use a coefficient of 1.5 for dates, which tend to vary much less than numeric values.
+                            lower_limit_subset = q1 - (1.5 * (q3 - q1))
                         except Exception:
                             continue
 
@@ -3895,7 +3902,7 @@ class StringTestsMixin(CheckerState):
 
     def _check_small_given_pair(self, test_id):
         """
-        As this test examines many subsets, it sets the threshold for large values based on 2.0 * self.idr_limit.
+        As this test examines many subsets, it sets the threshold for small values based on 2.0 * self.iqr_limit.
 
         This considers only subsets that have larger values than normal for the column.
 
@@ -4104,20 +4111,6 @@ class StringTestsMixin(CheckerState):
         assert isinstance(numeric_df, pd.DataFrame)
         numeric_np = numeric_df.values
 
-        # Create a sample. We do not use self.sample_df, as it may have Nulls removed, and we do not wish to remove
-        # rows where the conditioning column has Null values
-        sample_df = self.orig_df.sample(n=50)
-
-        # Create a sample array similarly
-        numeric_sample_df: pd.Series | pd.DataFrame | None = None
-        for col_name in self.numeric_cols:
-            if numeric_sample_df is None:
-                numeric_sample_df = convert_to_numeric(sample_df[col_name], self.column_medians[col_name])
-            else:
-                numeric_sample_df = pd.concat([numeric_sample_df, convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name])], axis=1)
-        assert isinstance(numeric_sample_df, pd.DataFrame)
-        numeric_sample_df.columns = self.numeric_cols
-
         # Determine if there are too many combinations to execute
         num_pairs, numeric_pairs = self._get_numeric_column_pairs_unique()
         total_combinations = num_pairs * (len(self.string_cols) + len(self.binary_cols))
@@ -4165,17 +4158,9 @@ class StringTestsMixin(CheckerState):
                 col_idx_1 = self.numeric_cols.index(col_name_1)
                 col_idx_2 = self.numeric_cols.index(col_name_2)
 
-                # Skip any pairs of columns that are correlated even if not conditioning on another column
-                try:
-                    corr = pairwise_correlation(numeric_sample_df[col_name_1], numeric_sample_df[col_name_2])
-                except Exception as e:
-                    if self.DEBUG_MSG:
-                        if colored:
-                            print(colored(f"Error calculating correlation in {test_id}: {e}", 'red'))
-                        else:
-                            print(f"Error calculating correlation in {test_id}: {e}")
-                    continue
-                if abs(corr) >= 0.75:
+                # Skip any pairs of columns that are correlated even if not conditioning on another column. This is
+                # the Pearson correlation of the full columns, over the rows where both values are present.
+                if abs(self.pearson_corr.loc[col_name_1, col_name_2]) >= 0.75:
                     continue
 
                 # We ensure at least one subset was large enough to test and was correlated, and that there aren't
