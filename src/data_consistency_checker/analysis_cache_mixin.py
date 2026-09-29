@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 
 from .checker_state import CheckerState
@@ -587,12 +588,16 @@ class AnalysisCacheMixin(CheckerState):
             for col_name_1, col_name_2 in pairs:
                 triples_arr.append(tuple(sorted([bin_col, col_name_1, col_name_2])))
 
-        # Examine each triple
+        # Examine each triple, with each column's null mask computed once
         threshold = self.num_rows * 0.9
+        null_masks = {c: self.orig_df[c].isna().to_numpy() for c in {c for triple in triples_arr for c in triple}}
+        null_counts = {c: int(np.count_nonzero(mask)) for c, mask in null_masks.items()}
         for triple in triples_arr:
-            triple = list(triple)
-            self.col_triples_all_null_bool_dict[tuple(sorted(triple))] = \
-                self.orig_df[triple].isna().any(axis=1).sum() > threshold
+            a, b, c = sorted(triple)
+            # Rows with a null in the triple are at most the columns' nulls added up
+            self.col_triples_all_null_bool_dict[(a, b, c)] = \
+                (null_counts[a] + null_counts[b] + null_counts[c] > threshold) and \
+                bool(np.count_nonzero(null_masks[a] | null_masks[b] | null_masks[c]) > threshold)
 
         return self.col_triples_all_null_bool_dict
 
