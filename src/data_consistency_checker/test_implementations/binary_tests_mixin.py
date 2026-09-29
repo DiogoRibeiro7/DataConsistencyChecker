@@ -972,6 +972,30 @@ class BinaryTestsMixin(CheckerState):
         sub_df_0: pd.DataFrame | None
         sub_df_1: pd.DataFrame | None
 
+        # The number of rows with the most frequent value, per column. Filled in as the columns are reached.
+        top_count_dict = {}
+
+        def get_top_count(col_name):
+            if col_name not in top_count_dict:
+                top_count_dict[col_name] = self.orig_df[col_name].value_counts().values[0]
+            return top_count_dict[col_name]
+
+        # For the current binary column, per column: the values, and which are missing, in the samples of rows with
+        # each binary value, as numpy arrays. None where these are not numeric or boolean numpy arrays, which pandas
+        # compares as numpy does. Filled in as the columns are reached.
+        sample_arrays_dict: dict = {}
+
+        def get_sample_arrays(col_name):
+            if col_name not in sample_arrays_dict:
+                col_0 = sample_sub_df_0[col_name]
+                col_1 = sample_sub_df_1[col_name]
+                if all(isinstance(x.dtype, np.dtype) and (x.dtype.kind in 'biuf') for x in (col_0, col_1)):
+                    sample_arrays_dict[col_name] = \
+                        (col_0.to_numpy(), col_0.isna().to_numpy(), col_1.to_numpy(), col_1.isna().to_numpy())
+                else:
+                    sample_arrays_dict[col_name] = None
+            return sample_arrays_dict[col_name]
+
         def test_set(bin_col, col_name_2, col_name_3):
             nonlocal sub_df_0, sub_df_1
 
@@ -985,41 +1009,58 @@ class BinaryTestsMixin(CheckerState):
 
             # Check the two columns that have the values that are checked have a reasonable number of values besides
             # the most frequent
-            if self.orig_df[col_name_2].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
+            if get_top_count(col_name_2) > (self.num_rows - self.freq_contamination_level):
                 return
-            if self.orig_df[col_name_3].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
+            if get_top_count(col_name_3) > (self.num_rows - self.freq_contamination_level):
                 return
 
-            # Test first on a sample of the rows where the bin_col has value 0
-            if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
-                    sample_sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_0 = sample_sub_df_0[col_name_2].astype(str) == sample_sub_df_0[col_name_3].astype(str)
+            sample_arrays_2 = get_sample_arrays(col_name_2)
+            sample_arrays_3 = get_sample_arrays(col_name_3)
+            if (sample_arrays_2 is not None) and (sample_arrays_3 is not None):
+                # The same tests on the samples as below, comparing numpy arrays, as pandas does for these columns
+                vals_0_2, isna_0_2, vals_1_2, isna_1_2 = sample_arrays_2
+                vals_0_3, isna_0_3, vals_1_3, isna_1_3 = sample_arrays_3
+                is_match_0 = (vals_0_2 == vals_0_3) | (isna_0_2 & isna_0_3)
+                num_match_0 = np.count_nonzero(is_match_0)
+                num_mismatch_0 = len(is_match_0) - num_match_0
+                if (num_match_0 > 2) and (num_mismatch_0 > 2):
+                    return
+                is_match_1 = (vals_1_2 == vals_1_3) | (isna_1_2 & isna_1_3)
+                num_match_1 = np.count_nonzero(is_match_1)
+                num_mismatch_1 = len(is_match_1) - num_match_1
+                sample_okay_val_0 = (num_mismatch_0 < 1) and (num_match_1 < 1)
+                sample_okay_val_1 = (num_match_0 < 1) and (num_mismatch_1 < 1)
             else:
-                test_series_0 = sample_sub_df_0[col_name_2] == sample_sub_df_0[col_name_3]
-            test_series_0 = test_series_0 | (sample_sub_df_0[col_name_2].isna() & sample_sub_df_0[col_name_3].isna())
+                # Test first on a sample of the rows where the bin_col has value 0
+                if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
+                        sample_sub_df_0[col_name_3].dtype.name == 'category':
+                    test_series_0 = sample_sub_df_0[col_name_2].astype(str) == sample_sub_df_0[col_name_3].astype(str)
+                else:
+                    test_series_0 = sample_sub_df_0[col_name_2] == sample_sub_df_0[col_name_3]
+                test_series_0 = test_series_0 | (sample_sub_df_0[col_name_2].isna() & sample_sub_df_0[col_name_3].isna())
 
-            # Before calculating test_series_1, determine if test_series_0 is mostly True or mostly False. If so,
-            # we can return.
-            if (test_series_0.tolist().count(True) > 2) and (test_series_0.tolist().count(False) > 2):
-                return
+                # Before calculating test_series_1, determine if test_series_0 is mostly True or mostly False. If so,
+                # we can return.
+                if (test_series_0.tolist().count(True) > 2) and (test_series_0.tolist().count(False) > 2):
+                    return
 
-            # Test on a sample of the rows where bin_col has value 1
-            if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
-                    sample_sub_df_0[col_name_3].dtype.name == 'category':
-                test_series_1 = sample_sub_df_1[col_name_2].astype(str) == sample_sub_df_1[col_name_3].astype(str)
-            else:
-                test_series_1 = sample_sub_df_1[col_name_2] == sample_sub_df_1[col_name_3]
-            test_series_1 = test_series_1 | (sample_sub_df_1[col_name_2].isna() & sample_sub_df_1[col_name_3].isna())
+                # Test on a sample of the rows where bin_col has value 1
+                if sample_sub_df_0[col_name_2].dtype.name == 'category' or \
+                        sample_sub_df_0[col_name_3].dtype.name == 'category':
+                    test_series_1 = sample_sub_df_1[col_name_2].astype(str) == sample_sub_df_1[col_name_3].astype(str)
+                else:
+                    test_series_1 = sample_sub_df_1[col_name_2] == sample_sub_df_1[col_name_3]
+                test_series_1 = test_series_1 | (sample_sub_df_1[col_name_2].isna() & sample_sub_df_1[col_name_3].isna())
 
-            # Test if the binary column has val_0 iff the other 2 columns are equal
-            sample_okay_val_0 = False
-            if (test_series_0.tolist().count(False) < 1) and (test_series_1.tolist().count(True) < 1):
-                sample_okay_val_0 = True
+                # Test if the binary column has val_0 iff the other 2 columns are equal
+                sample_okay_val_0 = False
+                if (test_series_0.tolist().count(False) < 1) and (test_series_1.tolist().count(True) < 1):
+                    sample_okay_val_0 = True
 
-            # Test if the binary column has val_1 iff the other 2 columns are equal
-            sample_okay_val_1 = False
-            if (test_series_0.tolist().count(True) < 1) and (test_series_1.tolist().count(False) < 1):
-                sample_okay_val_1 = True
+                # Test if the binary column has val_1 iff the other 2 columns are equal
+                sample_okay_val_1 = False
+                if (test_series_0.tolist().count(True) < 1) and (test_series_1.tolist().count(False) < 1):
+                    sample_okay_val_1 = True
 
             if not sample_okay_val_0 and not sample_okay_val_1:
                 return
@@ -1152,6 +1193,7 @@ class BinaryTestsMixin(CheckerState):
             # dataframe as well.
             sample_sub_df_0 = self.sample_df[self.sample_df[bin_col] == val0]
             sample_sub_df_1 = self.sample_df[self.sample_df[bin_col] == val1]
+            sample_arrays_dict.clear()
             sub_df_0 = None
             sub_df_1 = None
 
@@ -1238,25 +1280,196 @@ class BinaryTestsMixin(CheckerState):
 
         nunique_dict = self.get_nunique_dict()
 
-        # Calculate and cache the sums of each pair of numeric columns
-        sums_arr_dict = {}
+        # Where the row labels are the row positions, as with the index set by init_data(), the tests may be done
+        # with numpy arrays of the columns' values
+        is_default_index = isinstance(self.orig_df.index, pd.RangeIndex) and \
+            self.orig_df.index.equals(pd.RangeIndex(self.num_rows))
+
+        # Per column: the number of rows with the most frequent value, which rows are missing values and which have
+        # values, and for numeric columns, the values filled with the median as a numpy array, or None where this
+        # may not be used in place of the Series. Filled in as the columns are reached.
+        top_count_dict = {}
+        isna_arr_dict = {}
+        notna_arr_dict = {}
+        filled_arr_dict = {}
+
+        def get_top_count(col_name):
+            if col_name not in top_count_dict:
+                top_count_dict[col_name] = self.orig_df[col_name].value_counts().values[0]
+            return top_count_dict[col_name]
+
+        def get_isna_arr(col_name):
+            if col_name not in isna_arr_dict:
+                isna_arr_dict[col_name] = self.orig_df[col_name].isna().to_numpy()
+            return isna_arr_dict[col_name]
+
+        def get_notna_arr(col_name):
+            if col_name not in notna_arr_dict:
+                notna_arr_dict[col_name] = self.orig_df[col_name].notna().to_numpy()
+            return notna_arr_dict[col_name]
+
+        def get_filled_arr(col_name):
+            if col_name not in filled_arr_dict:
+                filled_vals = self.numeric_vals_filled[col_name]
+                is_usable = is_default_index and (filled_vals.dtype == np.float64) and \
+                    filled_vals.index.equals(self.orig_df.index)
+                filled_arr_dict[col_name] = filled_vals.to_numpy() if is_usable else None
+            return filled_arr_dict[col_name]
+
+        # The sum of a pair of numeric columns, and which rows have values in both columns, as pandas Series
+        def get_sum_series(num_col_1, num_col_2):
+            sum_arr = pd.Series(self.numeric_vals_filled[num_col_1] + self.numeric_vals_filled[num_col_2])
+            return sum_arr.fillna(self.column_medians[num_col_1] + self.column_medians[num_col_2])
+
+        def get_non_null_series(num_col_1, num_col_2):
+            return self.orig_df[num_col_1].notna() & self.orig_df[num_col_2].notna()
+
+        # Calculate and cache the sorted sums of each pair of numeric columns. Also cache, where possible, the sums
+        # and which rows have values in both columns as numpy arrays (else None).
         sorted_sums_arr_dict = {}
-        non_null_dict = {}
+        sum_vals_dict: dict[tuple, np.ndarray | None] = {}
+        non_null_arr_dict = {}
         for num_col_1, num_col_2 in pairs:
             # Check the two columns that have the values that are checked have a reasonable number of values besides
             # the most frequent
-            if self.orig_df[num_col_1].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
+            if get_top_count(num_col_1) > (self.num_rows - self.freq_contamination_level):
                 continue
-            if self.orig_df[num_col_2].value_counts().values[0] > (self.num_rows - self.freq_contamination_level):
+            if get_top_count(num_col_2) > (self.num_rows - self.freq_contamination_level):
                 continue
 
             if not self.check_columns_same_scale_2(num_col_1, num_col_2):
                 continue
-            sum_arr = pd.Series(self.numeric_vals_filled[num_col_1] + self.numeric_vals_filled[num_col_2])
-            sum_arr = sum_arr.fillna(self.column_medians[num_col_1] + self.column_medians[num_col_2])
-            sums_arr_dict[(num_col_1, num_col_2)] = sum_arr
-            sorted_sums_arr_dict[(num_col_1, num_col_2)] = pd.Series(sorted(sum_arr))
-            non_null_dict[(num_col_1, num_col_2)] = self.orig_df[num_col_1].notna() & self.orig_df[num_col_2].notna()
+            filled_arr_1 = get_filled_arr(num_col_1)
+            filled_arr_2 = get_filled_arr(num_col_2)
+            fill_value = self.column_medians[num_col_1] + self.column_medians[num_col_2]
+            if (filled_arr_1 is None) or (filled_arr_2 is None) or not isinstance(fill_value, (float, np.floating)):
+                sum_vals_dict[(num_col_1, num_col_2)] = None
+                sorted_sums_arr_dict[(num_col_1, num_col_2)] = pd.Series(sorted(get_sum_series(num_col_1, num_col_2)))
+                continue
+
+            # The same values as get_sum_series()
+            sum_vals = filled_arr_1 + filled_arr_2
+            is_nan = np.isnan(sum_vals)
+            if is_nan.any():
+                sum_vals = np.where(is_nan, fill_value, sum_vals)
+                is_nan = np.isnan(sum_vals)
+            sum_vals_dict[(num_col_1, num_col_2)] = sum_vals
+            if is_nan.any():
+                sorted_sums_arr_dict[(num_col_1, num_col_2)] = pd.Series(sorted(sum_vals.tolist()))
+            else:
+                # Without NaN values, a stable sort gives the same order as sorted()
+                sorted_sums_arr_dict[(num_col_1, num_col_2)] = pd.Series(np.sort(sum_vals, kind='stable'))
+            non_null_arr_dict[(num_col_1, num_col_2)] = get_notna_arr(num_col_1) & get_notna_arr(num_col_2)
+
+        def get_bin_arrays(bin_col, val0, val1, bin_non_null):
+            """
+            Returns numpy arrays for the binary column: which rows have val0 and which have val1, as the loop below
+            finds them comparing one value at a time, which rows have a value, and which rows equal val0 and val1 as
+            check_nulls_matching() finds them. Returns None where the arrays may not give the same results as the
+            loop, such as where comparing a value to val0 or val1 does not give a bool, as with pd.NA values.
+            """
+            def is_bool(x):
+                return type(x) in (bool, np.bool_)
+
+            if not is_default_index:
+                return None
+            bin_dtype = self.orig_df[bin_col].dtype
+            if not isinstance(bin_dtype, np.dtype) or (bin_dtype.kind not in 'biufO'):
+                return None
+            try:
+                # list.count(val0) also counts the values that are val0, so val0 must equal itself
+                if not all(is_bool(v == v) and (v == v) for v in (val0, val1)):
+                    return None
+                vals = self.orig_df[bin_col].tolist()
+                is_val0 = [x == val0 for x in vals]
+                is_val1 = [x == val1 for x in vals]
+            except Exception:
+                return None
+            if not (all(map(is_bool, is_val0)) and all(map(is_bool, is_val1))):
+                return None
+            is_eq_0 = self.orig_df[bin_col] == val0
+            is_eq_1 = self.orig_df[bin_col] == val1
+            if (is_eq_0.dtype != bool) or (is_eq_1.dtype != bool):
+                return None
+            return (np.array(is_val0, dtype=bool), np.array(is_val1, dtype=bool), bin_non_null.to_numpy(),
+                    is_eq_0.to_numpy(), is_eq_1.to_numpy())
+
+        def test_pair_with_arrays(bin_col, val0, val1, num_val_0, num_val_1, bin_arrays, num_col_1, num_col_2):
+            """
+            The same test as in the loop below, for one binary column and one pair of numeric columns, but using
+            numpy arrays in place of pandas operations and loops over the rows. The steps, their order and the early
+            exits are the same.
+            """
+            is_val0, is_val1, bin_non_null, is_eq_0, is_eq_1 = bin_arrays
+            sum_vals = sum_vals_dict[(num_col_1, num_col_2)]
+            assert sum_vals is not None  # checked by the caller
+            sorted_sum_arr = sorted_sums_arr_dict[(num_col_1, num_col_2)]
+
+            # Rows with a missing value in any of the three columns neither support nor violate the pattern, so
+            # the thresholds are found among the other rows
+            non_null = non_null_arr_dict[(num_col_1, num_col_2)] & bin_non_null
+            num_non_null_val_0, num_non_null_val_1 = num_val_0, num_val_1
+            if not non_null.all():
+                sorted_sum_arr = pd.Series(sorted(sum_vals[non_null].tolist()))
+                num_non_null_val_0 = int(np.count_nonzero(is_val0 & non_null))
+                num_non_null_val_1 = int(np.count_nonzero(is_val1 & non_null))
+                if (num_non_null_val_0 == 0) or (num_non_null_val_1 == 0):
+                    return
+
+            # Check, on the first 50 rows, if the binary column appears to have val_0 for smaller sums, or val_1 for
+            # smaller sums
+            val_0_for_smaller = False
+            val_1_for_smaller = False
+
+            val_at_frac_0 = sorted_sum_arr[num_non_null_val_0]
+            is_below_threshold_0 = (sum_vals[:50] < val_at_frac_0) & non_null[:50]
+            if np.count_nonzero(is_val1[:50] & is_below_threshold_0) < self.freq_contamination_level:
+                val_0_for_smaller = True
+
+            if not val_0_for_smaller:
+                val_at_frac_1 = sorted_sum_arr[num_non_null_val_1]
+                is_below_threshold_1 = (sum_vals[:50] < val_at_frac_1) & non_null[:50]
+                if np.count_nonzero(is_val0[:50] & is_below_threshold_1) < self.freq_contamination_level:
+                    val_1_for_smaller = True
+
+            if not val_0_for_smaller and not val_1_for_smaller:
+                return
+
+            # The values of the binary column for the smaller sums, and for the larger sums
+            if val_0_for_smaller:
+                threshold = val_at_frac_0
+                val_small, val_large, is_val_small, is_val_large = val0, val1, is_val0, is_val1
+            else:
+                threshold = val_at_frac_1
+                val_small, val_large, is_val_small, is_val_large = val1, val0, is_val1, is_val0
+            test_arr = (is_val_small & (sum_vals <= threshold)) | (is_val_large & (sum_vals >= threshold))
+            is_missing_arr = get_isna_arr(bin_col) | get_isna_arr(num_col_1) | get_isna_arr(num_col_2)
+
+            # Test on a sample of rows
+            sample_size = 25
+            sample_test_arr = test_arr[:sample_size] | is_missing_arr[:sample_size]
+            if (len(sample_test_arr) - np.count_nonzero(sample_test_arr)) > 1:
+                return
+
+            # Test on the full columns, first checking if either numeric column is mostly Null for either binary value
+            if bin_col in (num_col_1, num_col_2):
+                if not check_nulls_matching(bin_col, num_col_1, num_col_2):
+                    return
+            else:
+                for is_eq in (is_eq_0, is_eq_1):
+                    num_rows_eq = np.count_nonzero(is_eq)
+                    if np.count_nonzero(is_eq & get_isna_arr(num_col_1)) > (num_rows_eq * 0.75):
+                        return
+                    if np.count_nonzero(is_eq & get_isna_arr(num_col_2)) > (num_rows_eq * 0.75):
+                        return
+
+            self._process_analysis_binary(
+                test_id,
+                [num_col_1, num_col_2, bin_col],
+                test_arr | is_missing_arr,
+                (f'Column "{bin_col}" is consistently {val_small} when the sum of columns "{num_col_1}" and '
+                 f'"{num_col_2}" is under {threshold} and {val_large} when the sum is over.'),
+            )
 
         for bin_idx, bin_col in enumerate(self.binary_cols):
             if self.verbose >= 2 and bin_idx > 0 and bin_idx % 1 == 0:
@@ -1271,20 +1484,26 @@ class BinaryTestsMixin(CheckerState):
             if num_val_1 < (bin_non_null.sum() * 0.1):
                 continue
 
+            bin_arrays = get_bin_arrays(bin_col, val0, val1, bin_non_null)
+
             for num_col_1, num_col_2 in pairs:
                 # Pairs skipped above, with a near-constant column or columns on different scales, have no sums
-                if (num_col_1, num_col_2) not in sums_arr_dict:
+                if (num_col_1, num_col_2) not in sorted_sums_arr_dict:
                     continue
 
                 if (nunique_dict[num_col_1] < 10) or (nunique_dict[num_col_2] < 10):
                     continue
 
-                sum_arr = sums_arr_dict[(num_col_1, num_col_2)]
+                if (bin_arrays is not None) and (sum_vals_dict[(num_col_1, num_col_2)] is not None):
+                    test_pair_with_arrays(bin_col, val0, val1, num_val_0, num_val_1, bin_arrays, num_col_1, num_col_2)
+                    continue
+
+                sum_arr = get_sum_series(num_col_1, num_col_2)
                 sorted_sum_arr = sorted_sums_arr_dict[(num_col_1, num_col_2)]
 
                 # Rows with a missing value in any of the three columns neither support nor violate the pattern, so
                 # the thresholds are found among the other rows
-                non_null = non_null_dict[(num_col_1, num_col_2)] & bin_non_null
+                non_null = get_non_null_series(num_col_1, num_col_2) & bin_non_null
                 num_non_null_val_0, num_non_null_val_1 = num_val_0, num_val_1
                 if not non_null.all():
                     sorted_sum_arr = pd.Series(sorted(sum_arr[non_null]))

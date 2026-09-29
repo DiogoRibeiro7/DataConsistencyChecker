@@ -525,6 +525,53 @@ class MultiColumnTestsMixin(CheckerState):
                 cols.append(col_name)
                 num_unique_vals_dict[col_name] = self.orig_df[col_name].nunique()
 
+        # For each column: codes for its values, as DataFrame.duplicated() finds them, with missing values sharing a
+        # code of their own, the number of codes, which rows have values, and if any do not. Filled in as the columns
+        # are reached.
+        codes_dict = {}
+        num_codes_dict = {}
+        notna_dict = {}
+        has_na_dict = {}
+
+        def add_codes(col_name):
+            codes, uniques = pd.factorize(self.orig_df[col_name].values, size_hint=self.num_rows)
+            codes = codes.astype(np.int64)
+            num_codes = len(uniques)
+            if (codes == -1).any():
+                codes = codes + 1
+                num_codes += 1
+            codes_dict[col_name] = codes
+            num_codes_dict[col_name] = num_codes
+            notna_dict[col_name] = self.orig_df[col_name].notna().to_numpy()
+            has_na_dict[col_name] = not notna_dict[col_name].all()
+
+        def may_have_few_duplicates(subset):
+            """
+            Returns False if the number of duplicated rows without missing values, num_dup below, cannot be between
+            0 and freq_contamination_level (exclusive): where no rows are duplicated, or where the rows duplicated,
+            less the rows with a missing value, are freq_contamination_level or more. Returns True otherwise, including
+            where there are too many combinations of codes to count them this way.
+            """
+            if self.num_rows == 0:
+                return True
+            ids = np.zeros(self.num_rows, dtype=np.int64)
+            num_ids = 1
+            for col_name in subset:
+                if col_name not in codes_dict:
+                    add_codes(col_name)
+                num_ids *= num_codes_dict[col_name]
+                if num_ids > (self.num_rows * 8):
+                    return True
+                ids = ids * num_codes_dict[col_name] + codes_dict[col_name]
+            num_duplicated = self.num_rows - np.count_nonzero(np.bincount(ids))
+            if num_duplicated == 0:
+                return False
+            num_rows_missing = 0
+            if any(has_na_dict[col_name] for col_name in subset):
+                num_rows_missing = self.num_rows - np.count_nonzero(np.logical_and.reduce(
+                    [notna_dict[col_name] for col_name in subset]))
+            return (num_duplicated - num_rows_missing) < self.freq_contamination_level
+
         found_any = False
         printed_subset_size_msg = False
         for subset_size in range(len(cols), 1, -1):
@@ -543,16 +590,14 @@ class MultiColumnTestsMixin(CheckerState):
             subsets = list(combinations(cols, subset_size))
             if self.verbose >= 2 and len(cols) > 15:
                 print(f"    Examining subsets of size {subset_size}. There are {len(subsets):,} subsets.")
-            for subset in subsets:
-                max_combinations = 1
-                for c in subset:
-                    max_combinations *= num_unique_vals_dict[c]
-
+            # The number of combinations of the unique values in each subset, in the same order as the subsets
+            subsets_num_combinations = map(math.prod, combinations([num_unique_vals_dict[c] for c in cols], subset_size))
+            for subset, max_combinations in zip(subsets, subsets_num_combinations):
                 # If there are too few combinations to make unique combinations impossible (the number of combinations
                 # is less than the number of rows), do not test. Also do not test if it will be unremarkable if there
                 # are all unique combinations. The threshold for this is arbitrary, but set to a small multiple of the
                 # number of rows.
-                if self.num_rows <= max_combinations <= (self.num_rows * 2):
+                if self.num_rows <= max_combinations <= (self.num_rows * 2) and may_have_few_duplicates(subset):
                     # Rows with a missing value in any of the columns neither support nor violate the pattern
                     test_series = self.orig_df.duplicated(subset=subset) & self.orig_df[list(subset)].notna().all(axis=1)
                     num_dup = test_series.tolist().count(True)
