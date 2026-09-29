@@ -338,6 +338,22 @@ class NumericTestsMixin(CheckerState):
 
 
     def _check_rare_decimals(self, test_id):
+        def split_values(vals, split_cache):
+            """
+            Return the parts of np.format_float_positional() of each value, split on '.', formatting each distinct value
+            once: as a list with one element per distinct value, and the index of each value's element. Values are
+            distinct by their bits, so 0.0 and -0.0, which format differently, are kept apart.
+            """
+            vals_bits = np.ascontiguousarray(vals, dtype=np.float64).view(np.int64)
+            unique_bits, unique_idxs = np.unique(vals_bits, return_inverse=True)
+            split_vals = []
+            for bits, x in zip(unique_bits.tolist(), unique_bits.view(np.float64).tolist()):
+                if bits not in split_cache:
+                    # as_str() leaves the strings as they are
+                    split_cache[bits] = np.format_float_positional(x).split('.')
+                split_vals.append(split_cache[bits])
+            return split_vals, unique_idxs.reshape(-1)
+
         for col_name in self.numeric_cols:
             vals_arr = self.numeric_vals[col_name]  # This has the non-numeric values removed, but may contain NaNs.
             vals_arr = vals_arr.dropna()
@@ -345,7 +361,10 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             # The format_float_positional function ensures the strings are not in scientific notation
-            vals_arr = pd.Series([x[1] for x in as_str(vals_arr.apply(np.format_float_positional)).str.split('.')])
+            split_cache: dict[int, list[str]] = {}
+            split_vals, unique_idxs = split_values(vals_arr.to_numpy(), split_cache)
+            decimals = np.array([x[1] for x in split_vals], dtype=object)
+            vals_arr = pd.Series(decimals[unique_idxs].tolist())
             vc = vals_arr.value_counts()
             common_values = [x for x, y in zip(vc.index, vc.values) if y > (self.num_rows * 0.01)]
             if len(common_values) > 10:
@@ -356,10 +375,16 @@ class NumericTestsMixin(CheckerState):
                 continue
             if set(common_values) == {'', '1', '2', '3', '4', '5', '6', '7', '8', '9'}:
                 continue
-            test_series = [
-                True if y else x[1] in common_values
-                for x, y in zip(as_str(self.numeric_vals_filled[col_name].apply(np.format_float_positional)).str.split('.'),
-                self.orig_df[col_name].isna())]
+
+            # Missing values match the pattern. For the others, check if the decimals are common, once per distinct
+            # value, and only for the values in rows with no missing value.
+            is_na = self.orig_df[col_name].isna().to_numpy()
+            split_vals, unique_idxs = split_values(self.numeric_vals_filled[col_name].to_numpy(), split_cache)
+            is_checked = np.zeros(len(split_vals), dtype=bool)
+            is_checked[unique_idxs[~is_na]] = True
+            is_common = np.array(
+                [bool(checked) and (x[1] in common_values) for x, checked in zip(split_vals, is_checked)], dtype=bool)
+            test_series = is_na | is_common[unique_idxs]
             if len(common_values) == 1:
                 common_values_str = str(common_values)[1:-1].replace("\'\'", '0')
             else:
@@ -898,6 +923,9 @@ class NumericTestsMixin(CheckerState):
 
         num_bins = 50
 
+        # The bins are labelled 0, 1, 2, ..., the same as the categorical codes, which are -1 for missing values. So,
+        # the counts per bin, sorted by label, may be indexed by the label.
+
         for col_name in self.numeric_cols:
             # Skip columns with any non-numeric values
             if len(self.numeric_vals[col_name]) < self.num_rows:
@@ -932,22 +960,24 @@ class NumericTestsMixin(CheckerState):
             combined_bins_counts[-2] = list_counts[-1] + list_counts[-2] + list_counts[-3] + list_counts[-4]
             combined_bins_counts[-3] = list_counts[-1] + list_counts[-2] + list_counts[-3] + list_counts[-4] + list_counts[-5]
 
+            counts_arr = bin_counts.sort_index().to_numpy()
             for bin_id in bin_labels[3:-3]:
-                rows_count = bin_counts.loc[bin_id-3] + \
-                             bin_counts.loc[bin_id-2] + \
-                             bin_counts.loc[bin_id-1] + \
-                             bin_counts.loc[bin_id]   + \
-                             bin_counts.loc[bin_id+1] + \
-                             bin_counts.loc[bin_id+2] + \
-                             bin_counts.loc[bin_id+3]
+                rows_count = counts_arr[bin_id-3] + \
+                             counts_arr[bin_id-2] + \
+                             counts_arr[bin_id-1] + \
+                             counts_arr[bin_id]   + \
+                             counts_arr[bin_id+1] + \
+                             counts_arr[bin_id+2] + \
+                             counts_arr[bin_id+3]
                 combined_bins_counts[bin_id] = rows_count
-                if (bin_counts.sort_index().loc[bin_id+1:].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
-                    (bin_counts.sort_index().loc[:bin_id].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
+                if (counts_arr[bin_id+1:].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
+                    (counts_arr[:bin_id+1].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
                     (rows_count < self.freq_contamination_level):
                     rare_bins.append(bin_id)
             if len(rare_bins) == 0:
                 continue
-            test_series = np.array([x not in rare_bins for x in binned_values])
+            bin_codes = binned_values.cat.codes.to_numpy()
+            test_series = ~np.isin(bin_codes, rare_bins)
 
             self._process_analysis_binary(
                 test_id,
@@ -956,7 +986,8 @@ class NumericTestsMixin(CheckerState):
                 "The column consistently contains values that have several similar values in the column",
                 (f" -- any values with fewer than an average of {math.floor(self.freq_contamination_level)} neighbors "
                  f"within their and the neighboring bins (width {bin_width:.4f})"),
-                display_info={'Number in Range': [np.nan if pd.isna(x) else combined_bins_counts[x] for x in binned_values]}
+                display_info={
+                    'Number in Range': [np.nan if x < 0 else combined_bins_counts[x] for x in bin_codes.tolist()]}
             )
 
         for col_name in self.date_cols:
@@ -987,22 +1018,24 @@ class NumericTestsMixin(CheckerState):
             combined_bins_counts[-2] = list_counts[-1] + list_counts[-2] + list_counts[-3] + list_counts[-4]
             combined_bins_counts[-3] = list_counts[-1] + list_counts[-2] + list_counts[-3] + list_counts[-4] + list_counts[-5]
 
+            counts_arr = bin_counts.sort_index().to_numpy()
             for bin_id in bin_labels[3:-3]:
-                rows_count = bin_counts.loc[bin_id-3] + \
-                             bin_counts.loc[bin_id-2] + \
-                             bin_counts.loc[bin_id-1] + \
-                             bin_counts.loc[bin_id]   + \
-                             bin_counts.loc[bin_id+1] + \
-                             bin_counts.loc[bin_id+2] + \
-                             bin_counts.loc[bin_id+3]
+                rows_count = counts_arr[bin_id-3] + \
+                             counts_arr[bin_id-2] + \
+                             counts_arr[bin_id-1] + \
+                             counts_arr[bin_id]   + \
+                             counts_arr[bin_id+1] + \
+                             counts_arr[bin_id+2] + \
+                             counts_arr[bin_id+3]
                 combined_bins_counts[bin_id] = rows_count
-                if (bin_counts.sort_index().loc[bin_id+1:].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
-                        (bin_counts.sort_index().loc[:bin_id].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
+                if (counts_arr[bin_id+1:].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
+                        (counts_arr[:bin_id+1].sum() > (self.num_valid_rows[col_name] / 10.0)) and \
                         (rows_count < self.freq_contamination_level) and (rows_count > 0):
                     rare_bins.append(bin_id)
             if len(rare_bins) == 0:
                 continue
-            test_series = np.array([x not in rare_bins for x in binned_values])
+            bin_codes = binned_values.cat.codes.to_numpy()
+            test_series = ~np.isin(bin_codes, rare_bins)
 
             self._process_analysis_binary(
                 test_id,
@@ -1011,7 +1044,8 @@ class NumericTestsMixin(CheckerState):
                 "The column consistently contains values that have several similar values in the column",
                 (f" -- any values with fewer than an average of {math.floor(self.freq_contamination_level)} neighbors "
                  f"within their and the neighboring bins (width {bin_width.days} days)"),
-                display_info={'Number in Range': [np.nan if pd.isna(x) else combined_bins_counts[x] for x in binned_values]})
+                display_info={
+                    'Number in Range': [np.nan if x < 0 else combined_bins_counts[x] for x in bin_codes.tolist()]})
 
 
     def _generate_very_small(self):
@@ -1147,11 +1181,45 @@ class NumericTestsMixin(CheckerState):
         # meaningful. Eg a constant of .25 or .5 is meaningless if the values are all integers, but is meaningful
         # if most values have decimals.
 
+        # Per column, the values convert_to_numeric() gives, with a mask of where it uses the filler value. These do
+        # not depend on the divisor, so are found once per column.
+        col_vals_dict = {}
+
+        def get_col_vals(col_name):
+            if col_name not in col_vals_dict:
+                col_vals = self.orig_df[col_name]
+                kind = col_vals.dtype.kind if isinstance(col_vals.dtype, np.dtype) else None
+                if kind == 'f':
+                    # float(x) of each value, with the filler used for the NaN values
+                    vals = col_vals.to_numpy(dtype=np.float64)
+                    col_vals_dict[col_name] = (vals, np.isnan(vals))
+                elif (kind in ('i', 'u')) and (len(col_vals) > 0) and \
+                        (int(col_vals.min()) >= -(2 ** 53)) and (int(col_vals.max()) <= 2 ** 53):
+                    # Ints are never missing, and are exact as floats up to 2 ** 53
+                    col_vals_dict[col_name] = (
+                        col_vals.to_numpy().astype(np.float64), np.zeros(len(col_vals), dtype=bool))
+                else:
+                    # Where the filler is used, the two fillers give different values. Elsewhere, both give float(x).
+                    vals = convert_to_numeric(col_vals, 0.0).to_numpy()
+                    vals_other_filler = convert_to_numeric(col_vals, 1.0).to_numpy()
+                    col_vals_dict[col_name] = (vals, vals.view(np.int64) != vals_other_filler.view(np.int64))
+            return col_vals_dict[col_name]
+
         def test_divisor(col_name, v):
-            vals_arr = convert_to_numeric(self.orig_df[col_name], v)
-            test_series = [math.isclose(x, y) or is_missing(x) or is_missing(y)
-                           for x, y in zip(round(vals_arr / v), vals_arr / v)]
-            n_multiples = test_series.count(True)
+            vals, uses_filler = get_col_vals(col_name)
+            vals_arr = np.where(uses_filler, v, vals)  # The same as convert_to_numeric(self.orig_df[col_name], v)
+            divided = vals_arr / v
+            rounded = np.round(divided)
+            # The same, value by value, as math.isclose(x, y) or is_missing(x) or is_missing(y), with x the rounded
+            # value and y the value: math.isclose() uses rel_tol=1e-09 and abs_tol=0.0, and is False for NaN values
+            # and, unless they are equal, infinite values
+            with np.errstate(invalid='ignore'):
+                diff = np.abs(divided - rounded)
+                is_close = (rounded == divided) | (
+                    ~np.isinf(rounded) & ~np.isinf(divided) &
+                    ((diff <= np.abs(1e-09 * divided)) | (diff <= np.abs(1e-09 * rounded)) | (diff <= 0.0)))
+            test_series = is_close | np.isnan(rounded) | np.isnan(divided)
+            n_multiples = np.count_nonzero(test_series)
             self._process_analysis_binary(
                 test_id,
                 [col_name],
@@ -1898,15 +1966,37 @@ class NumericTestsMixin(CheckerState):
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
+        # Each column is in many pairs, so what depends on only one column is found once
+        nunique_dict = {}
+        sample_info_dict = {}
+        col_info_dict = {}
+
+        def get_nunique(col_name):
+            if col_name not in nunique_dict:
+                nunique_dict[col_name] = self.orig_df[col_name].nunique()
+            return nunique_dict[col_name]
+
+        def get_sample_info(col_name):
+            if col_name not in sample_info_dict:
+                sample_info_dict[col_name] = (self.sample_df[col_name].notna().values,
+                                              self.sample_numeric_vals_filled[col_name].to_numpy())
+            return sample_info_dict[col_name]
+
+        def get_col_info(col_name):
+            if col_name not in col_info_dict:
+                col_info_dict[col_name] = (self.orig_df[col_name].notna().to_numpy(),
+                                           self.numeric_vals_filled[col_name].to_numpy())
+            return col_info_dict[col_name]
+
         min_unique_vals = math.sqrt(self.num_rows)
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if self.verbose >= 2 and (pair_idx > 0) and (pair_idx % 5000) == 0:
                 print(f"  Examining column set {pair_idx:,} of {num_pairs:,} pairs of numeric columns")
 
             # Check there are a sufficient number of unique values in both columns
-            if self.orig_df[col_name_1].nunique() < min_unique_vals:
+            if get_nunique(col_name_1) < min_unique_vals:
                 continue
-            if self.orig_df[col_name_2].nunique() < min_unique_vals:
+            if get_nunique(col_name_2) < min_unique_vals:
                 continue
 
             if not self.check_columns_same_scale_2(col_name_1, col_name_2, order=100):
@@ -1916,32 +2006,42 @@ class NumericTestsMixin(CheckerState):
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Test on a sample, using the rows with values in both columns
-            sample_non_null = (self.sample_df[col_name_1].notna() & self.sample_df[col_name_2].notna()).values
+            # Test on a sample, using the rows with values in both columns. The medians are found as before: with
+            # Series.median() and statistics.median() over the values as Python floats.
+            sample_not_na_1, sample_vals_1 = get_sample_info(col_name_1)
+            sample_not_na_2, sample_vals_2 = get_sample_info(col_name_2)
+            sample_non_null = sample_not_na_1 & sample_not_na_2
             if not sample_non_null.any():
                 continue
-            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1][sample_non_null]
-            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2][sample_non_null]
-            diffs_series = vals_arr_1 - vals_arr_2
-            if diffs_series.median() == 0:
+            diffs_arr = sample_vals_1[sample_non_null] - sample_vals_2[sample_non_null]
+            if pd.Series(diffs_arr).median() == 0:
                 continue  # If the two columns are the same, there is a separate test for that.
-            nmad = scipy.stats.median_abs_deviation(diffs_series) / statistics.median(diffs_series) \
-                if statistics.median(diffs_series) != 0 \
+            diffs_median = statistics.median(diffs_arr.tolist())
+            nmad = scipy.stats.median_abs_deviation(diffs_arr) / diffs_median \
+                if diffs_median != 0 \
                 else 0.0
             if nmad > 0.01:
                 continue
 
             # Get the median absolute deviation of the differences, normalized by the median. Rows with a missing value
             # in either column neither support nor violate the pattern, so these use only the other rows.
-            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
-            vals_arr_1 = self.numeric_vals_filled[col_name_1][non_null]
-            vals_arr_2 = self.numeric_vals_filled[col_name_2][non_null]
-            diffs_series = abs(vals_arr_1 - vals_arr_2)
-            diffs_series = diffs_series.replace([np.inf, -np.inf, np.nan], diffs_series.median())
-            nmad = scipy.stats.median_abs_deviation(diffs_series) / statistics.median(diffs_series)\
-                if statistics.median(diffs_series) != 0 \
+            not_na_1, vals_1 = get_col_info(col_name_1)
+            not_na_2, vals_2 = get_col_info(col_name_2)
+            non_null_arr = not_na_1 & not_na_2
+            diffs_arr = np.abs(vals_1[non_null_arr] - vals_2[non_null_arr])
+            # The same as Series.replace([np.inf, -np.inf, np.nan], median)
+            diffs_arr = np.where(np.isinf(diffs_arr) | np.isnan(diffs_arr), pd.Series(diffs_arr).median(), diffs_arr)
+            diffs_median = statistics.median(diffs_arr.tolist())
+            nmad = scipy.stats.median_abs_deviation(diffs_arr) / diffs_median \
+                if diffs_median != 0 \
                 else 0.0
             if nmad < 0.01:
+                # For the few pairs with a pattern, the results are found as pandas Series, as before
+                non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
+                vals_arr_1 = self.numeric_vals_filled[col_name_1][non_null]
+                vals_arr_2 = self.numeric_vals_filled[col_name_2][non_null]
+                diffs_series = abs(vals_arr_1 - vals_arr_2)
+                diffs_series = diffs_series.replace([np.inf, -np.inf, np.nan], diffs_series.median())
                 test_series = abs(diffs_series - statistics.median(diffs_series)) <= \
                               abs(0.01 * statistics.median(diffs_series))
                 test_series = test_series.reindex(self.orig_df.index, fill_value=True)
@@ -2163,6 +2263,26 @@ class NumericTestsMixin(CheckerState):
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
+        # Each column is in many pairs, so the arrays and counts that depend on only one column are found once
+        col_info_dict = {}
+        num_zero_dict = {}
+
+        def get_col_info(col_name):
+            if col_name not in col_info_dict:
+                col_vals = self.orig_df[col_name]
+                is_na = col_vals.isna().to_numpy()
+                # Missing values give False (or NA) here, but are excluded below using is_na in any case
+                not_trivial = ((col_vals != 0) & (col_vals != 1) & (col_vals != -1)).to_numpy(
+                    dtype=bool, na_value=False)
+                col_info_dict[col_name] = (
+                    is_na, ~is_na, not_trivial, is_na.sum(), self.numeric_vals_filled[col_name].to_numpy())
+            return col_info_dict[col_name]
+
+        def get_num_zero(col_name):
+            if col_name not in num_zero_dict:
+                num_zero_dict[col_name] = self.orig_df[col_name].tolist().count(0)
+            return num_zero_dict[col_name]
+
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                 print(f"  Examining pair number {pair_idx:,} of {num_pairs:,} pairs of numeric columns")
@@ -2171,37 +2291,35 @@ class NumericTestsMixin(CheckerState):
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
+            is_na_1, not_na_1, not_trivial_1, num_na_1, vals_1 = get_col_info(col_name_1)
+            is_na_2, not_na_2, not_trivial_2, num_na_2, vals_2 = get_col_info(col_name_2)
+
             # Rows with a missing value in either column neither support nor violate the pattern, so are not counted
-            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
-            num_valid = len(np.where(
-                non_null &
-                (self.orig_df[col_name_1] != 0) &
-                (self.orig_df[col_name_1] != 1) &
-                (self.orig_df[col_name_1] != -1) &
-                (self.orig_df[col_name_2] != 0) &
-                (self.orig_df[col_name_2] != 1) &
-                (self.orig_df[col_name_2] != -1))[0])
+            non_null = not_na_1 & not_na_2
+            num_valid = np.count_nonzero(non_null & not_trivial_1 & not_trivial_2)
             if num_valid < (non_null.sum() / 2):
                 continue
 
-            if self.orig_df[col_name_1].isna().sum() > (self.num_rows * 0.75):
+            if num_na_1 > (self.num_rows * 0.75):
                 continue
-            if self.orig_df[col_name_2].isna().sum() > (self.num_rows * 0.75):
+            if num_na_2 > (self.num_rows * 0.75):
                 continue
-            if self.orig_df[col_name_2].tolist().count(0) > (self.num_rows * 0.75):
+            if get_num_zero(col_name_2) > (self.num_rows * 0.75):
                 continue
 
-            val_arr_1 = self.numeric_vals_filled[col_name_1].where(non_null)
-            val_arr_2 = self.numeric_vals_filled[col_name_2].where(non_null)
-            test_series = np.where(val_arr_2 != 0, val_arr_1 / val_arr_2, val_arr_1).tolist()
+            val_arr_1 = np.where(non_null, vals_1, np.nan)
+            val_arr_2 = np.where(non_null, vals_2, np.nan)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                test_arr = np.where(val_arr_2 != 0, val_arr_1 / val_arr_2, val_arr_1)
 
             # Remove cases where there is trivially an even multiple
-            if (test_series.count(1) + test_series.count(0) + test_series.count(-1) + \
-                test_series.count(np.inf)) > self.freq_contamination_level:
+            if (np.count_nonzero(test_arr == 1) + np.count_nonzero(test_arr == 0) + np.count_nonzero(test_arr == -1) +
+                    np.count_nonzero(test_arr == np.inf)) > self.freq_contamination_level:
                 continue
 
-            test_series = [float(x).is_integer() for x in test_series]
-            test_series = np.array(test_series) | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+            # The same as float.is_integer(): finite and equal to its floor
+            test_series = np.isfinite(test_arr) & (np.floor(test_arr) == test_arr)
+            test_series = test_series | is_na_1 | is_na_2
             self._process_analysis_binary(
                 test_id,
                 [col_name_1, col_name_2],
@@ -2261,6 +2379,19 @@ class NumericTestsMixin(CheckerState):
             column_bins[col_name] = bins
             column_bin_boundaries[col_name] = bin_boundaries
 
+        # Each column is in many pairs, so the bin of each row and the count of rows in each bin are found once per
+        # column. The bin labels are 0 to num_bins-1, the same as the categorical codes, which are -1 for missing
+        # values.
+        column_codes = {}
+        column_counts = {}
+
+        def get_codes_and_counts(col_name):
+            if col_name not in column_codes:
+                bins = column_bins[col_name]
+                column_codes[col_name] = bins.cat.codes.to_numpy()
+                column_counts[col_name] = bins.value_counts().sort_index().values
+            return column_codes[col_name], column_counts[col_name]
+
         cell_limit = math.ceil(self.freq_contamination_level / 9)
 
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
@@ -2285,21 +2416,16 @@ class NumericTestsMixin(CheckerState):
             if (bins_1 is None) or (bins_2 is None):
                 continue
 
-            vc1 = bins_1.value_counts()
-            vc2 = bins_2.value_counts()
-            counts_col_1 = vc1.sort_index().values
-            counts_col_2 = vc2.sort_index().values
+            codes_1, counts_col_1 = get_codes_and_counts(col_name_1)
+            codes_2, counts_col_2 = get_codes_and_counts(col_name_2)
 
             # There are 6x6=36 cells in the 2d space. However, this test does not flag values that are extreme in
             # either dimension, so does not flag the outer ring of cells, checking only the inner 4x4=16 cells.
             # Loop through the 16 internal cells and identify cells that both have low count and their 8 neighboring
-            # cells have low count. We first get the counts of all 36 cells.
-            cell_counts = np.zeros((num_bins, num_bins))
-            test_series = [1] * self.num_rows
-            for i in range(num_bins):
-                subset_i = [(x, y) for x, y in zip(bins_1, bins_2) if x == i]
-                for j in range(num_bins):
-                    cell_counts[i][j] = len([1 for x, y in subset_i if y == j])
+            # cells have low count. We first get the counts of all 36 cells, from the rows with values in both columns.
+            in_cells = (codes_1 >= 0) & (codes_2 >= 0)
+            cell_ids = (codes_1[in_cells].astype(np.intp) * num_bins) + codes_2[in_cells]
+            cell_counts = np.bincount(cell_ids, minlength=num_bins * num_bins).reshape(num_bins, num_bins).astype(float)
             flat_list = [item for sublist in cell_counts for item in sublist]
 
             # Check there are at least 9 cells with counts less than the contamination rate
@@ -2341,8 +2467,9 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             # Loop through each flagged cell and flag all rows in those cells
+            test_series = [1] * self.num_rows
             for i, j in flagged_cells:
-                flagged_idxs = [x for x in bins_1.index if bins_1[x] == i and bins_2[x] == j]
+                flagged_idxs = np.flatnonzero((codes_1 == i) & (codes_2 == j)).tolist()
                 for f in flagged_idxs:
                     test_series[f] = False
 
@@ -2388,13 +2515,37 @@ class NumericTestsMixin(CheckerState):
         cols_same_count_dict = self.get_cols_same_count_dict()
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict()
 
+        # Each column is in many pairs, so what depends on only one column is found once
+        nunique_dict = {}
+        col_info_dict = {}
+
+        def get_nunique(col_name):
+            if col_name not in nunique_dict:
+                nunique_dict[col_name] = self.orig_df[col_name].nunique(dropna=True)
+            return nunique_dict[col_name]
+
+        def get_col_info(col_name):
+            # The missing values, the filled values, and the number of unique filled values, which is the number of
+            # unique values in any pair where neither column has missing values
+            if col_name not in col_info_dict:
+                is_na = self.orig_df[col_name].isna().to_numpy()
+                col_info_dict[col_name] = (is_na, self.numeric_vals_filled[col_name].to_numpy(), [None])
+            return col_info_dict[col_name]
+
+        def get_nunique_non_null(col_info, vals_arr, all_non_null):
+            if not all_non_null:
+                return vals_arr.nunique()
+            if col_info[2][0] is None:
+                col_info[2][0] = vals_arr.nunique()
+            return col_info[2][0]
+
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
                 print(f"  Examining pair {pair_idx:,} of {len(numeric_pairs_list):,} pairs of numeric columns")
 
-            if self.orig_df[col_name_1].nunique(dropna=True) < self.freq_contamination_level:
+            if get_nunique(col_name_1) < self.freq_contamination_level:
                 continue
-            if self.orig_df[col_name_2].nunique(dropna=True) < self.freq_contamination_level:
+            if get_nunique(col_name_2) < self.freq_contamination_level:
                 continue
 
             # Skip pairs where only rare rows have no nulls
@@ -2403,12 +2554,17 @@ class NumericTestsMixin(CheckerState):
 
             # Rows with a missing value in either column neither support nor violate the pattern, so the correlation
             # and the percentiles are calculated on the other rows
-            non_null = self.orig_df[col_name_1].notna() & self.orig_df[col_name_2].notna()
-            val_arr_1 = self.numeric_vals_filled[col_name_1].where(non_null)
-            val_arr_2 = self.numeric_vals_filled[col_name_2].where(non_null)
-            if val_arr_1.nunique() < 3:
+            col_info_1 = get_col_info(col_name_1)
+            col_info_2 = get_col_info(col_name_2)
+            is_na_1, vals_1, _ = col_info_1
+            is_na_2, vals_2, _ = col_info_2
+            non_null = ~(is_na_1 | is_na_2)
+            all_non_null = bool(non_null.all())
+            val_arr_1 = pd.Series(np.where(non_null, vals_1, np.nan))
+            val_arr_2 = pd.Series(np.where(non_null, vals_2, np.nan))
+            if get_nunique_non_null(col_info_1, val_arr_1, all_non_null) < 3:
                 continue
-            if val_arr_2.nunique() < 3:
+            if get_nunique_non_null(col_info_2, val_arr_2, all_non_null) < 3:
                 continue
 
             # Skip columns that are almost entirely the same
@@ -2420,10 +2576,16 @@ class NumericTestsMixin(CheckerState):
             if spearman_corr >= 0.995:
                 col_1_percentiles = self.orig_df[col_name_1].where(non_null).rank(pct=True)
                 col_2_percentiles = self.orig_df[col_name_2].where(non_null).rank(pct=True)
+                vectorize = (col_1_percentiles.dtype == np.float64) and (col_2_percentiles.dtype == np.float64)
+                percentiles_1 = col_1_percentiles.to_numpy()
+                percentiles_2 = col_2_percentiles.to_numpy()
 
                 # Test for positive correlation
-                test_series = np.array([abs(x-y) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
-                test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                if vectorize:
+                    test_series = (np.abs(percentiles_1 - percentiles_2) < 0.2) | is_na_1 | is_na_2
+                else:
+                    test_series = np.array([abs(x-y) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
+                    test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -2434,8 +2596,12 @@ class NumericTestsMixin(CheckerState):
                 )
 
                 # Test for negative correlation
-                test_series = np.array([abs(x-(1.0 - y)) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
-                test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                if vectorize:
+                    test_series = (np.abs(percentiles_1 - (1.0 - percentiles_2)) < 0.2) | is_na_1 | is_na_2
+                else:
+                    test_series = np.array(
+                        [abs(x-(1.0 - y)) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
+                    test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -2680,9 +2846,43 @@ class NumericTestsMixin(CheckerState):
         function onf another numeric column. This checks rounding to the even integer, 10's, 100's, and 1000's
         """
 
-        # Cache the rounded, floor and ceiling values of each numeric column, as well as the number of digits after
-        # the decimal point
-        number_decimals_dict = {}
+        def get_exact_floats(col_vals):
+            """
+            Return the values of a float or int column as a float64 array, with a mask of the missing (NaN) values,
+            where each value is exactly the Python value iterating over the column gives. Otherwise, such as for object
+            columns or ints too large to be exact as floats, return None, and the values are handled one at a time.
+            """
+            if not isinstance(col_vals.dtype, np.dtype):
+                return None
+            if col_vals.dtype.kind == 'f':
+                vals = col_vals.to_numpy(dtype=np.float64)
+                return vals, np.isnan(vals)
+            if col_vals.dtype.kind in 'iu':
+                vals = col_vals.to_numpy()
+                if len(vals) > 0 and (int(vals.min()) < -(2 ** 53) or int(vals.max()) > 2 ** 53):
+                    return None
+                return vals.astype(np.float64), np.zeros(len(vals), dtype=bool)
+            return None
+
+        def get_test_series(col_vals, exact_vals, rounded_vals, py_func, np_func):
+            """
+            Return a boolean array, True where the value in col_vals equals py_func() of the value in rounded_vals, or
+            either is missing. Where col_vals is a float or int column, this is vectorized using np_func(), which gives
+            the same values: np.floor(), np.ceil() and np.rint() match math.floor(), math.ceil() and round() (which
+            rounds halves to even) for finite values.
+            """
+            if exact_vals is not None:
+                x_vals, x_missing = exact_vals
+                y_missing = np.isnan(rounded_vals)
+                # math.floor(), math.ceil() and round() raise on infinite values: leave these to the code below
+                if not np.isinf(rounded_vals[~x_missing & ~y_missing]).any():
+                    return x_missing | y_missing | (x_vals == np_func(rounded_vals))
+            return np.array([is_missing(x) or is_missing(y) or x == py_func(y)
+                             for x, y in zip(col_vals, rounded_vals.tolist())], dtype=bool)
+
+        # Cache the rounded, floor and ceiling values of each numeric column, as well as the median number of digits
+        # after the decimal point
+        number_decimals_median_dict = {}
 
         sample_floor_dict = {}
         sample_ceil_dict = {}
@@ -2699,26 +2899,40 @@ class NumericTestsMixin(CheckerState):
         round_1000_dict = {}
 
         for col_name in self.numeric_cols:
-            # Missing values are kept as NaN, so they neither match nor violate any of the relationships
-            vals_arr = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name]).where(
-                self.orig_df[col_name].notna().to_numpy())
+            # Missing values are kept as NaN, so they neither match nor violate any of the relationships.
+            # convert_to_numeric() gives float(x) for each number and the filler for others, which for float and int
+            # columns is the column's values with the filler where they are NaN.
+            col_vals = self.orig_df[col_name]
+            exact_vals = get_exact_floats(col_vals)
+            if exact_vals is not None:
+                vals_arr = pd.Series(np.where(exact_vals[1], self.column_medians[col_name], exact_vals[0]))
+            else:
+                vals_arr = convert_to_numeric(col_vals, self.column_medians[col_name])
+            vals_arr = vals_arr.where(col_vals.notna().to_numpy())
             vals_arr_sample = convert_to_numeric(self.sample_df[col_name], self.column_medians[col_name]).where(
                 self.sample_df[col_name].notna().to_numpy())
-            number_decimals_dict[col_name] = vals_arr.dropna().apply(get_num_decimal_digits)
 
-            sample_floor_dict[col_name] = vals_arr_sample.apply(np.floor)
-            sample_ceil_dict[col_name] = vals_arr_sample.apply(np.ceil)
-            sample_round_dict[col_name] = vals_arr_sample.apply(np.round)
-            sample_round_10_dict[col_name] = (vals_arr_sample / 10).apply(np.round) * 10
-            sample_round_100_dict[col_name] = (vals_arr_sample / 100).apply(np.round) * 100
-            sample_round_1000_dict[col_name] = (vals_arr_sample / 1000).apply(np.round) * 1000
+            # get_num_decimal_digits() is called once per distinct value, as many values repeat
+            non_null_vals = vals_arr.dropna().to_numpy()
+            unique_vals, unique_idxs = np.unique(non_null_vals, return_inverse=True)
+            unique_decimals = np.array([get_num_decimal_digits(x) for x in unique_vals.tolist()], dtype=np.int64)
+            number_decimals_median_dict[col_name] = \
+                pd.Series(unique_decimals[unique_idxs.reshape(-1)], dtype=np.int64).median()
 
-            floor_dict[col_name] = vals_arr.apply(np.floor)
-            ceil_dict[col_name] = vals_arr.apply(np.ceil)
-            round_dict[col_name] = vals_arr.apply(np.round)
-            round_10_dict[col_name] = (vals_arr / 10).apply(np.round) * 10
-            round_100_dict[col_name] = (vals_arr / 100).apply(np.round) * 100
-            round_1000_dict[col_name] = (vals_arr / 1000).apply(np.round) * 1000
+            # Series.round() rounds each value as Series.apply(np.round) does, but without a Python call per value
+            sample_floor_dict[col_name] = vals_arr_sample.apply(np.floor).to_numpy()
+            sample_ceil_dict[col_name] = vals_arr_sample.apply(np.ceil).to_numpy()
+            sample_round_dict[col_name] = vals_arr_sample.round().to_numpy()
+            sample_round_10_dict[col_name] = ((vals_arr_sample / 10).round() * 10).to_numpy()
+            sample_round_100_dict[col_name] = ((vals_arr_sample / 100).round() * 100).to_numpy()
+            sample_round_1000_dict[col_name] = ((vals_arr_sample / 1000).round() * 1000).to_numpy()
+
+            floor_dict[col_name] = vals_arr.apply(np.floor).to_numpy()
+            ceil_dict[col_name] = vals_arr.apply(np.ceil).to_numpy()
+            round_dict[col_name] = vals_arr.round().to_numpy()
+            round_10_dict[col_name] = ((vals_arr / 10).round() * 10).to_numpy()
+            round_100_dict[col_name] = ((vals_arr / 100).round() * 100).to_numpy()
+            round_1000_dict[col_name] = ((vals_arr / 1000).round() * 1000).to_numpy()
 
         num_pairs, numeric_pairs_list = self._get_numeric_column_pairs()
         if num_pairs > self.max_combinations:
@@ -2730,6 +2944,20 @@ class NumericTestsMixin(CheckerState):
         cols_same_count_dict = self.get_cols_same_count_dict()
         cols_same_bool_dict = self.get_cols_same_bool_dict()
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict(force=True)
+
+        # The values of each column, in the sample and in the full data, for the vectorized comparisons
+        sample_exact_dict = {}
+        exact_dict = {}
+
+        def get_sample_exact(col_name):
+            if col_name not in sample_exact_dict:
+                sample_exact_dict[col_name] = get_exact_floats(self.sample_df[col_name])
+            return sample_exact_dict[col_name]
+
+        def get_exact(col_name):
+            if col_name not in exact_dict:
+                exact_dict[col_name] = get_exact_floats(self.orig_df[col_name])
+            return exact_dict[col_name]
 
         for pair_idx, (col_name_1, col_name_2) in enumerate(numeric_pairs_list):
             if self.verbose >= 2 and pair_idx > 0 and pair_idx % 10_000 == 0:
@@ -2749,34 +2977,34 @@ class NumericTestsMixin(CheckerState):
             #   where more than contamination_level values have diff # digits.
 
             # Test floor function
-            if number_decimals_dict[col_name_2].median() > 0:
-                test_series = [is_missing(x) or is_missing(y) or x == math.floor(y)
-                               for x, y in zip(self.sample_df[col_name_1], sample_floor_dict[col_name_2])]
-                if test_series.count(False) <= 1:
-                    test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                                   for x, y in zip(self.orig_df[col_name_1], floor_dict[col_name_2])]
-                    if test_series.count(False) < self.freq_contamination_level:
+            if number_decimals_median_dict[col_name_2] > 0:
+                test_series = get_test_series(self.sample_df[col_name_1], get_sample_exact(col_name_1),
+                                              sample_floor_dict[col_name_2], math.floor, np.floor)
+                if np.count_nonzero(~test_series) <= 1:
+                    test_series = get_test_series(self.orig_df[col_name_1], get_exact(col_name_1),
+                                                  floor_dict[col_name_2], round, np.rint)
+                    if np.count_nonzero(~test_series) < self.freq_contamination_level:
                         self._process_analysis_binary(
                             test_id,
                             [col_name_2, col_name_1],
-                            np.array(test_series),
+                            test_series,
                             (f'Column "{col_name_1}" is consistently the same as the floor of "{col_name_2}" (with '
                              f'{num_same} identical values)')
                         )
                         continue
 
             # Test ceil function
-            if number_decimals_dict[col_name_2].median() > 0:
-                test_series = [is_missing(x) or is_missing(y) or x == math.ceil(y)
-                               for x, y in zip(self.sample_df[col_name_1], sample_ceil_dict[col_name_2])]
-                if test_series.count(False) <= 1:
-                    test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                                   for x, y in zip(self.orig_df[col_name_1], ceil_dict[col_name_2])]
-                    if test_series.count(False) < self.freq_contamination_level:
+            if number_decimals_median_dict[col_name_2] > 0:
+                test_series = get_test_series(self.sample_df[col_name_1], get_sample_exact(col_name_1),
+                                              sample_ceil_dict[col_name_2], math.ceil, np.ceil)
+                if np.count_nonzero(~test_series) <= 1:
+                    test_series = get_test_series(self.orig_df[col_name_1], get_exact(col_name_1),
+                                                  ceil_dict[col_name_2], round, np.rint)
+                    if np.count_nonzero(~test_series) < self.freq_contamination_level:
                         self._process_analysis_binary(
                             test_id,
                             [col_name_2, col_name_1],
-                            np.array(test_series),
+                            test_series,
                             (f'Column "{col_name_1}" is consistently the same as the ceiling of "{col_name_2}" (with '
                              f'{num_same} identical values')
                         )
@@ -2784,16 +3012,16 @@ class NumericTestsMixin(CheckerState):
 
             # Test rounding to a single digit
             if (abs(self.column_medians[col_name_1]) >= 1.0) and (abs(self.column_medians[col_name_2]) >= 1.0):
-                test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                               for x, y in zip(self.sample_df[col_name_1], sample_round_dict[col_name_2])]
-                if test_series.count(False) <= 1:
-                    test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                                   for x, y in zip(self.orig_df[col_name_1], round_dict[col_name_2])]
-                    if test_series.count(False) < self.freq_contamination_level:
+                test_series = get_test_series(self.sample_df[col_name_1], get_sample_exact(col_name_1),
+                                              sample_round_dict[col_name_2], round, np.rint)
+                if np.count_nonzero(~test_series) <= 1:
+                    test_series = get_test_series(self.orig_df[col_name_1], get_exact(col_name_1),
+                                                  round_dict[col_name_2], round, np.rint)
+                    if np.count_nonzero(~test_series) < self.freq_contamination_level:
                         self._process_analysis_binary(
                             test_id,
                             [col_name_2, col_name_1],
-                            np.array(test_series),
+                            test_series,
                             (f'Column "{col_name_1}" is consistently the same as rounding "{col_name_2}" (with '
                              f'{num_same} identical values)')
                         )
@@ -2801,16 +3029,16 @@ class NumericTestsMixin(CheckerState):
 
             # Test rounding to 10's
             if (abs(self.column_medians[col_name_1]) >= 10.0) and (abs(self.column_medians[col_name_2]) >= 10.0):
-                test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                               for x, y in zip(self.sample_df[col_name_1], sample_round_10_dict[col_name_2])]
-                if test_series.count(False) <= 1:
-                    test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                                   for x, y in zip(self.orig_df[col_name_1], round_10_dict[col_name_2])]
-                    if test_series.count(False) < self.freq_contamination_level:
+                test_series = get_test_series(self.sample_df[col_name_1], get_sample_exact(col_name_1),
+                                              sample_round_10_dict[col_name_2], round, np.rint)
+                if np.count_nonzero(~test_series) <= 1:
+                    test_series = get_test_series(self.orig_df[col_name_1], get_exact(col_name_1),
+                                                  round_10_dict[col_name_2], round, np.rint)
+                    if np.count_nonzero(~test_series) < self.freq_contamination_level:
                         self._process_analysis_binary(
                             test_id,
                             [col_name_2, col_name_1],
-                            np.array(test_series),
+                            test_series,
                             (f'Column "{col_name_1}" is consistently the same as rounding "{col_name_2}" to the 10s '
                              f'(with {num_same} identical values)')
                         )
@@ -2818,16 +3046,16 @@ class NumericTestsMixin(CheckerState):
 
             # Test rounding to 100's
             if (abs(self.column_medians[col_name_1]) >= 100.0) and (abs(self.column_medians[col_name_2]) >= 100.0):
-                test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                               for x, y in zip(self.sample_df[col_name_1], sample_round_100_dict[col_name_2])]
-                if test_series.count(False) <= 1:
-                    test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                                   for x, y in zip(self.orig_df[col_name_1], round_100_dict[col_name_2])]
-                    if test_series.count(False) < self.freq_contamination_level:
+                test_series = get_test_series(self.sample_df[col_name_1], get_sample_exact(col_name_1),
+                                              sample_round_100_dict[col_name_2], round, np.rint)
+                if np.count_nonzero(~test_series) <= 1:
+                    test_series = get_test_series(self.orig_df[col_name_1], get_exact(col_name_1),
+                                                  round_100_dict[col_name_2], round, np.rint)
+                    if np.count_nonzero(~test_series) < self.freq_contamination_level:
                         self._process_analysis_binary(
                             test_id,
                             [col_name_2, col_name_1],
-                            np.array(test_series),
+                            test_series,
                             (f'Column "{col_name_1}" is consistently the same as rounding "{col_name_2}" to the 100s '
                              f'(with {num_same} identical values)')
                         )
@@ -2835,16 +3063,16 @@ class NumericTestsMixin(CheckerState):
 
             # Test rounding to 1000's
             if (abs(self.column_medians[col_name_1]) >= 1000.0) and (abs(self.column_medians[col_name_2]) >= 1000.0):
-                test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                               for x, y in zip(self.sample_df[col_name_1], sample_round_1000_dict[col_name_2])]
-                if test_series.count(False) <= 1:
-                    test_series = [is_missing(x) or is_missing(y) or x == round(y)
-                                   for x, y in zip(self.orig_df[col_name_1], round_1000_dict[col_name_2])]
-                    if test_series.count(False) < self.freq_contamination_level:
+                test_series = get_test_series(self.sample_df[col_name_1], get_sample_exact(col_name_1),
+                                              sample_round_1000_dict[col_name_2], round, np.rint)
+                if np.count_nonzero(~test_series) <= 1:
+                    test_series = get_test_series(self.orig_df[col_name_1], get_exact(col_name_1),
+                                                  round_1000_dict[col_name_2], round, np.rint)
+                    if np.count_nonzero(~test_series) < self.freq_contamination_level:
                         self._process_analysis_binary(
                             test_id,
                             [col_name_2, col_name_1],
-                            np.array(test_series),
+                            test_series,
                             (f'Column "{col_name_1}" is consistently the same as rounding "{col_name_2}" to the 1000s'
                              f'(with {num_same} identical values)')
                         )
