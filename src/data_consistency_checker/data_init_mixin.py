@@ -78,6 +78,7 @@ class DataInitMixin(CheckerState):
         self.column_unique_vals = {}  # Stored only for binary columns. Excludes None and NaN values.
         self.numeric_vals = {}  # An array of the truly numeric values in each numeric column
         self.numeric_vals_filled = {}
+        self.numeric_vals_nan = {}
         self.binary_cols = []
         self.numeric_cols = []
         self.date_cols = []
@@ -365,6 +366,9 @@ class DataInitMixin(CheckerState):
             self.column_unique_vals[col_name] = sorted([x for x in self.orig_df[col_name].unique() if not is_missing(x)])
 
         # For all numeric columns, get the set of truly numeric values. This may have less than self.num_rows elements.
+        # The caches start empty, so none of them keep columns of any data given previously.
+        self.numeric_vals, self.numeric_vals_filled, self.numeric_vals_nan = {}, {}, {}
+        self.sample_numeric_vals_filled = {}
         for col_name in self.numeric_cols:
             self.numeric_vals[col_name] = pd.Series(
                 [float(x) for x in self.orig_df[col_name]
@@ -382,6 +386,15 @@ class DataInitMixin(CheckerState):
         # Todo: remove calls to convert_to_numeric that use the median anyway
         for col_name in self.numeric_cols:
             self.numeric_vals_filled[col_name] = convert_to_numeric(self.orig_df[col_name], self.column_medians[col_name])
+
+        # For all numeric columns, the values as numbers, with any value that is not a number missing. This has the same
+        # rows as orig_df. Checks that use the values themselves, not the median-filled values, use these, so a value
+        # that is not a number neither supports nor breaks their patterns. INVALID_NUMBERS flags such values.
+        for col_name in self.numeric_cols:
+            if pandas_types.is_numeric_dtype(self.orig_df[col_name]):
+                self.numeric_vals_nan[col_name] = self.orig_df[col_name]
+            else:
+                self.numeric_vals_nan[col_name] = convert_to_numeric(self.orig_df[col_name], np.nan)
 
         trimmed_orig_df = self.orig_df.copy()
         if len(self.numeric_cols) > 0:
@@ -411,11 +424,15 @@ class DataInitMixin(CheckerState):
                     convert_to_numeric(trimmed_orig_df[col_name], self.column_medians[col_name]).mean()
 
         # Create a sample of the full data, which may be used for early stopping for expensive tests.
-        # The sample_df will tend to not contain Null values.
+        # The sample_df will tend to not contain Null values, or values in numeric columns that are not numbers.
+        non_number_rows = pd.Series(False, index=self.orig_df.index)
+        for col_name in self.numeric_cols:
+            non_number_rows |= self.numeric_vals_nan[col_name].isna() & self.orig_df[col_name].notna()
+        trimmed_orig_df = trimmed_orig_df[~non_number_rows.loc[trimmed_orig_df.index]]
         if len(trimmed_orig_df) > 50:
             self.sample_df = trimmed_orig_df.dropna().sample(n=min(len(trimmed_orig_df.dropna()), 50), random_state=0)
-        elif len(self.orig_df.dropna()) > 50:
-            self.sample_df = self.orig_df.dropna().sample(n=50, random_state=0)
+        elif len(self.orig_df[~non_number_rows].dropna()) > 50:
+            self.sample_df = self.orig_df[~non_number_rows].dropna().sample(n=50, random_state=0)
         else:
             self.sample_df = self.orig_df.sample(n=min(len(self.orig_df), 50), random_state=0)
 
@@ -482,6 +499,7 @@ class DataInitMixin(CheckerState):
         self.larger_or_equal_pairs_with_bool_dict = None
         self.is_missing_dict = None
         self.sample_is_missing_dict = None
+        self.numeric_vals_nan_df = None
         self.num_missing_dict = None
         self.percentiles_dict = None
         self.nunique_dict = None

@@ -823,7 +823,7 @@ class MultiColumnTestsMixin(CheckerState):
         for col_name in self.numeric_cols:
             rand_df = pd.concat([
                 rand_df,
-                pd.DataFrame({col_name: self.orig_df[col_name].rank(pct=True)})
+                pd.DataFrame({col_name: self.numeric_vals_nan[col_name].rank(pct=True)})
             ], axis=1)
         rand_df['Avg Percentile'] = rand_df.mean(axis=1)
 
@@ -868,7 +868,7 @@ class MultiColumnTestsMixin(CheckerState):
         for col_name in self.numeric_cols:
             rank_df = pd.concat([
                 rank_df,
-                pd.DataFrame({col_name: self.orig_df[col_name].rank(pct=True)})
+                pd.DataFrame({col_name: self.numeric_vals_nan[col_name].rank(pct=True)})
             ], axis=1)
         rank_df['Avg Percentile'] = rank_df.mean(axis=1)
 

@@ -581,13 +581,14 @@ class NumericTestsMixin(CheckerState):
             if self.orig_df[col_name].nunique(dropna=True) < 3:
                 continue
             if col_name in self.numeric_cols:
-                spearman_corr = abs(self.numeric_vals[col_name].corr(pd.Series(row_numbers), method='spearman'))
+                spearman_corr = abs(self.numeric_vals_nan[col_name].corr(pd.Series(row_numbers), method='spearman'))
             else:
                 col_vals = [x.timestamp() for x, y in
                             zip(pd.to_datetime(self.orig_df[col_name]), self.orig_df[col_name].isna()) if not y]
                 spearman_corr = abs(pd.Series(col_vals).corr(pd.Series(list(range(len(col_vals)))), method='spearman'))
             if spearman_corr >= 0.95:
-                col_percentiles = self.orig_df[col_name].rank(pct=True)
+                vals_to_rank = self.numeric_vals_nan[col_name] if col_name in self.numeric_cols else self.orig_df[col_name]
+                col_percentiles = vals_to_rank.rank(pct=True)
 
                 # Test for positive correlation
                 test_series = np.array([(abs(x-y) < 0.1) or is_missing(x)
@@ -629,12 +630,13 @@ class NumericTestsMixin(CheckerState):
             if self.orig_df[col_name].nunique(dropna=True) < 3:
                 continue
             if col_name in self.numeric_cols:
-                spearman_corr = abs(self.numeric_vals[col_name].corr(pd.Series(row_numbers), method='spearman'))
+                spearman_corr = abs(self.numeric_vals_nan[col_name].corr(pd.Series(row_numbers), method='spearman'))
             else:
                 col_vals = [x.timestamp() for x, y in zip(pd.to_datetime(self.orig_df[col_name]), self.orig_df[col_name].isna()) if not y]
                 spearman_corr = abs(pd.Series(col_vals).corr(pd.Series(list(range(len(col_vals)))), method='spearman'))
             if spearman_corr >= 0.95:
-                col_percentiles = self.orig_df[col_name].rank(pct=True)
+                vals_to_rank = self.numeric_vals_nan[col_name] if col_name in self.numeric_cols else self.orig_df[col_name]
+                col_percentiles = vals_to_rank.rank(pct=True)
 
                 # Test for negative correlation
                 test_series = np.array([(abs(x-(1.0 - y)) < 0.1) or is_missing(x) for x, y in
@@ -1537,6 +1539,8 @@ class NumericTestsMixin(CheckerState):
         larger_pairs_with_bool_dict = self.get_larger_pairs_with_bool_dict()
         get_col_pairs_either_null_bool_dict = self.get_col_pairs_either_null_bool_dict(force=True)
         much_larger_pairs_arr = []
+        # Values in numeric columns that are not numbers are treated as missing
+        sample_nums = self.get_numeric_vals_nan_df().loc[self.sample_df.index]
 
         for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
             if self.verbose >= 2 and cols_idx > 0 and cols_idx % 10_000 == 0:
@@ -1554,8 +1558,8 @@ class NumericTestsMixin(CheckerState):
                 continue
 
             # Test on a sample that the columns are correlated
-            corr = scipy.stats.spearmanr(self.sample_df[col_name_1].fillna(self.sample_df[col_name_1].median()),
-                                         self.sample_df[col_name_2].fillna(self.sample_df[col_name_2].median()))
+            corr = scipy.stats.spearmanr(sample_nums[col_name_1].fillna(sample_nums[col_name_1].median()),
+                                         sample_nums[col_name_2].fillna(sample_nums[col_name_2].median()))
             if corr.correlation < 0.9:
                 continue
 
@@ -1567,7 +1571,7 @@ class NumericTestsMixin(CheckerState):
                 (vals_arr_1 / vals_arr_2) > 10.0,
                 False
             )
-            sample_series = sample_series | self.sample_df[col_name_1].isna() | self.sample_df[col_name_2].isna()
+            sample_series = sample_series | sample_nums[col_name_1].isna() | sample_nums[col_name_2].isna()
             if sample_series.tolist().count(False) > 1:
                 continue
 
@@ -2531,7 +2535,8 @@ class NumericTestsMixin(CheckerState):
             # The missing values, the filled values, and the number of unique filled values, which is the number of
             # unique values in any pair where neither column has missing values
             if col_name not in col_info_dict:
-                is_na = self.orig_df[col_name].isna().to_numpy()
+                # Values that are not numbers count as missing
+                is_na = self.numeric_vals_nan[col_name].isna().to_numpy()
                 col_info_dict[col_name] = (is_na, self.numeric_vals_filled[col_name].to_numpy(), [None])
             return col_info_dict[col_name]
 
@@ -2562,8 +2567,8 @@ class NumericTestsMixin(CheckerState):
             if get_col_pairs_either_null_bool_dict[tuple(sorted([col_name_1, col_name_2]))]:
                 continue
 
-            # Rows with a missing value in either column neither support nor violate the pattern, so the correlation
-            # and the percentiles are calculated on the other rows
+            # Rows with a missing value, or one that is not a number, in either column neither support nor violate the
+            # pattern, so the correlation and the percentiles are calculated on the other rows
             col_info_1 = get_col_info(col_name_1)
             col_info_2 = get_col_info(col_name_2)
             is_na_1, vals_1, _ = col_info_1
@@ -2593,18 +2598,18 @@ class NumericTestsMixin(CheckerState):
 
             spearman_corr = abs(val_arr_1.corr(val_arr_2, method='spearman'))
             if spearman_corr >= 0.995:
-                col_1_percentiles = self.orig_df[col_name_1].where(non_null).rank(pct=True)
-                col_2_percentiles = self.orig_df[col_name_2].where(non_null).rank(pct=True)
+                col_1_percentiles = self.numeric_vals_nan[col_name_1].where(non_null).rank(pct=True)
+                col_2_percentiles = self.numeric_vals_nan[col_name_2].where(non_null).rank(pct=True)
                 vectorize = (col_1_percentiles.dtype == np.float64) and (col_2_percentiles.dtype == np.float64)
                 percentiles_1 = col_1_percentiles.to_numpy()
                 percentiles_2 = col_2_percentiles.to_numpy()
 
                 # Test for positive correlation
                 if vectorize:
-                    test_series = (np.abs(percentiles_1 - percentiles_2) < 0.2) | is_na_1 | is_na_2
+                    test_series = np.abs(percentiles_1 - percentiles_2) < 0.2
                 else:
                     test_series = np.array([abs(x-y) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
-                    test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = test_series | is_na_1 | is_na_2
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -2616,11 +2621,11 @@ class NumericTestsMixin(CheckerState):
 
                 # Test for negative correlation
                 if vectorize:
-                    test_series = (np.abs(percentiles_1 - (1.0 - percentiles_2)) < 0.2) | is_na_1 | is_na_2
+                    test_series = np.abs(percentiles_1 - (1.0 - percentiles_2)) < 0.2
                 else:
                     test_series = np.array(
                         [abs(x-(1.0 - y)) < 0.2 for x, y in zip(col_1_percentiles, col_2_percentiles)])
-                    test_series = test_series | self.orig_df[col_name_1].isna() | self.orig_df[col_name_2].isna()
+                test_series = test_series | is_na_1 | is_na_2
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],
@@ -3865,6 +3870,10 @@ class NumericTestsMixin(CheckerState):
         values in the column.
         """
 
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
+        sample_nums = nums.loc[self.sample_df.index]
+
         # Track which columns are mostly positive. We execute this test only on those columns.
         column_pos_arr = []
         for col_name in self.numeric_cols:
@@ -4028,7 +4037,7 @@ class NumericTestsMixin(CheckerState):
                         continue
 
                     # Check all 3 sub-tests on a sample first, skipping rows with missing values
-                    sample_df = self.sample_df[[*subset, col_name]].dropna().astype(float)
+                    sample_df = sample_nums[[*subset, col_name]].dropna().astype(float)
                     col_sums = sample_df[subset].sum(axis=1)
                     sample_diffs_series = sample_df[col_name] - col_sums
                     sample_col_values = sample_diffs_series == 0
@@ -4048,11 +4057,11 @@ class NumericTestsMixin(CheckerState):
                     # Check if col_name is the sum of subset
                     if subtest_1_okay or subtest_2_okay or subtest_3_okay:
                         # Rows with missing values are not tested, so skip where few rows have none
-                        if self.orig_df[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
+                        if nums[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
                             continue
-                        df = self.orig_df[subset].astype(float)
+                        df = nums[subset].astype(float)
                         col_sums = df.sum(axis=1, skipna=False)  # The sums are NaN where any value is missing
-                        diffs_series = self.orig_df[col_name].astype(float) - col_sums
+                        diffs_series = nums[col_name].astype(float) - col_sums
                         col_values = diffs_series == 0
                         col_values = self.check_results_for_null(col_values, col_name, subset)
                         if col_values.tolist().count(False) < self.freq_contamination_level:
@@ -4066,7 +4075,7 @@ class NumericTestsMixin(CheckerState):
                             )
                             found_any = True
                             break
-                        too_small_arr = self.orig_df[col_name].astype(float) > col_sums
+                        too_small_arr = nums[col_name].astype(float) > col_sums
                         if too_small_arr.tolist().count(True) > self.freq_contamination_level:
                             know_failed_masks.append(subset_mask)
                     else:
@@ -4098,7 +4107,7 @@ class NumericTestsMixin(CheckerState):
                     # column col_name is the sum of the columns times a constant. We determine if the median value in
                     # the differences is this constant.
                     if subtest_3_okay:
-                        ratios_series = self.orig_df[col_name].astype(float) / col_sums
+                        ratios_series = nums[col_name].astype(float) / col_sums
                         median_ratio = ratios_series.median()
                         col_values = np.array([math.isclose(x, median_ratio) for x in ratios_series])
                         col_values = self.check_results_for_null(col_values, col_name, subset)
@@ -4147,7 +4156,10 @@ class NumericTestsMixin(CheckerState):
         # Try all subsets where it's median is less than this column's, but more than 1/20 of it.
         # For each target column, try all subsets whose minimum values match this column.
 
-        two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
+        sample_nums = nums.loc[self.sample_df.index]
+        two_rows_np = sample_nums[self.numeric_cols].sample(n=2, random_state=0).values
 
         def filter_on_two_rows(subsets, col_idx):
             """
@@ -4210,16 +4222,16 @@ class NumericTestsMixin(CheckerState):
 
                     # Test on a subset of the rows
                     subset_names = np.array(self.numeric_cols)[subset].tolist()
-                    df = self.sample_df[subset_names]
+                    df = sample_nums[subset_names]
                     col_mins = df.min(axis=1)
-                    test_series = np.where(self.sample_df[col_name].values == col_mins, True, False)
+                    test_series = np.where(sample_nums[col_name].values == col_mins, True, False)
                     if test_series.tolist().count(False) > 1:
                         continue
 
                     # Test on the full columns
-                    df = self.orig_df[subset_names]
+                    df = nums[subset_names]
                     col_mins = df.min(axis=1)
-                    diffs_series = self.orig_df[col_name] - col_mins
+                    diffs_series = nums[col_name] - col_mins
                     test_series = diffs_series == 0
                     test_series = self.check_results_for_null(test_series, col_name, subset_names)
                     if test_series.tolist().count(False) < self.freq_contamination_level:
@@ -4227,7 +4239,7 @@ class NumericTestsMixin(CheckerState):
                         subset_okay = True
                         for col in subset_names:
                             equal_series = [x == y or is_missing(x) or is_missing(y)
-                                            for x, y in zip(self.orig_df[col_name], self.orig_df[col])]
+                                            for x, y in zip(nums[col_name], nums[col])]
                             if equal_series.count(False) < self.freq_contamination_level:
                                 subset_okay = False
                                 break
@@ -4238,7 +4250,7 @@ class NumericTestsMixin(CheckerState):
                         # least once.
                         subset_okay = True
                         for col in subset_names:
-                            if [(x == y) for x, y, z in zip(self.orig_df[col], col_mins, test_series) if z].count(True) == 0:
+                            if [(x == y) for x, y, z in zip(nums[col], col_mins, test_series) if z].count(True) == 0:
                                 subset_okay = False
                                 break
                         if not subset_okay:
@@ -4280,7 +4292,10 @@ class NumericTestsMixin(CheckerState):
         # Try all subsets where it's median is less than this column's, but more than 1/10 of it.
         # For each target column, try all subsets whose maximum values match this column.
 
-        two_rows_np = self.sample_df[self.numeric_cols].sample(n=2, random_state=0).values
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
+        sample_nums = nums.loc[self.sample_df.index]
+        two_rows_np = sample_nums[self.numeric_cols].sample(n=2, random_state=0).values
 
         def filter_on_two_rows(subsets, col_idx):
             """
@@ -4343,23 +4358,23 @@ class NumericTestsMixin(CheckerState):
 
                     # Test on a subset of the rows
                     subset_names = np.array(self.numeric_cols)[subset].tolist()
-                    df = self.sample_df[subset_names]
+                    df = sample_nums[subset_names]
                     col_maxs = df.max(axis=1)
-                    test_series = np.where(self.sample_df[col_name].values == col_maxs, True, False)
+                    test_series = np.where(sample_nums[col_name].values == col_maxs, True, False)
                     if test_series.tolist().count(False) > 1:
                         continue
 
                     # Test on the full columns
-                    df = self.orig_df[subset_names]
+                    df = nums[subset_names]
                     col_maxs = df.max(axis=1)
-                    diffs_series = self.orig_df[col_name] - col_maxs
+                    diffs_series = nums[col_name] - col_maxs
                     test_series = diffs_series == 0
                     test_series = self.check_results_for_null(test_series, col_name, subset_names)
                     if test_series.tolist().count(False) < self.freq_contamination_level:
                         # Check the target column is not identical to any of the source columns
                         subset_okay = True
                         for col in subset_names:
-                            equal_series = [x == y or is_missing(x) or is_missing(y) for x, y in zip(self.orig_df[col_name], self.orig_df[col])]
+                            equal_series = [x == y or is_missing(x) or is_missing(y) for x, y in zip(nums[col_name], nums[col])]
                             if equal_series.count(False) < self.freq_contamination_level:
                                 subset_okay = False
                                 break
@@ -4370,7 +4385,7 @@ class NumericTestsMixin(CheckerState):
                         # least once.
                         subset_okay = True
                         for col in subset_names:
-                            if [(x == y) for x, y, z in zip(self.orig_df[col], col_maxs, test_series) if z].count(True) == 0:
+                            if [(x == y) for x, y, z in zip(nums[col], col_maxs, test_series) if z].count(True) == 0:
                                 subset_okay = False
                                 break
                         if not subset_okay:
@@ -4419,6 +4434,14 @@ class NumericTestsMixin(CheckerState):
         consequently, subsequent columns tend to execute much faster.
         """
 
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
+        # The sample, with numeric columns holding such values replaced by their numbers. Other columns are unchanged.
+        sample_frame = self.sample_df.copy()
+        for col_name in self.numeric_cols:
+            if not pd.api.types.is_numeric_dtype(sample_frame[col_name]):
+                sample_frame[col_name] = nums.loc[self.sample_df.index, col_name]
+
         # Track which columns are mostly positive. We execute this test only on those columns.
         column_pos_arr = []
         for col_name in self.numeric_cols:
@@ -4444,22 +4467,22 @@ class NumericTestsMixin(CheckerState):
         orig_col_positions: dict[str, int] = {}
         for c_idx, c in enumerate(self.orig_df.columns.tolist()):
             orig_col_positions.setdefault(c, c_idx)
-        sample_values_np = self.sample_df.values
+        sample_values_np = sample_frame.values
         sample_notna_dict: dict[str, np.ndarray] = {}
         sample_col_dict: dict[str, np.ndarray | None] = {}
 
         def get_sample_notna(col_name):
             if col_name not in sample_notna_dict:
-                sample_notna_dict[col_name] = self.sample_df[col_name].notna().to_numpy()
+                sample_notna_dict[col_name] = sample_frame[col_name].notna().to_numpy()
             return sample_notna_dict[col_name]
 
         def get_sample_col(col_name, rows_arr):
-            # The same values as self.sample_df[col_name][rows_arr], as np.allclose() uses them
+            # The same values as sample_frame[col_name][rows_arr], as np.allclose() uses them
             if col_name not in sample_col_dict:
-                col = self.sample_df[col_name]
+                col = sample_frame[col_name]
                 sample_col_dict[col_name] = col.to_numpy() if isinstance(col.dtype, np.dtype) else None
             col_np = sample_col_dict[col_name]
-            return self.sample_df[col_name][rows_arr] if col_np is None else col_np[rows_arr]
+            return sample_frame[col_name][rows_arr] if col_np is None else col_np[rows_arr]
 
         # The sample's numeric columns, as float64, in a 2d array, so all the columns in a subset can be compared at
         # once. This includes the columns whose values are the same as float64: float columns, and integer columns
@@ -4475,9 +4498,9 @@ class NumericTestsMixin(CheckerState):
 
         sample_float64_cols: dict[str, int] = {}
         sample_float64_arrs = []
-        if self.sample_df.columns.is_unique:
-            for sample_col_name in self.sample_df.columns.tolist():
-                col_np = self.sample_df[sample_col_name].to_numpy()
+        if sample_frame.columns.is_unique:
+            for sample_col_name in sample_frame.columns.tolist():
+                col_np = sample_frame[sample_col_name].to_numpy()
                 if is_same_as_float64(col_np):
                     sample_float64_cols[sample_col_name] = len(sample_float64_cols)
                     sample_float64_arrs.append(col_np.astype(np.float64))
@@ -4578,13 +4601,13 @@ class NumericTestsMixin(CheckerState):
                         continue
 
                     # Rows with missing values are not tested, so skip where few rows have none
-                    if self.orig_df[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
+                    if nums[[*subset, col_name]].notna().all(axis=1).sum() < self.freq_contamination_level:
                         continue
 
                     # Test on the full columns
-                    df = self.orig_df[subset].copy()
+                    df = nums[subset].copy()
                     col_mean = df.mean(axis=1)
-                    diffs_series = self.orig_df[matching_column] - col_mean
+                    diffs_series = nums[matching_column] - col_mean
                     test_series = np.isclose(diffs_series, 0)
                     test_series = self.check_results_for_null(test_series, col_name, subset)
 
@@ -4629,6 +4652,10 @@ class NumericTestsMixin(CheckerState):
         negative together.
         """
 
+        # Values in numeric columns that are not numbers are treated as missing
+        nums = self.get_numeric_vals_nan_df()
+        sample_nums = nums.loc[self.sample_df.index]
+
         # Check all columns examined have at least 10% positive and 10% negative values.
         cols = []
         sample_pos_dict = {}
@@ -4643,13 +4670,13 @@ class NumericTestsMixin(CheckerState):
                 cols.append(col_name)
 
                 # The sample data tends not to include Null values
-                pos_arr = self.sample_df[col_name] > 0
-                neg_arr = self.sample_df[col_name] < 0
+                pos_arr = sample_nums[col_name] > 0
+                neg_arr = sample_nums[col_name] < 0
                 sample_pos_dict[col_name] = pos_arr
                 sample_neg_dict[col_name] = neg_arr
 
-                pos_arr = ((self.orig_df[col_name] > 0) | self.orig_df[col_name].isna())
-                neg_arr = ((self.orig_df[col_name] < 0) | self.orig_df[col_name].isna())
+                pos_arr = ((nums[col_name] > 0) | nums[col_name].isna())
+                neg_arr = ((nums[col_name] < 0) | nums[col_name].isna())
                 pos_dict[col_name] = pos_arr
                 neg_dict[col_name] = neg_arr
 

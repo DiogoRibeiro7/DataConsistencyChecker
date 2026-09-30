@@ -195,12 +195,31 @@ class AnalysisCacheMixin(CheckerState):
     def check_results_for_null(self, test_series, col_name, subset):
         """
         Used by tests that work with any number of columns, and where Null values do not violate the general pattern.
+        In numeric columns, values that are not numbers are treated as Null.
         """
         if col_name:
-            test_series = test_series | self.orig_df[col_name].isna()
+            test_series = test_series | self.get_no_value_mask(col_name)
         for col in subset:
-            test_series = test_series | self.orig_df[col].isna()
+            test_series = test_series | self.get_no_value_mask(col)
         return test_series
+
+    def get_no_value_mask(self, col_name):
+        """
+        The rows where the column has no value a check can use: a missing value, or, in a numeric column, a value that
+        is not a number.
+        """
+        if col_name in self.numeric_cols:
+            return self.numeric_vals_nan[col_name].isna()
+        return self.orig_df[col_name].isna()
+
+    def get_numeric_vals_nan_df(self):
+        """
+        The numeric columns of orig_df as numbers, with the values that are not numbers missing. See numeric_vals_nan.
+        """
+        if self.numeric_vals_nan_df is None:
+            self.numeric_vals_nan_df = pd.DataFrame(
+                {col_name: self.numeric_vals_nan[col_name] for col_name in self.numeric_cols}, index=self.orig_df.index)
+        return self.numeric_vals_nan_df
 
     ##################################################################################################################
     # Methods to populate the caches used by some of the tests. These are not set in init(), as these may not be used
