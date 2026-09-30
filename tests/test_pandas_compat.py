@@ -153,3 +153,11 @@ def test_init_data_converts_categorical_text_to_strings() -> None:
 
     assert checker.orig_df["cat"].dtype == object
     assert checker.orig_df["cat"].tolist()[:3] == ["a", "b", "nan"]
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_even_multiple_synthetic_data_can_be_generated_with_any_seed(seed: int) -> None:
+    # The exception row's value is not always a whole number: pandas 3 no longer upcasts the column for it.
+    synth = DataConsistencyChecker(verbose=-1).generate_synth_data(execute_list=["EVEN_MULTIPLE"], seed=seed)
+
+    assert len(synth) == 1000

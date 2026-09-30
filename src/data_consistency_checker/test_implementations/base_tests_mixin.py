@@ -901,6 +901,58 @@ class BaseTestsMixin(CheckerState):
             vc = self.orig_df[col_name].value_counts(normalize=True)
             most_freq_per_col[col_name] = vc.sort_values(ascending=False).values[0]
 
+        # Facts about each column of the sample, cached as the columns are reached
+        sample_has_na_dict = {}
+        sample_num_na_dict = {}
+        sample_nunique_dict = {}
+        sample_num_non_na_dict = {}
+        sample_vals_dict: dict[object, np.ndarray | None] = {}
+
+        def get_sample_float_vals(col_name):
+            """
+            Returns the sample's values in the column as floats if the column is numeric and each value converts to
+            a float exactly, so comparing these gives the same result as comparing the python values. Else None.
+            """
+            if col_name not in sample_vals_dict:
+                vals = sample_df[col_name].to_numpy()
+                is_exact = isinstance(sample_df[col_name].dtype, np.dtype) and (vals.dtype.kind in 'iuf') and \
+                    (vals.dtype.itemsize <= 8)
+                if is_exact and (vals.dtype.kind in 'iu') and (len(vals) > 0):
+                    is_exact = (vals.min() >= -(2 ** 53)) and (vals.max() <= (2 ** 53))
+                sample_vals_dict[col_name] = vals.astype(np.float64) if is_exact else None
+            return sample_vals_dict[col_name]
+
+        def sample_rejects_pair(col_name_1, col_name_2):
+            """
+            Used where neither column has missing values in the sample. Returns True if test_arrs() would return
+            False given the two columns of the sample, and False if test_arrs() must be run to determine the result.
+            This checks the same conditions as test_arrs(), in the same order, up to the fraction of rows with the
+            same value, reusing the values that depend on one column only. Only numeric columns are checked here.
+            """
+            vals_1 = get_sample_float_vals(col_name_1)
+            vals_2 = get_sample_float_vals(col_name_2)
+            if vals_1 is None or vals_2 is None:
+                return False
+
+            for col_name in (col_name_1, col_name_2):
+                if col_name not in sample_num_na_dict:
+                    sample_num_na_dict[col_name] = sample_df[col_name].isna().sum()
+                if sample_num_na_dict[col_name] > (len(sample_df) * 0.75):
+                    return True
+            for col_name in (col_name_1, col_name_2):
+                if col_name not in sample_nunique_dict:
+                    sample_nunique_dict[col_name] = sample_df[col_name].nunique()
+                    sample_num_non_na_dict[col_name] = sample_df[col_name].notna().sum()
+                if sample_nunique_dict[col_name] < math.sqrt(sample_num_non_na_dict[col_name]):
+                    return True
+
+            # With no missing values, a row has the same value in both columns exactly where the values are equal
+            num_same = int(np.count_nonzero(vals_1 == vals_2))
+            num_non_missing = len(sample_df)
+            if num_same < (num_non_missing * 0.1):
+                return True
+            return num_same > (num_non_missing * 0.95)
+
         for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
             if self.verbose >= 2 and cols_idx > 0 and cols_idx % 10_000 == 0:
                 print(f"  Examining column set {cols_idx:,} of {len(col_pairs):,} combinations of columns.")
@@ -916,10 +968,16 @@ class BaseTestsMixin(CheckerState):
                 continue
 
             # If the sample has missing values in either column, test on a sample of the rows where both have values
-            pair_sample_df = sample_df[[col_name_1, col_name_2]]
-            if pair_sample_df.isna().values.any():
+            for col_name in (col_name_1, col_name_2):
+                if col_name not in sample_has_na_dict:
+                    sample_has_na_dict[col_name] = sample_df[col_name].isna().any()
+            if sample_has_na_dict[col_name_1] or sample_has_na_dict[col_name_2]:
                 pair_sample_df = self.orig_df[[col_name_1, col_name_2]].dropna()
                 pair_sample_df = pair_sample_df.sample(n=min(len(pair_sample_df), 50), random_state=0)
+            else:
+                if sample_rejects_pair(col_name_1, col_name_2):
+                    continue
+                pair_sample_df = sample_df[[col_name_1, col_name_2]]
             if not test_arrs(pair_sample_df[col_name_1], pair_sample_df[col_name_2], is_sample=True):
                 continue
             test_arrs(self.orig_df[col_name_1], self.orig_df[col_name_2], is_sample=False)
@@ -947,6 +1005,23 @@ class BaseTestsMixin(CheckerState):
         min_number_combinations = self.num_rows - self.freq_contamination_level
 
         sample_df = self.sample_df.copy().fillna('NONE')
+
+        # Codes for the sample's values in each column, matching how value_counts() groups them, so the number of
+        # distinct pairs of codes is the number of pairs value_counts() finds. Filled in as the columns are reached.
+        sample_codes_dict = {}
+
+        def get_num_sample_pairs(col_name_1, col_name_2):
+            # value_counts() also counts the unobserved categories of categorical columns, so is used for these
+            if isinstance(sample_df[col_name_1].dtype, pd.CategoricalDtype) or \
+                    isinstance(sample_df[col_name_2].dtype, pd.CategoricalDtype):
+                return len(sample_df[[col_name_1, col_name_2]].value_counts(dropna=False))
+            for col_name in (col_name_1, col_name_2):
+                if col_name not in sample_codes_dict:
+                    sample_codes_dict[col_name] = pd.factorize(sample_df[col_name], use_na_sentinel=False)[0]
+            codes_1 = sample_codes_dict[col_name_1]
+            codes_2 = sample_codes_dict[col_name_2]
+            return len(np.unique(codes_1 * (codes_2.max(initial=0) + 1) + codes_2))
+
         for col_name_1_idx, col_name_1 in enumerate(self.orig_df.columns):
             if num_missing_dict[col_name_1] > missing_threshold:
                 continue
@@ -964,14 +1039,13 @@ class BaseTestsMixin(CheckerState):
                 if nunique_dict[col_name_1] * nunique_dict[col_name_2] < min_number_combinations:
                     continue
 
-                counts_arr = sample_df[[col_name_1, col_name_2]].value_counts(dropna=False)
-                if len(counts_arr) < nunique_sample_pairs_threshold:
+                if get_num_sample_pairs(col_name_1, col_name_2) < nunique_sample_pairs_threshold:
                     continue
                 df = self.orig_df[[col_name_1, col_name_2]].copy().fillna('NONE')
                 counts_arr = df.fillna('NONE').value_counts(dropna=False)
                 repeated_vals = [x for x, y in zip(counts_arr.index, counts_arr.values) if y > 1]
-                test_series = [counts_arr[x, y] == 1
-                               for x, y in zip(df[col_name_1], df[col_name_2])]
+                # A row's pair of values occurs once exactly when no other row has the same pair
+                test_series = ~df.duplicated(keep=False).to_numpy()
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2],

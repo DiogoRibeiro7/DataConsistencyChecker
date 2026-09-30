@@ -3737,17 +3737,63 @@ class StringTestsMixin(CheckerState):
                        f"of columns and unique values. max_combinations is currently set to {self.max_combinations:,}")
             return
 
+        # Find, once per string column, which rows have each of its common values
+        eq_masks_dict = {}
+        for col_name_1, col_name_2 in pairs:
+            for col_name in (col_name_1, col_name_2):
+                if col_name not in eq_masks_dict:
+                    eq_masks_dict[col_name] = [self.orig_df[col_name] == v for v in common_vals_dict[col_name]]
+
         # Save the subset dataframe for each pair of values
-        subsets_dict = {}
+        subsets_dict: dict = {}  # Values are the index of the subset, or the subset dataframe
         store_index_only = len(self.date_cols) == 0
         for col_name_1, col_name_2 in pairs:
-            for v1 in common_vals_dict[col_name_1]:
-                for v2 in common_vals_dict[col_name_2]:
-                    sub_df = self.orig_df[(self.orig_df[col_name_1] == v1) & (self.orig_df[col_name_2] == v2)]
+            for v1, eq_mask_1 in zip(common_vals_dict[col_name_1], eq_masks_dict[col_name_1]):
+                for v2, eq_mask_2 in zip(common_vals_dict[col_name_2], eq_masks_dict[col_name_2]):
+                    if store_index_only and (eq_mask_1.dtype == bool) and (eq_mask_2.dtype == bool):
+                        # The index of the rows with both values, as self.orig_df[eq_mask_1 & eq_mask_2].index
+                        is_match = eq_mask_1.to_numpy() & eq_mask_2.to_numpy()
+                        subsets_dict[(col_name_1, col_name_2, v1, v2)] = \
+                            self.orig_df.index if is_match.all() else self.orig_df.index.take(np.flatnonzero(is_match))
+                        continue
+                    sub_df = self.orig_df[eq_mask_1 & eq_mask_2]
                     if store_index_only:
                         subsets_dict[(col_name_1, col_name_2, v1, v2)] = sub_df.index
                     else:
                         subsets_dict[(col_name_1, col_name_2, v1, v2)] = sub_df
+
+        # For each numeric column, its values with missing values filled with the median, and which rows have a value.
+        # Where the row labels are the row positions, as with the index set by init_data(), these are looked up by
+        # position in numpy arrays. Filled in as the columns are reached.
+        numeric_arrays_dict = {}
+
+        def get_numeric_vals(col_name, row_labels):
+            """
+            Returns the filled values of the numeric column for the given rows, and which of these rows have a value,
+            as numpy arrays, the same as
+            numeric_vals_filled[col_name].loc[row_labels] and orig_df[col_name].notna().loc[row_labels].
+            """
+            if col_name not in numeric_arrays_dict:
+                filled_vals = self.numeric_vals_filled[col_name]
+                has_val = self.orig_df[col_name].notna()
+                by_position = all(isinstance(x.index, pd.RangeIndex) and x.index.equals(pd.RangeIndex(self.num_rows))
+                                  for x in (filled_vals, has_val))
+                numeric_arrays_dict[col_name] = \
+                    (filled_vals, has_val, filled_vals.to_numpy() if by_position else None, has_val.to_numpy())
+            filled_vals, has_val, filled_arr, has_val_arr = numeric_arrays_dict[col_name]
+            if filled_arr is None:
+                num_vals = filled_vals.loc[row_labels]
+                return num_vals.to_numpy(), has_val.loc[num_vals.index].to_numpy()
+            positions = np.asarray(row_labels)
+            return filled_arr[positions], has_val_arr[positions]
+
+        # Which rows have a missing value, per column. Filled in as the columns are reached.
+        isna_dict = {}
+
+        def get_isna(col_name):
+            if col_name not in isna_dict:
+                isna_dict[col_name] = self.orig_df[col_name].isna()
+            return isna_dict[col_name]
 
         # Loop through each pair of string columns, and for each pair: each pair of values, and each numeric/date column
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
@@ -3788,20 +3834,16 @@ class StringTestsMixin(CheckerState):
                                 sample_indexes = np.random.choice(sub_df, 50, replace=True)
                             else:
                                 sample_indexes = sub_df.sample(n=50).index
-                            num_vals = self.numeric_vals_filled[col_name_3].loc[sample_indexes]
+                            num_vals, has_val = get_numeric_vals(col_name_3, sample_indexes)
                             # Use the non-null values, not the values filled with the median
-                            num_vals = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index].to_numpy()]
-                            q2, q3 = num_vals.quantile([0.5, 0.75])
+                            q2, q3 = pd.Series(num_vals[has_val]).quantile([0.5, 0.75])
                             if (q2 > col_q2_limit) or (q3 > col_q3_limit):
                                 continue
 
                         if col_name_3 in self.numeric_cols:
-                            if store_index_only:
-                                num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df]
-                            else:
-                                num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df.index]
+                            num_vals, has_val = get_numeric_vals(col_name_3, sub_df if store_index_only else sub_df.index)
                             # Get the quartiles of the non-null values, not of the values filled with the median
-                            q1, q2, q3 = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index]].quantile(
+                            q1, q2, q3 = pd.Series(num_vals[has_val]).quantile(
                                 [0.25, 0.50, 0.75], interpolation='midpoint')
                             if q2 is None or q2 > col_q2_limit:
                                 continue
@@ -3825,13 +3867,12 @@ class StringTestsMixin(CheckerState):
                         except Exception:  # Date values can exceed limits
                             continue
 
+                        # Null values are not flagged
                         if col_name_3 in self.numeric_cols:
-                            res = num_vals <= upper_limit
+                            res = (num_vals <= upper_limit) | ~has_val
                         else:
                             res = sub_df[col_name_3] <= upper_limit
-
-                        # Null values are not flagged
-                        res = res | self.orig_df[col_name_3].isna().loc[res.index]
+                            res = res | get_isna(col_name_3).loc[res.index]
 
                         if res.tolist().count(False) > self.freq_contamination_level:
                             found_many = True
@@ -3846,9 +3887,9 @@ class StringTestsMixin(CheckerState):
                                 test_series[i] = False
 
                 test_series = np.array(test_series) | \
-                              self.orig_df[col_name_1].isna() | \
-                              self.orig_df[col_name_2].isna() | \
-                              self.orig_df[col_name_3].isna()
+                              get_isna(col_name_1) | \
+                              get_isna(col_name_2) | \
+                              get_isna(col_name_3)
 
                 self._process_analysis_binary(
                     test_id,
@@ -3936,17 +3977,63 @@ class StringTestsMixin(CheckerState):
                        f"of columns and unique values. max_combinations is currently set to {self.max_combinations:,}")
             return
 
+        # Find, once per string column, which rows have each of its common values
+        eq_masks_dict = {}
+        for col_name_1, col_name_2 in pairs:
+            for col_name in (col_name_1, col_name_2):
+                if col_name not in eq_masks_dict:
+                    eq_masks_dict[col_name] = [self.orig_df[col_name] == v for v in common_vals_dict[col_name]]
+
         # Save the subset for each pair of values
-        subsets_dict = {}
+        subsets_dict: dict = {}  # Values are the index of the subset, or the subset dataframe
         store_index_only = len(self.date_cols) == 0
         for col_name_1, col_name_2 in pairs:
-            for v1 in common_vals_dict[col_name_1]:
-                for v2 in common_vals_dict[col_name_2]:
-                    sub_df = self.orig_df[(self.orig_df[col_name_1] == v1) & (self.orig_df[col_name_2] == v2)]
+            for v1, eq_mask_1 in zip(common_vals_dict[col_name_1], eq_masks_dict[col_name_1]):
+                for v2, eq_mask_2 in zip(common_vals_dict[col_name_2], eq_masks_dict[col_name_2]):
+                    if store_index_only and (eq_mask_1.dtype == bool) and (eq_mask_2.dtype == bool):
+                        # The index of the rows with both values, as self.orig_df[eq_mask_1 & eq_mask_2].index
+                        is_match = eq_mask_1.to_numpy() & eq_mask_2.to_numpy()
+                        subsets_dict[(col_name_1, col_name_2, v1, v2)] = \
+                            self.orig_df.index if is_match.all() else self.orig_df.index.take(np.flatnonzero(is_match))
+                        continue
+                    sub_df = self.orig_df[eq_mask_1 & eq_mask_2]
                     if store_index_only:
                         subsets_dict[(col_name_1, col_name_2, v1, v2)] = sub_df.index
                     else:
                         subsets_dict[(col_name_1, col_name_2, v1, v2)] = sub_df
+
+        # For each numeric column, its values with missing values filled with the median, and which rows have a value.
+        # Where the row labels are the row positions, as with the index set by init_data(), these are looked up by
+        # position in numpy arrays. Filled in as the columns are reached.
+        numeric_arrays_dict = {}
+
+        def get_numeric_vals(col_name, row_labels):
+            """
+            Returns the filled values of the numeric column for the given rows, and which of these rows have a value,
+            as numpy arrays, the same as
+            numeric_vals_filled[col_name].loc[row_labels] and orig_df[col_name].notna().loc[row_labels].
+            """
+            if col_name not in numeric_arrays_dict:
+                filled_vals = self.numeric_vals_filled[col_name]
+                has_val = self.orig_df[col_name].notna()
+                by_position = all(isinstance(x.index, pd.RangeIndex) and x.index.equals(pd.RangeIndex(self.num_rows))
+                                  for x in (filled_vals, has_val))
+                numeric_arrays_dict[col_name] = \
+                    (filled_vals, has_val, filled_vals.to_numpy() if by_position else None, has_val.to_numpy())
+            filled_vals, has_val, filled_arr, has_val_arr = numeric_arrays_dict[col_name]
+            if filled_arr is None:
+                num_vals = filled_vals.loc[row_labels]
+                return num_vals.to_numpy(), has_val.loc[num_vals.index].to_numpy()
+            positions = np.asarray(row_labels)
+            return filled_arr[positions], has_val_arr[positions]
+
+        # Which rows have a missing value, per column. Filled in as the columns are reached.
+        isna_dict = {}
+
+        def get_isna(col_name):
+            if col_name not in isna_dict:
+                isna_dict[col_name] = self.orig_df[col_name].isna()
+            return isna_dict[col_name]
 
         # Loop through each pair of string columns, and for each pair: each pair of values, and each numeric/date column
         for pair_idx, (col_name_1, col_name_2) in enumerate(pairs):
@@ -3984,12 +4071,9 @@ class StringTestsMixin(CheckerState):
                             continue
 
                         if col_name_3 in self.numeric_cols:
-                            if store_index_only:
-                                num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df]
-                            else:
-                                num_vals = self.numeric_vals_filled[col_name_3].loc[sub_df.index]
+                            num_vals, has_val = get_numeric_vals(col_name_3, sub_df if store_index_only else sub_df.index)
                             # Get the quantiles of the non-null values, not of the values filled with the median
-                            d1, q1, q2, q3 = num_vals[self.orig_df[col_name_3].notna().loc[num_vals.index]].quantile(
+                            d1, q1, q2, q3 = pd.Series(num_vals[has_val]).quantile(
                                 [0.1, 0.25, 0.50, 0.75], interpolation='midpoint')
                             if d1 is None or q1 is None or q2 is None or q3 is None:
                                 continue
@@ -4010,13 +4094,12 @@ class StringTestsMixin(CheckerState):
                         except Exception:  # Date values can exceed limits
                             continue
 
+                        # Null values are not flagged
                         if col_name_3 in self.numeric_cols:
-                            res = num_vals >= lower_limit
+                            res = (num_vals >= lower_limit) | ~has_val
                         else:
                             res = sub_df[col_name_3] >= lower_limit
-
-                        # Null values are not flagged
-                        res = res | self.orig_df[col_name_3].isna().loc[res.index]
+                            res = res | get_isna(col_name_3).loc[res.index]
 
                         if res.tolist().count(False) > self.freq_contamination_level:
                             found_many = True
@@ -4031,9 +4114,9 @@ class StringTestsMixin(CheckerState):
                                 test_series[i] = False
 
                 test_series = np.array(test_series) | \
-                              self.orig_df[col_name_1].isna() | \
-                              self.orig_df[col_name_2].isna() | \
-                              self.orig_df[col_name_3].isna()
+                              get_isna(col_name_1) | \
+                              get_isna(col_name_2) | \
+                              get_isna(col_name_3)
                 self._process_analysis_binary(
                     test_id,
                     [col_name_1, col_name_2, col_name_3],

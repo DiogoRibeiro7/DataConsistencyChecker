@@ -4,10 +4,29 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 
 from .checker_state import CheckerState
 from .checker_utils import as_str, is_missing, replace_special_with_space
+
+
+class _EitherNullPairs(dict):
+    """For a sorted pair of columns, whether over the threshold number of rows have a null in either column.
+
+    Values are computed when first looked up, from each column's null mask.
+    """
+
+    def __init__(self, null_masks: dict[str, np.ndarray], threshold: float) -> None:
+        super().__init__()
+        self.null_masks = null_masks
+        self.threshold = threshold
+
+    def __missing__(self, key: tuple[str, ...]) -> bool:
+        col_name_a, col_name_b = key
+        value = bool(np.count_nonzero(self.null_masks[col_name_a] | self.null_masks[col_name_b]) > self.threshold)
+        self[key] = value
+        return value
 
 
 class AnalysisCacheMixin(CheckerState):
@@ -263,6 +282,11 @@ class AnalysisCacheMixin(CheckerState):
         num_pairs, col_pairs = self._get_numeric_column_pairs()
         if num_pairs == 0 or col_pairs is None:
             return self.larger_pairs_dict
+
+        # The sample's values and null masks, per column, computed once rather than once per pair
+        sample_vals_dict = {c: self.sample_numeric_vals_filled[c].to_numpy() for c in self.numeric_cols}
+        sample_isna_dict = {c: self.sample_df[c].isna().to_numpy() for c in self.numeric_cols}
+
         for cols_idx, (col_name_1, col_name_2) in enumerate(col_pairs):
             key = (col_name_1, col_name_2)
 
@@ -273,12 +297,10 @@ class AnalysisCacheMixin(CheckerState):
                 self.larger_pairs_dict[key] = None
                 continue
 
-            vals_arr_1 = self.sample_numeric_vals_filled[col_name_1]
-            vals_arr_2 = self.sample_numeric_vals_filled[col_name_2]
-            sample_series = ((vals_arr_1 - vals_arr_2) >= 0) | \
-                            self.sample_df[col_name_1].isna().values | \
-                            self.sample_df[col_name_2].isna().values
-            if sample_series.tolist().count(False) > 1:
+            with np.errstate(invalid='ignore'):
+                sample_arr = ((sample_vals_dict[col_name_1] - sample_vals_dict[col_name_2]) >= 0) | \
+                             sample_isna_dict[col_name_1] | sample_isna_dict[col_name_2]
+            if np.count_nonzero(~sample_arr) > 1:
                 self.larger_pairs_dict[key] = None
                 continue
 
@@ -488,18 +510,21 @@ class AnalysisCacheMixin(CheckerState):
 
         # Check pairs of string columns
         num_pairs, pairs_arr = self._get_string_column_pairs_unique(force=force)
-        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
-            check_match(col_name_a, col_name_b)
+        if pairs_arr is not None:
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                check_match(col_name_a, col_name_b)
 
         # Check pairs of binary columns
         num_pairs, pairs_arr = self._get_binary_column_pairs_unique(force=force)
-        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
-            check_match(col_name_a, col_name_b)
+        if pairs_arr is not None:
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                check_match(col_name_a, col_name_b)
 
         # Check pairs of date columns
         num_pairs, pairs_arr = self._get_date_column_pairs_unique(force=force)
-        for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
-            check_match(col_name_a, col_name_b)
+        if pairs_arr is not None:
+            for _pair_idx, (col_name_a, col_name_b) in enumerate(pairs_arr):
+                check_match(col_name_a, col_name_b)
 
         return self.cols_same_bool_dict
 
@@ -546,24 +571,17 @@ class AnalysisCacheMixin(CheckerState):
             self.sample_cols_pairs_both_null_dict[pairs_tuple] = match_arr
         return self.sample_cols_pairs_both_null_dict
 
-    def get_col_pairs_either_null_bool_dict(self, force=False):
+    def get_col_pairs_either_null_bool_dict(self, force=False):  # noqa: ARG002 - kept for compatibility
         """
         Similar to get_col_pair_both_null_dict(), but checks if either are null, not if both are, and contains a single
         boolean value for each pair of columns indicating True if there are at least 90% of the rows having either null.
 
-        Set force=True if the results will not be used to loop through tests, only to create a dictionary for reference.
+        Each pair's value is computed the first time it is looked up, so this also works where there are more pairs
+        of columns than max_combinations; force is kept for compatibility.
         """
-        if self.col_pairs_either_null_bool_dict:
-            return self.col_pairs_either_null_bool_dict
-        self.col_pairs_either_null_bool_dict = {}
-        threshold = self.num_rows * 0.9
-        _, pairs = self._get_column_pairs_unique(force=force)
-        if pairs is None:
-            return None
-        for col_name_a, col_name_b in pairs:
-            pairs_tuple = tuple(sorted([col_name_a, col_name_b]))
-            match_arr = (self.orig_df[col_name_a].isna() | self.orig_df[col_name_b].isna())
-            self.col_pairs_either_null_bool_dict[pairs_tuple] = match_arr.tolist().count(True) > threshold
+        if self.col_pairs_either_null_bool_dict is None:
+            self.col_pairs_either_null_bool_dict = _EitherNullPairs(
+                {c: self.orig_df[c].isna().to_numpy() for c in self.orig_df.columns}, self.num_rows * 0.9)
         return self.col_pairs_either_null_bool_dict
 
     def get_col_triples_any_null_bool_dict(self):
@@ -587,12 +605,16 @@ class AnalysisCacheMixin(CheckerState):
             for col_name_1, col_name_2 in pairs:
                 triples_arr.append(tuple(sorted([bin_col, col_name_1, col_name_2])))
 
-        # Examine each triple
+        # Examine each triple, with each column's null mask computed once
         threshold = self.num_rows * 0.9
+        null_masks = {c: self.orig_df[c].isna().to_numpy() for c in {c for triple in triples_arr for c in triple}}
+        null_counts = {c: int(np.count_nonzero(mask)) for c, mask in null_masks.items()}
         for triple in triples_arr:
-            triple = list(triple)
-            self.col_triples_all_null_bool_dict[tuple(sorted(triple))] = \
-                self.orig_df[triple].isna().any(axis=1).sum() > threshold
+            a, b, c = sorted(triple)
+            # Rows with a null in the triple are at most the columns' nulls added up
+            self.col_triples_all_null_bool_dict[(a, b, c)] = \
+                (null_counts[a] + null_counts[b] + null_counts[c] > threshold) and \
+                bool(np.count_nonzero(null_masks[a] | null_masks[b] | null_masks[c]) > threshold)
 
         return self.col_triples_all_null_bool_dict
 
