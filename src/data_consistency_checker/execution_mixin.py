@@ -179,13 +179,14 @@ class ExecutionMixin(CheckerState):
             return
 
         # Initialize the variables related to the run
-        self.n_tests_executed = 0
         self.execution_times = {}
         self.num_exceptions = 0
         self.execution_failures = []
 
-        # Initialize the variables related to the results found, unless append_results is specified.
+        # Initialize the variables related to the results found, unless append_results is specified. The count of
+        # tests executed covers the same runs as the results, as the summary gives the fraction of tests with findings.
         if not append_results:
+            self.n_tests_executed = 0
             self.patterns_arr = []
             self.patterns_df = None
             self.results_summary_arr = []

@@ -281,7 +281,7 @@ def test_grouped_strings_description_is_written_to_the_html_report(tmp_path, cap
     checker.display_detailed_results(save_to_disk=True, output_folder=str(tmp_path),
                                      include_examples=False, plot_results=False)
 
-    assert "grouped rule text" in (tmp_path / "Data_consistency.html").read_text()
+    assert "grouped&nbsp;rule&nbsp;text" in (tmp_path / "Data_consistency.html").read_text()
     assert "grouped rule text" not in capsys.readouterr().out
 
 

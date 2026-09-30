@@ -9,7 +9,7 @@ background colours.
 | [California Housing](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_California_Housing.ipynb) | A typical first look at a dataset with `quick_report()`, then details on selected findings. |
 | [Breast Cancer](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Real_Breast_Cancer.ipynb) | Another typical review, using a different set of methods. |
 | [Hypothyroid](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Hypothyroid.ipynb) | Listing the findings and looking more closely at the most interesting ones. |
-| [APIs](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_APIs.ipynb) | Many of the less common methods, on the Boston Housing dataset. |
+| [APIs](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_APIs.ipynb) | Many of the less common methods, on scikit-learn's breast cancer dataset. |
 | [Clearing issues](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Clear_Issues.ipynb) | Pruning findings with `clear_results()` and `restore_results()`. |
 | [Multiple executions](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_Multiple_Executions.ipynb) | Replacing results with a new run, or appending runs to build up a complete set. |
 | [OpenML datasets](https://github.com/DiogoRibeiro7/DataConsistencyChecker/blob/main/Demo%20Notebooks/Demo_OpenML_Datasets.ipynb) | A few findings on each of several OpenML datasets. |

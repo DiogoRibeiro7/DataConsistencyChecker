@@ -254,3 +254,17 @@ def test_output_stats_handles_no_executed_tests(
     checker._output_stats()
 
     assert capsys.readouterr().out.strip() == "No tests executed."
+
+
+def test_output_stats_counts_the_tests_of_appended_runs(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """With appended results, the fraction of tests with findings covers every run."""
+    checker = DataConsistencyChecker(verbose=0)
+    checker.init_data(pd.DataFrame({"pos": np.arange(1.0, 101.0), "neg": -np.arange(1.0, 101.0)}))
+    checker.check_data_quality(execute_list=["NEGATIVE"])
+    checker.check_data_quality(execute_list=["POSITIVE"], append_results=True)
+
+    out = capsys.readouterr().out.split("Data consistency check complete.")[-1]
+    assert "Executed 2 tests." in out
+    assert "2 tests (100.00% of tests) identified at least one pattern" in out

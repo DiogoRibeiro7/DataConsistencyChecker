@@ -419,7 +419,7 @@ def test_save_to_disk_writes_html_report(checker, tmp_path, capsys) -> None:
     assert "<H2>NEGATIVE</H2>" in html
     assert "<H2>COLUMN_ORDERED_ASC</H2>" in html
     assert "Columns(s): neg_all<br>" in html
-    assert "Issue ID" in html
+    assert "<b>Issue&nbsp;ID</b>:&nbsp;" in html
     assert "<table" in html
     assert html.rstrip().endswith("</html>")
     assert "Columns(s):" not in capsys.readouterr().out

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -62,3 +63,24 @@ def test_init_data_respects_known_date_columns() -> None:
 
     assert "when" in checker.date_cols
     assert "when" not in checker.string_cols
+
+
+def test_a_mostly_missing_column_of_text_is_a_string_column() -> None:
+    # Its few values are all text, so few non-numeric values does not make it numeric.
+    values = pd.Categorical([None] * 895 + ["Y"] * 3, categories=["Y"])
+    df = pd.DataFrame({"flag": values, "x": np.arange(898.0), "y": np.arange(898.0) % 7})
+    checker = DataConsistencyChecker(verbose=-1)
+
+    checker.init_data(df)
+
+    assert "flag" in checker.string_cols
+
+
+def test_a_categorical_numeric_column_with_a_few_other_values_loads() -> None:
+    values = pd.Categorical([str(i % 50) for i in range(999)] + ["x"])
+    checker = DataConsistencyChecker(verbose=-1)
+
+    checker.init_data(pd.DataFrame({"code": values, "y": np.arange(1000.0)}))
+
+    assert "code" in checker.numeric_cols
+    assert checker.orig_df["code"].tolist()[-1] == "x"
