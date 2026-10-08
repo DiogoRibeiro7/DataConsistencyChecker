@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/project-avatar.png" alt="DataConsistencyChecker project logo" width="160" height="160">
+</p>
+
 # DataConsistencyChecker
 
 [![CI](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/DiogoRibeiro7/DataConsistencyChecker/actions/workflows/python.yml)
